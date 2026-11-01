@@ -15,6 +15,7 @@ import {
   BotNotFoundError,
   DisplayNameConflictError,
 } from '../core/errors.js';
+import { isProcessRunning } from '../core/lock.js';
 import process from 'node:process';
 
 export class BotService {
@@ -182,6 +183,71 @@ export class BotService {
 
       await this.storage.saveBotRegistry(sessionId, registry);
       return updated;
+    });
+  }
+
+  /**
+   * Updates a bot's heartbeat timestamp (last_seen_at).
+   */
+  public async touchHeartbeat(sessionId: string, botId: string): Promise<BotRecord> {
+    const validId = validateBotId(botId);
+
+    return await this.storage.withSessionLock(sessionId, async () => {
+      const registry = await this.storage.getBotRegistry(sessionId);
+      const targetIndex = registry.bots.findIndex((b) => b.bot_id === validId);
+
+      if (targetIndex === -1) {
+        throw new BotNotFoundError(validId, sessionId);
+      }
+
+      const existing = registry.bots[targetIndex]!;
+      const now = new Date().toISOString();
+      const updated: BotRecord = {
+        ...existing,
+        last_seen_at: now,
+      };
+
+      registry.bots[targetIndex] = updated;
+      registry.updated_at = now;
+
+      await this.storage.saveBotRegistry(sessionId, registry);
+      return updated;
+    });
+  }
+
+  /**
+   * Reconciles bot liveness in a session: marks bots as 'stale' if their PID is dead
+   * or heartbeat has expired beyond staleThresholdMs.
+   */
+  public async reconcileBotLiveness(
+    sessionId: string,
+    staleThresholdMs: number = 10000
+  ): Promise<BotRecord[]> {
+    return await this.storage.withSessionLock(sessionId, async () => {
+      const registry = await this.storage.getBotRegistry(sessionId);
+      const now = Date.now();
+      let changed = false;
+
+      for (let i = 0; i < registry.bots.length; i++) {
+        const bot = registry.bots[i]!;
+        if (bot.status === 'active') {
+          const lastSeen = new Date(bot.last_seen_at).getTime();
+          const isTimeout = now - lastSeen > staleThresholdMs;
+          const isPidDead = bot.pid ? !isProcessRunning(bot.pid) : false;
+
+          if (isTimeout || isPidDead) {
+            bot.status = 'stale';
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        registry.updated_at = new Date().toISOString();
+        await this.storage.saveBotRegistry(sessionId, registry);
+      }
+
+      return registry.bots;
     });
   }
 }

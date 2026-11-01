@@ -1,7 +1,9 @@
 import { Command } from 'commander';
+import process from 'node:process';
 import { resolveWorkspaceRoot } from '../../core/config.js';
 import { FilesystemSessionStorage } from '../../blackboard/filesystem.js';
 import { BotService } from '../../bot/service.js';
+import { BotRuntime } from '../../bot/runtime.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -52,6 +54,56 @@ export function registerBotCommands(program: Command): void {
     });
 
   bot
+    .command('run')
+    .description('Run a bot runtime process with active heartbeat loop in the Session')
+    .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <botId>', 'Explicit stable Bot ID (e.g. BOT001)')
+    .option('-n, --name <displayName>', 'Human-readable display name')
+    .option('-d, --description <description>', 'Bot description or role')
+    .option('--auto-ack', 'Automatically acknowledge incoming direct messages', false)
+    .option('-w, --workspace <path>', 'Workspace directory path')
+    .action(async (options: {
+      session: string;
+      bot?: string;
+      name?: string;
+      description?: string;
+      autoAck?: boolean;
+      workspace?: string;
+    }) => {
+      try {
+        const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
+        const storage = new FilesystemSessionStorage(workspaceRoot);
+        const runtime = new BotRuntime(storage, {
+          sessionId: options.session,
+          botId: options.bot,
+          displayName: options.name,
+          description: options.description,
+          autoAcknowledge: options.autoAck,
+          onMessage: async (msg) => {
+            console.log(`[BOT ${runtime.botId}] Received message from ${msg.sender_bot_id}: ${msg.content}`);
+          },
+          onBroadcast: async (evt) => {
+            console.log(`[BOT ${runtime.botId}] Observed broadcast from ${evt.sender_bot_id} (${evt.category}): ${evt.content}`);
+          },
+        });
+
+        const botRecord = await runtime.start();
+        console.log(`Bot runtime started successfully!`);
+        console.log(`  Session ID:   ${botRecord.session_id}`);
+        console.log(`  Bot ID:       ${botRecord.bot_id}`);
+        console.log(`  Display Name: ${botRecord.display_name}`);
+        console.log(`  PID:          ${process.pid}`);
+        console.log(`Press Ctrl+C to terminate bot process.`);
+
+        // Keep process running until interrupted
+        await new Promise<void>(() => {});
+      } catch (error: unknown) {
+        console.error(`Error running bot runtime: ${(error as Error).message}`);
+        process.exitCode = 1;
+      }
+    });
+
+  bot
     .command('list')
     .description('List all bots registered in a session')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
@@ -63,7 +115,8 @@ export function registerBotCommands(program: Command): void {
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new BotService(storage);
 
-        const bots = await service.listBots(options.session);
+        // Reconcile stale bot liveness before listing
+        const bots = await service.reconcileBotLiveness(options.session);
 
         if (options.json) {
           console.log(JSON.stringify(bots, null, 2));

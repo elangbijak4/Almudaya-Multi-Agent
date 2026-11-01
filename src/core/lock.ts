@@ -24,7 +24,7 @@ const DEFAULT_POLL_INTERVAL_MS = 50;
 /**
  * Checks if a process with the specified PID is currently running.
  */
-function isProcessRunning(pid: number): boolean {
+export function isProcessRunning(pid: number): boolean {
   if (pid <= 0) return false;
   try {
     process.kill(pid, 0);

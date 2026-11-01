@@ -1,7 +1,7 @@
 # Waterfall Phase Gate Status
 
-**Current phase:** Phase 6 — Independent bot runtime  
-**Overall status:** PHASES 1..5 PASSED, PHASE 6 READY TO START
+**Current phase:** Phase 7 — End-to-end verification  
+**Overall status:** PHASES 1..6 PASSED, PHASE 7 READY TO START
 
 | Phase | Name | Status | Evidence / report | Gate approved |
 |---|---|---|---|---|
@@ -10,8 +10,8 @@
 | 3 | Bot registration and discovery | PASSED | Multi-process registry tests, ADR-004, PHASE_3_BOT_GATE.md | Yes |
 | 4 | Messaging | PASSED | Broadcast/direct-message tests, ADR-005..006, PHASE_4_MESSAGING_GATE.md | Yes |
 | 5 | Shared project context | PASSED | Shared context tests, ADR-007, PHASE_5_SHARED_CONTEXT_GATE.md | Yes |
-| 6 | Independent bot runtime | READY TO START | Pending Phase 6 process lifecycle tests | No |
-| 7 | End-to-end verification | NOT STARTED | Acceptance test report | No |
+| 6 | Independent bot runtime | PASSED | Process lifecycle/isolation tests, ADR-008, PHASE_6_RUNTIME_GATE.md | Yes |
+| 7 | End-to-end verification | READY TO START | Pending Phase 7 acceptance scenario | No |
 | 8 | Release preparation and closure | NOT STARTED | Release checklist | No |
 
 ## Gate rule

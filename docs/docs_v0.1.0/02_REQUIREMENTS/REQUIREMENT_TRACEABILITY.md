@@ -12,7 +12,7 @@ Status awal: baseline draft. Isi kolom desain, implementasi, dan test saat fase 
 | FR-006 | Custom and editable display name | `bot/` | `tests/bot/bot-registry.test.ts` (Phase 3 verified) |
 | FR-007 | Display name uniqueness within session | `bot/` | `tests/bot/bot-registry.test.ts` (Phase 3 verified) |
 | FR-008 | Discover peer bots via registry | `bot/` | `tests/bot/bot-registry.test.ts` (Phase 3 verified) |
-| FR-009 | Store bot status, PID, and timestamps | `bot/` | `tests/bot/bot-registry.test.ts` (Phase 3 verified) |
+| FR-009 | Store bot status, PID, and timestamps | `bot/` | `tests/bot/bot-registry.test.ts`, `tests/bot/runtime.test.ts` (Phase 3 & 6 verified) |
 | FR-010 | Session broadcast log | `messaging/`, `blackboard/` | `tests/messaging/broadcast.test.ts` (Phase 4 verified) |
 | FR-011 | Bot read available broadcasts | `messaging/` | `tests/messaging/broadcast.test.ts` (Phase 4 verified) |
 | FR-012 | Individual Blackboard per bot | `messaging/`, `blackboard/` | `tests/messaging/direct-message.test.ts` (Phase 4 verified) |

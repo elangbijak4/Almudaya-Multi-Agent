@@ -144,11 +144,17 @@ export class MessagingService {
 
     return await this.storage.withSessionLock(sessionId, async () => {
       const inbox = await this.storage.getInbox(sessionId, canonicalBotId);
-      let needsSave = false;
+
+      // Determine matching messages before mutating status
+      let matched = inbox.messages;
+      if (options.status) {
+        matched = matched.filter((m) => m.status === options.status);
+      }
 
       if (options.markAsRead) {
         const now = new Date().toISOString();
-        for (const msg of inbox.messages) {
+        let needsSave = false;
+        for (const msg of matched) {
           if (msg.status === 'unread') {
             msg.status = 'read';
             msg.read_at = now;
@@ -161,15 +167,11 @@ export class MessagingService {
         }
       }
 
-      let result = inbox.messages;
-      if (options.status) {
-        result = result.filter((m) => m.status === options.status);
-      }
       if (options.limit && options.limit > 0) {
-        result = result.slice(-options.limit);
+        matched = matched.slice(-options.limit);
       }
 
-      return result;
+      return matched;
     });
   }
 

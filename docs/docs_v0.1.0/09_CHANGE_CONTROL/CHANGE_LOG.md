@@ -11,6 +11,7 @@ Record every approved change that affects requirements, architecture, scope, or 
 | CHG-005 | 2026-11-01 | Complete Phase 4 Messaging | Implement ADR-005..006, broadcast events (`events.jsonl`), per-bot cursors, direct messaging inboxes, idempotent acknowledgements, CLI messaging commands | Broadcast and direct messaging subsystem, multi-process concurrency verification, 57 automated tests | Passed Phase 4 Gate |
 | CHG-006 | 2026-11-01 | Complete Phase 5 Shared Project Context | Implement ADR-007, project roots, environment metadata with secret redaction, SDLC document references, CLI context commands | Shared context subsystem, credential protection, 69 automated tests | Passed Phase 5 Gate |
 | CHG-007 | 2026-11-01 | Complete Phase 6 Independent Bot Runtime | Implement ADR-008, BotRuntime, periodic heartbeats, graceful signal handling, dead-PID and stale bot detection, CLI `bot run` | Process isolation, fault tolerance, multi-process integration tests, 76 automated tests | Passed Phase 6 Gate |
+| CHG-008 | 2026-11-01 | Complete Phase 7 End-to-End Verification | Execute Section 10 two-terminal acceptance scenario in automated test suite, publish verification report and update traceability matrix | End-to-end multi-process verification, 77 automated tests across 18 test files, zero failures | Passed Phase 7 Gate |
 
 ## Change process
 

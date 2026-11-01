@@ -1,7 +1,7 @@
 # Waterfall Phase Gate Status
 
-**Current phase:** Phase 7 — End-to-end verification  
-**Overall status:** PHASES 1..6 PASSED, PHASE 7 READY TO START
+**Current phase:** Phase 8 — Release preparation and closure  
+**Overall status:** PHASES 1..7 PASSED, PHASE 8 READY TO START
 
 | Phase | Name | Status | Evidence / report | Gate approved |
 |---|---|---|---|---|
@@ -11,8 +11,8 @@
 | 4 | Messaging | PASSED | Broadcast/direct-message tests, ADR-005..006, PHASE_4_MESSAGING_GATE.md | Yes |
 | 5 | Shared project context | PASSED | Shared context tests, ADR-007, PHASE_5_SHARED_CONTEXT_GATE.md | Yes |
 | 6 | Independent bot runtime | PASSED | Process lifecycle/isolation tests, ADR-008, PHASE_6_RUNTIME_GATE.md | Yes |
-| 7 | End-to-end verification | READY TO START | Pending Phase 7 acceptance scenario | No |
-| 8 | Release preparation and closure | NOT STARTED | Release checklist | No |
+| 7 | End-to-end verification | PASSED | VERIFICATION_REPORT.md, tests/e2e/two-terminal-poc.test.ts, PHASE_7_VERIFICATION_GATE.md | Yes |
+| 8 | Release preparation and closure | READY TO START | Release plan, documentation review, package verification | No |
 
 ## Gate rule
 

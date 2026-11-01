@@ -90,8 +90,9 @@ export async function acquireLock(
       };
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      if (code === 'EEXIST') {
-        // Lock file exists. Check for staleness.
+      // EEXIST: lock exists. EPERM / EBUSY / EACCES: file in use, locked, or delete-pending on Windows.
+      if (code === 'EEXIST' || code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
+        // Lock file exists or is in transition. Check for staleness if readable.
         try {
           const content = await fs.readFile(lockFilePath, 'utf-8');
           const record = JSON.parse(content) as LockRecord;
@@ -109,13 +110,7 @@ export async function acquireLock(
             }
           }
         } catch {
-          // Lock file might be corrupt, partially written, or already deleted
-          try {
-            await fs.unlink(lockFilePath);
-            continue;
-          } catch {
-            // Ignore and retry
-          }
+          // Lock file might be corrupt, partially written, or in the middle of being written/deleted
         }
 
         // Bounded sleep with slight jitter

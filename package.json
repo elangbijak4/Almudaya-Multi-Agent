@@ -28,7 +28,15 @@
     "collaboration"
   ],
   "author": "Almudaya Research Institute",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elangbijak4/Almudaya-Multi-Agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/elangbijak4/Almudaya-Multi-Agent/issues"
+  },
+  "homepage": "https://github.com/elangbijak4/Almudaya-Multi-Agent#readme",
   "dependencies": {
     "commander": "^15.0.0",
     "zod": "^4.6.7"

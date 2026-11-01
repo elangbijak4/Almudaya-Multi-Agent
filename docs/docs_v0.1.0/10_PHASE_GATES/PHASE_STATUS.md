@@ -1,7 +1,7 @@
 # Waterfall Phase Gate Status
 
-**Current phase:** Phase 8 — Release preparation and closure  
-**Overall status:** PHASES 1..7 PASSED, PHASE 8 READY TO START
+**Current phase:** Project Closure & Release  
+**Overall status:** ALL PHASES PASSED (1..8) — READY FOR RELEASE & REMOTE PUSH
 
 | Phase | Name | Status | Evidence / report | Gate approved |
 |---|---|---|---|---|
@@ -12,7 +12,7 @@
 | 5 | Shared project context | PASSED | Shared context tests, ADR-007, PHASE_5_SHARED_CONTEXT_GATE.md | Yes |
 | 6 | Independent bot runtime | PASSED | Process lifecycle/isolation tests, ADR-008, PHASE_6_RUNTIME_GATE.md | Yes |
 | 7 | End-to-end verification | PASSED | VERIFICATION_REPORT.md, tests/e2e/two-terminal-poc.test.ts, PHASE_7_VERIFICATION_GATE.md | Yes |
-| 8 | Release preparation and closure | READY TO START | Release plan, documentation review, package verification | No |
+| 8 | Release preparation and closure | PASSED | README.md, LICENSE, RELEASE_PLAN.md, USER_GUIDE.md, PHASE_8_RELEASE_GATE.md | Yes |
 
 ## Gate rule
 

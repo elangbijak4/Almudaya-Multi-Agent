@@ -11,5 +11,5 @@ Track unresolved decisions. Do not silently decide high-impact issues.
 | OI-005 | How is bot liveness determined after a crash? | Registry accuracy | Heartbeat/lease with PID liveness check and stale transition | Resolved (ADR-008) |
 | OI-006 | What is the broadcast read-cursor model? | Message consumption | Per-bot persistent cursor + flexible timestamp/ID filters | Resolved (ADR-005) |
 | OI-007 | What is the direct-message delivery/ack model? | Messaging semantics | At-least-once persistent inbox with idempotent ack | Resolved (ADR-006) |
-| OI-008 | Which license should be used? | Distribution/legal | Owner decision required | Open |
-| OI-009 | Is `almudaya-multiagent` available on npm at release time? | Package publication | Check npm registry before publish | Open |
+| OI-008 | Which license should be used? | Distribution/legal | MIT License selected; LICENSE file created and package.json updated | Resolved (Phase 8) |
+| OI-009 | Is `almudaya-multiagent` available on npm at release time? | Package publication | Checked via npm registry (returned 404 Not Found, name is unclaimed and available) | Resolved (Phase 8) |

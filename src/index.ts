@@ -16,4 +16,7 @@ export * from './bot/service.js';
 export * from './messaging/schema.js';
 export * from './messaging/service.js';
 
+export * from './shared/schema.js';
+export * from './shared/service.js';
+
 export { createProgram, run } from './cli/index.js';

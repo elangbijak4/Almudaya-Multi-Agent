@@ -9,6 +9,7 @@ Record every approved change that affects requirements, architecture, scope, or 
 | CHG-003 | 2026-10-31 | Complete Phase 2 Session and Blackboard | Implement ADR-001..003, Session metadata, atomic writes, locking, persistence, CLI session commands | Session lifecycle, persistent storage, concurrency controls, 23 automated tests | Passed Phase 2 Gate |
 | CHG-004 | 2026-10-31 | Complete Phase 3 Bot Registration and Discovery | Implement ADR-004, Bot ID & display name rules, default sequencing, peer discovery, rename invariants, CLI bot commands | Bot registry, identity management, multi-process concurrent registration tests, 42 automated tests | Passed Phase 3 Gate |
 | CHG-005 | 2026-11-01 | Complete Phase 4 Messaging | Implement ADR-005..006, broadcast events (`events.jsonl`), per-bot cursors, direct messaging inboxes, idempotent acknowledgements, CLI messaging commands | Broadcast and direct messaging subsystem, multi-process concurrency verification, 57 automated tests | Passed Phase 4 Gate |
+| CHG-006 | 2026-11-01 | Complete Phase 5 Shared Project Context | Implement ADR-007, project roots, environment metadata with secret redaction, SDLC document references, CLI context commands | Shared context subsystem, credential protection, 69 automated tests | Passed Phase 5 Gate |
 
 ## Change process
 

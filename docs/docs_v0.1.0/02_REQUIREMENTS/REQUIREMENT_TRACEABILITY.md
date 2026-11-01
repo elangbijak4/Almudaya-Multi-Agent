@@ -20,11 +20,11 @@ Status awal: baseline draft. Isi kolom desain, implementasi, dan test saat fase 
 | FR-014 | Read and acknowledge direct messages | `messaging/` | `tests/messaging/direct-message.test.ts` (Phase 4 verified) |
 | FR-015 | Unique message and event IDs with timestamps | `messaging/schema.ts` | `tests/messaging/broadcast.test.ts`, `tests/messaging/direct-message.test.ts` (Phase 4 verified) |
 | FR-016 | Messaging state survives process restart | `blackboard/`, `messaging/` | `tests/messaging/broadcast.test.ts`, `tests/messaging/direct-message.test.ts` (Phase 4 verified) |
-| FR-017 | Shared context design | `shared/` | Project root tests (Pending Phase 5) |
-| FR-018 | Shared context design | `shared/` | Environment registry tests (Pending Phase 5) |
-| FR-019 | Shared context design | `shared/` | Document registry tests (Pending Phase 5) |
+| FR-017 | Register & list multiple project roots | `shared/`, `blackboard/` | `tests/shared/shared-context.test.ts` (Phase 5 verified) |
+| FR-018 | Register shared environment metadata | `shared/`, `blackboard/` | `tests/shared/shared-context.test.ts` (Phase 5 verified) |
+| FR-019 | Register & filter SDLC document references | `shared/`, `blackboard/` | `tests/shared/shared-context.test.ts` (Phase 5 verified) |
 | FR-020 | CLI help & version | `cli/` | `tests/cli.test.ts` (Phase 1 verified) |
-| FR-021 | CLI session & bot commands | `cli/` | `tests/cli/session-cli.test.ts`, `tests/cli/bot-cli.test.ts` (Phase 2 & 3 verified) |
+| FR-021 | CLI commands (session, bot, message, context) | `cli/` | Verified across CLI test suites (Phase 1..5 verified) |
 | FR-022 | Configurable workspace root | `core/config.ts` | `tests/core/config.test.ts` (Phase 2 verified) |
 | FR-023 | Resilient to process crash / abnormal stop | `core/lock.ts`, `blackboard/` | `tests/core/lock.test.ts`, `tests/bot/concurrent-registration.test.ts` (Phase 2 & 3 verified) |
 

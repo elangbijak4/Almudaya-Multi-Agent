@@ -60,36 +60,51 @@ Exact schema (validated by Zod in `src/messaging/schema.ts`):
 - `acknowledged_at`: String (optional ISO 8601 UTC)
 - `metadata`: Record<string, unknown> (optional)
 
-## 5. Project root
+## 5. Project root (`registry/project_roots.json`)
 
-- `root_id`
-- `name`
-- `path`
-- `type`
-- `description`
-- optional repository metadata
-- permissions/access metadata if required
-- `created_at`, `updated_at`
+Exact schema (validated by Zod in `src/shared/schema.ts`):
 
-## 6. Environment metadata
+- `schema_version`: String (`"1.0.0"`)
+- `session_id`: String
+- `updated_at`: String (ISO 8601 UTC)
+- `roots`: Array of `ProjectRootRecord`:
+  - `root_id`: String (matches `/^[a-zA-Z0-9_-]{1,64}$/`)
+  - `name`: String
+  - `path`: String (normalized absolute path)
+  - `root_type`: Enum (`"primary" | "dependency" | "reference" | "docs"`)
+  - `description`: String (optional)
+  - `created_at`: String (ISO 8601 UTC)
+  - `updated_at`: String (ISO 8601 UTC)
 
-- `environment_id` or version
-- language/runtime/framework/dependency/tool metadata
-- repository and branch metadata where relevant
-- `updated_at`
-- provenance/source
-- exclude credentials and secret values
+## 6. Environment metadata (`registry/environment.json`)
 
-## 7. SDLC document reference
+Exact schema (validated by Zod in `src/shared/schema.ts`):
 
-- `document_id`
-- `title`
-- `document_type` (SRS, requirements, user stories, use cases, architecture, component design, DB design, API spec, coding guideline, test plan/cases, deployment plan, operations manual)
-- `uri` or path reference
-- `version`
-- `status`
-- `updated_at`
-- optional checksum/freshness metadata
+- `schema_version`: String (`"1.0.0"`)
+- `session_id`: String
+- `os`: String
+- `arch`: String
+- `node_version`: String
+- `npm_version`: String
+- `git_version`: String (optional)
+- `variables`: Record<string, string> (strictly redacted; keys matching secret/key/token/password/credential masked)
+- `updated_at`: String (ISO 8601 UTC)
+
+## 7. SDLC document reference (`registry/documents.json`)
+
+Exact schema (validated by Zod in `src/shared/schema.ts`):
+
+- `schema_version`: String (`"1.0.0"`)
+- `session_id`: String
+- `updated_at`: String (ISO 8601 UTC)
+- `documents`: Array of `SdlcDocumentRecord`:
+  - `document_id`: String (matches `/^[a-zA-Z0-9_-]{1,64}$/`)
+  - `title`: String
+  - `document_type`: Enum (`"SRS" | "REQUIREMENTS" | "ARCHITECTURE" | "DESIGN" | "API_SPEC" | "TEST_PLAN" | "USER_GUIDE" | "OTHER"`)
+  - `uri_or_path`: String
+  - `version`: String (optional)
+  - `status`: Enum (`"draft" | "approved" | "deprecated"`)
+  - `updated_at`: String (ISO 8601 UTC)
 
 ## 8. Identity and naming
 

@@ -54,6 +54,30 @@ export class MessageNotFoundError extends AlmudayaError {
   }
 }
 
+export class ProjectRootAlreadyExistsError extends AlmudayaError {
+  constructor(rootId: string, sessionId: string) {
+    super(`Project root "${rootId}" already registered in session "${sessionId}"`, 'PROJECT_ROOT_ALREADY_EXISTS');
+  }
+}
+
+export class ProjectRootNotFoundError extends AlmudayaError {
+  constructor(rootId: string, sessionId: string) {
+    super(`Project root "${rootId}" not found in session "${sessionId}"`, 'PROJECT_ROOT_NOT_FOUND');
+  }
+}
+
+export class DocumentAlreadyExistsError extends AlmudayaError {
+  constructor(docId: string, sessionId: string) {
+    super(`SDLC document "${docId}" already registered in session "${sessionId}"`, 'DOCUMENT_ALREADY_EXISTS');
+  }
+}
+
+export class DocumentNotFoundError extends AlmudayaError {
+  constructor(docId: string, sessionId: string) {
+    super(`SDLC document "${docId}" not found in session "${sessionId}"`, 'DOCUMENT_NOT_FOUND');
+  }
+}
+
 export class CorruptedDataError extends AlmudayaError {
   constructor(path: string, details?: string) {
     super(`Corrupted data file at "${path}"${details ? `: ${details}` : ''}`, 'CORRUPTED_DATA');

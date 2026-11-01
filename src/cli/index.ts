@@ -4,6 +4,7 @@ import { VERSION, CLI_NAME } from '../core/version.js';
 import { registerSessionCommands } from './commands/session.js';
 import { registerBotCommands } from './commands/bot.js';
 import { registerMessagingCommands } from './commands/messaging.js';
+import { registerContextCommands } from './commands/context.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -16,6 +17,7 @@ export function createProgram(): Command {
   registerSessionCommands(program);
   registerBotCommands(program);
   registerMessagingCommands(program);
+  registerContextCommands(program);
 
   return program;
 }

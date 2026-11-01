@@ -6,6 +6,11 @@ import type {
   DirectMessage,
   InboxStore,
 } from '../messaging/schema.js';
+import type {
+  EnvironmentMetadata,
+  ProjectRootsRegistry,
+  SdlcDocumentsRegistry,
+} from '../shared/schema.js';
 
 /**
  * Persistence abstraction for Session storage operations.
@@ -51,9 +56,22 @@ export interface IMessagingStorage {
 }
 
 /**
+ * Persistence abstraction for Shared Project Context (project roots, environment, SDLC documents).
+ */
+export interface ISharedContextStorage {
+  getProjectRootsRegistry(sessionId: string): Promise<ProjectRootsRegistry>;
+  saveProjectRootsRegistry(sessionId: string, registry: ProjectRootsRegistry): Promise<void>;
+  getEnvironmentMetadata(sessionId: string): Promise<EnvironmentMetadata | null>;
+  saveEnvironmentMetadata(sessionId: string, metadata: EnvironmentMetadata): Promise<void>;
+  getDocumentsRegistry(sessionId: string): Promise<SdlcDocumentsRegistry>;
+  saveDocumentsRegistry(sessionId: string, registry: SdlcDocumentsRegistry): Promise<void>;
+}
+
+/**
  * Combined Blackboard Storage interface.
  */
 export interface IBlackboardStorage
   extends ISessionStorage,
     IBotRegistryStorage,
-    IMessagingStorage {}
+    IMessagingStorage,
+    ISharedContextStorage {}

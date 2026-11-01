@@ -22,6 +22,17 @@ import {
   DirectMessageSchema,
   InboxStoreSchema,
 } from '../messaging/schema.js';
+import type {
+  EnvironmentMetadata,
+  ProjectRootsRegistry,
+  SdlcDocumentsRegistry,
+} from '../shared/schema.js';
+import {
+  CURRENT_SHARED_CONTEXT_SCHEMA_VERSION,
+  EnvironmentMetadataSchema,
+  ProjectRootsRegistrySchema,
+  SdlcDocumentsRegistrySchema,
+} from '../shared/schema.js';
 import {
   SessionAlreadyExistsError,
   SessionNotFoundError,
@@ -55,6 +66,18 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   private getBotRegistryFilePath(sessionId: string): string {
     return path.join(this.getSessionDir(sessionId), 'registry', 'bots.json');
+  }
+
+  private getProjectRootsFilePath(sessionId: string): string {
+    return path.join(this.getSessionDir(sessionId), 'registry', 'project_roots.json');
+  }
+
+  private getEnvironmentFilePath(sessionId: string): string {
+    return path.join(this.getSessionDir(sessionId), 'registry', 'environment.json');
+  }
+
+  private getDocumentsFilePath(sessionId: string): string {
+    return path.join(this.getSessionDir(sessionId), 'registry', 'documents.json');
   }
 
   private getBroadcastFilePath(sessionId: string): string {
@@ -355,5 +378,89 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
       await this.saveInbox(validSession, validRecipient, inbox);
     });
+  }
+
+  // --- Shared Project Context Operations ---
+
+  public async getProjectRootsRegistry(sessionId: string): Promise<ProjectRootsRegistry> {
+    const validId = validateSessionId(sessionId);
+    if (!(await this.sessionExists(validId))) {
+      throw new SessionNotFoundError(validId);
+    }
+
+    const file = this.getProjectRootsFilePath(validId);
+    if (!(await pathExists(file))) {
+      return {
+        schema_version: CURRENT_SHARED_CONTEXT_SCHEMA_VERSION,
+        session_id: validId,
+        updated_at: new Date().toISOString(),
+        roots: [],
+      };
+    }
+
+    return await readJsonValidated(file, ProjectRootsRegistrySchema);
+  }
+
+  public async saveProjectRootsRegistry(
+    sessionId: string,
+    registry: ProjectRootsRegistry
+  ): Promise<void> {
+    const validId = validateSessionId(sessionId);
+    const file = this.getProjectRootsFilePath(validId);
+    const validated = ProjectRootsRegistrySchema.parse(registry);
+    await atomicWriteJson(file, validated);
+  }
+
+  public async getEnvironmentMetadata(sessionId: string): Promise<EnvironmentMetadata | null> {
+    const validId = validateSessionId(sessionId);
+    if (!(await this.sessionExists(validId))) {
+      throw new SessionNotFoundError(validId);
+    }
+
+    const file = this.getEnvironmentFilePath(validId);
+    if (!(await pathExists(file))) {
+      return null;
+    }
+
+    return await readJsonValidated(file, EnvironmentMetadataSchema);
+  }
+
+  public async saveEnvironmentMetadata(
+    sessionId: string,
+    metadata: EnvironmentMetadata
+  ): Promise<void> {
+    const validId = validateSessionId(sessionId);
+    const file = this.getEnvironmentFilePath(validId);
+    const validated = EnvironmentMetadataSchema.parse(metadata);
+    await atomicWriteJson(file, validated);
+  }
+
+  public async getDocumentsRegistry(sessionId: string): Promise<SdlcDocumentsRegistry> {
+    const validId = validateSessionId(sessionId);
+    if (!(await this.sessionExists(validId))) {
+      throw new SessionNotFoundError(validId);
+    }
+
+    const file = this.getDocumentsFilePath(validId);
+    if (!(await pathExists(file))) {
+      return {
+        schema_version: CURRENT_SHARED_CONTEXT_SCHEMA_VERSION,
+        session_id: validId,
+        updated_at: new Date().toISOString(),
+        documents: [],
+      };
+    }
+
+    return await readJsonValidated(file, SdlcDocumentsRegistrySchema);
+  }
+
+  public async saveDocumentsRegistry(
+    sessionId: string,
+    registry: SdlcDocumentsRegistry
+  ): Promise<void> {
+    const validId = validateSessionId(sessionId);
+    const file = this.getDocumentsFilePath(validId);
+    const validated = SdlcDocumentsRegistrySchema.parse(registry);
+    await atomicWriteJson(file, validated);
   }
 }

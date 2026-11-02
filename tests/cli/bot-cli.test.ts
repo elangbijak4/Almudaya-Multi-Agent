@@ -202,4 +202,17 @@ describe('CLI Bot Commands', () => {
     expect(logs).toContain('BOT001');
     expect(logs).toContain('New Name');
   });
+
+  it('should expose AI provider, model, and mode options in bot run (FR-218)', () => {
+    const program = createProgram();
+    const botCmd = program.commands.find((c) => c.name() === 'bot');
+    const runCmd = botCmd?.commands.find((c) => c.name() === 'run');
+
+    expect(runCmd).toBeDefined();
+    const optionNames = runCmd?.options.map((o) => o.name());
+    expect(optionNames).toContain('provider');
+    expect(optionNames).toContain('model');
+    expect(optionNames).toContain('mode');
+    expect(optionNames).toContain('max-iterations');
+  });
 });

@@ -4,6 +4,11 @@ import { resolveWorkspaceRoot } from '../../core/config.js';
 import { FilesystemSessionStorage } from '../../blackboard/filesystem.js';
 import { BotService } from '../../bot/service.js';
 import { BotRuntime } from '../../bot/runtime.js';
+import { AutonomousAgentLoop } from '../../bot/agent-loop.js';
+import { ExecutionModeController, type ExecutionMode } from '../../bot/execution-mode.js';
+import { GeminiProvider } from '../../ai/gemini.js';
+import { MockAIProvider } from '../../ai/mock-provider.js';
+import type { IAIModelProvider } from '../../ai/provider.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -62,7 +67,7 @@ export function registerBotCommands(program: Command): void {
 
   bot
     .command('run')
-    .description('Run a bot runtime process with active heartbeat loop in the Session')
+    .description('Run a bot runtime process with active heartbeat loop and autonomous AI loop')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
     .option('-b, --bot <botId>', 'Explicit stable Bot ID (e.g. BOT001)')
     .option('-n, --name <displayName>', 'Human-readable display name')
@@ -72,6 +77,10 @@ export function registerBotCommands(program: Command): void {
     .option('--interval <ms>', 'Heartbeat interval in ms (default: 2000)')
     .option('--auto-ack', 'Automatically acknowledge incoming direct messages', true)
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
+    .option('--provider <provider>', 'AI model provider ("gemini" | "mock")')
+    .option('--model <model>', 'AI model name (defaults to "gemini-2.5-flash")')
+    .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
+    .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .action(async (options: {
       session: string;
@@ -82,6 +91,10 @@ export function registerBotCommands(program: Command): void {
       role?: string;
       interval?: string;
       autoAck?: boolean;
+      provider?: string;
+      model?: string;
+      mode?: string;
+      maxIterations?: string;
       workspace?: string;
     }) => {
       try {
@@ -90,6 +103,33 @@ export function registerBotCommands(program: Command): void {
         const botDisplayName = options.displayName ?? options.name;
         const botDescription = options.role ?? options.description;
         const heartbeatIntervalMs = options.interval ? parseInt(options.interval, 10) : 2000;
+        const maxIter = options.maxIterations ? parseInt(options.maxIterations, 10) : 10;
+
+        // Configure AI Model Provider (FR-201, FR-202, FR-218)
+        let aiProvider: IAIModelProvider | undefined;
+        const providerName = options.provider?.toLowerCase();
+
+        if (providerName === 'gemini') {
+          aiProvider = new GeminiProvider({
+            modelName: options.model ?? 'gemini-2.5-flash'
+          });
+        } else if (providerName === 'mock') {
+          aiProvider = new MockAIProvider('mock-model', [
+            { text: 'Tugas telah diproses oleh Mock AI.' }
+          ]);
+        } else if (process.env.GEMINI_API_KEY && !providerName) {
+          // Auto-enable Gemini if API key is present in environment
+          aiProvider = new GeminiProvider({
+            modelName: options.model ?? 'gemini-2.5-flash'
+          });
+        }
+
+        // Configure Safety Execution Mode (FR-213, FR-214, FR-215)
+        const executionMode: ExecutionMode =
+          options.mode?.toLowerCase() === 'turbo' ? 'TURBO' : 'REQUEST_REVIEW';
+        const executionModeController = new ExecutionModeController(executionMode);
+
+        let agentLoop: AutonomousAgentLoop | undefined;
 
         const runtime = new BotRuntime(storage, {
           sessionId: options.session,
@@ -99,19 +139,51 @@ export function registerBotCommands(program: Command): void {
           heartbeatIntervalMs,
           autoAcknowledge: options.autoAck ?? true,
           onMessage: async (msg) => {
-            console.log(`[BOT ${runtime.botId}] Received message from ${msg.sender_bot_id}: ${msg.content}`);
+            console.log(`\n📨 [BOT ${runtime.botId}] Pesan masuk dari ${msg.sender_bot_id}: "${msg.content}"`);
+
+            if (agentLoop && aiProvider) {
+              console.log(
+                `🤖 Menjalankan ReAct Agent Loop (${aiProvider.providerId} | Mode: ${executionModeController.getMode()})...`
+              );
+              try {
+                const reply = await agentLoop.handleMessage(msg);
+                console.log(`✅ [BOT ${runtime.botId}] Balasan otonom terkirim:`);
+                console.log(`   "${reply.slice(0, 160)}${reply.length > 160 ? '...' : ''}"\n`);
+              } catch (err: unknown) {
+                console.error(
+                  `❌ [BOT ${runtime.botId}] Gagal memproses pesan: ${(err as Error).message}`
+                );
+              }
+            }
           },
           onBroadcast: async (evt) => {
-            console.log(`[BOT ${runtime.botId}] Observed broadcast from ${evt.sender_bot_id} (${evt.category}): ${evt.content}`);
+            console.log(
+              `📢 [BOT ${runtime.botId}] Broadcast dari ${evt.sender_bot_id} [${evt.category}]: ${evt.content}`
+            );
           },
         });
 
         const botRecord = await runtime.start();
+
+        // Initialize agent loop with registered bot identity
+        if (aiProvider) {
+          agentLoop = new AutonomousAgentLoop({
+            sessionId: options.session,
+            botId: botRecord.bot_id,
+            storage,
+            provider: aiProvider,
+            executionModeController,
+            maxIterations: maxIter
+          });
+        }
+
         console.log(`Bot runtime started successfully!`);
-        console.log(`  Session ID:   ${botRecord.session_id}`);
-        console.log(`  Bot ID:       ${botRecord.bot_id}`);
-        console.log(`  Display Name: ${botRecord.display_name}`);
-        console.log(`  PID:          ${process.pid}`);
+        console.log(`  Session ID:     ${botRecord.session_id}`);
+        console.log(`  Bot ID:         ${botRecord.bot_id}`);
+        console.log(`  Display Name:   ${botRecord.display_name}`);
+        console.log(`  PID:            ${process.pid}`);
+        console.log(`  AI Provider:    ${aiProvider ? `${aiProvider.providerId} (${aiProvider.modelName})` : 'Disabled (Messaging only)'}`);
+        console.log(`  Execution Mode: ${executionMode}`);
         console.log(`Press Ctrl+C to terminate bot process.`);
 
         // Keep process running until interrupted

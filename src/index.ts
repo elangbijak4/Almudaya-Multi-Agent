@@ -10,10 +10,7 @@ export * from './blackboard/filesystem.js';
 export * from './session/schema.js';
 export * from './session/service.js';
 
-export * from './bot/schema.js';
-export * from './bot/service.js';
-export * from './bot/runtime.js';
-export * from './bot/execution-mode.js';
+export * from './bot/index.js';
 
 export * from './messaging/schema.js';
 export * from './messaging/service.js';

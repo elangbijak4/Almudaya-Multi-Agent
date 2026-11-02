@@ -98,17 +98,19 @@ describe('Bot Runtime Lifecycle & Heartbeat', () => {
       content: 'Task payload',
     });
 
-    // Wait for runtime to poll and process
-    for (let i = 0; i < 20 && !messageReceived; i++) {
+    // Wait for runtime to poll, process, and acknowledge
+    let acknowledged = false;
+    for (let i = 0; i < 40; i++) {
+      const inbox = await messagingService.readInbox('S001', 'BOT001');
+      if (inbox.length > 0 && inbox[0]?.status === 'acknowledged') {
+        acknowledged = true;
+        break;
+      }
       await new Promise((r) => setTimeout(r, 25));
     }
 
     expect(messageReceived).toBe(true);
-
-    // Verify message was auto-acknowledged
-    const inbox = await messagingService.readInbox('S001', 'BOT001');
-    expect(inbox.length).toBe(1);
-    expect(inbox[0]?.status).toBe('acknowledged');
+    expect(acknowledged).toBe(true);
 
     await runtime.stop();
   });

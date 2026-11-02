@@ -1,6 +1,6 @@
 # Requirement Traceability Matrix — Almudaya Multi-Agent v0.2.0
 
-**Status:** IN PROGRESS (Phase 6 Verified)  
+**Status:** IN PROGRESS (Phase 7 Verified)  
 **Date:** 2026-11-02  
 
 Dokumen ini memetakan setiap kebutuhan fungsional dan non-fungsional v0.2.0 ke modul desain, modul implementasi, dan pengujian otomatis pendukungnya.
@@ -26,8 +26,8 @@ Dokumen ini memetakan setiap kebutuhan fungsional dan non-fungsional v0.2.0 ke m
 | **FR-213** | Mode Keamanan: `REQUEST_REVIEW` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
 | **FR-214** | Mode Keamanan: `TURBO` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
 | **FR-215** | Konfigurasi mode via CLI flag | ADR-203, SYSTEM_DESIGN | `src/cli/commands/bot.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
-| **FR-216** | Autonomous Multi-Bot ReAct Loop | ADR-204, SYSTEM_DESIGN | `src/bot/agent-loop.ts` | `tests/bot/agent-loop.test.ts` | **VERIFIED** |
-| **FR-217** | Audit Trail Logging di Blackboard | ADR-204, SYSTEM_DESIGN | `src/blackboard/` | `tests/bot/agent-loop.test.ts` | **VERIFIED** |
+| **FR-216** | Autonomous Multi-Bot ReAct Loop | ADR-204, SYSTEM_DESIGN | `src/bot/agent-loop.ts` | `tests/e2e/autonomous-coding.test.ts` | **VERIFIED** |
+| **FR-217** | Audit Trail Logging di Blackboard | ADR-204, SYSTEM_DESIGN | `src/blackboard/` | `tests/e2e/autonomous-coding.test.ts` | **VERIFIED** |
 | **FR-218** | CLI `almudaya bot run` AI parameters | ADR-204, SYSTEM_DESIGN | `src/cli/commands/bot.ts` | `tests/cli/bot-cli.test.ts` | **VERIFIED** |
 
 ---

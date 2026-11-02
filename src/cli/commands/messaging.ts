@@ -11,31 +11,46 @@ export function registerMessagingCommands(program: Command): void {
     .description('Publish and read Session broadcast events');
 
   broadcast
-    .command('publish <content>')
+    .command('publish [content]')
     .description('Publish an event to the Session broadcast log')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <senderBotId>', 'Sender Bot ID (alias for --sender)')
     .option('--sender <senderBotId>', 'Sender Bot ID (defaults to HUMAN)', 'HUMAN')
+    .option('--payload <payload>', 'Event payload content')
+    .option('--content <content>', 'Event content (alias for --payload)')
     .option(
       '-c, --category <category>',
       'Event category (ACTIVITY, OBSERVATION, DECISION, TASK, ARTIFACT, QUESTION, STATUS, ALERT)',
       'ACTIVITY'
     )
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (content: string, options: {
+    .action(async (posContent: string | undefined, options: {
       session: string;
+      bot?: string;
       sender: string;
+      payload?: string;
+      content?: string;
       category: string;
       workspace?: string;
     }) => {
       try {
+        const publishContent = posContent ?? options.payload ?? options.content;
+        const senderId = options.bot ?? options.sender ?? 'HUMAN';
+
+        if (!publishContent) {
+          console.error('Error: Broadcast content or payload is required (e.g. almudaya broadcast publish <content> or --payload <content>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new MessagingService(storage);
 
         const event = await service.publishBroadcast(options.session, {
-          senderBotId: options.sender,
+          senderBotId: senderId,
           category: options.category.toUpperCase() as BroadcastCategory,
-          content,
+          content: publishContent,
         });
 
         console.log(`Broadcast published successfully!`);
@@ -107,9 +122,13 @@ export function registerMessagingCommands(program: Command): void {
     .description('Send, read, and acknowledge bot-to-bot direct messages');
 
   message
-    .command('send <recipient> <content>')
+    .command('send [recipient] [content]')
     .description('Send a direct message to a recipient bot (by Bot ID or display name)')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-r, --recipient <recipient>', 'Recipient bot ID or display name')
+    .option('--body <content>', 'Message body content')
+    .option('--content <content>', 'Message body content (alias for --body)')
+    .option('-b, --bot <senderBotId>', 'Sender Bot ID (alias for --sender)')
     .option('--sender <senderBotId>', 'Sender Bot ID (defaults to HUMAN)', 'HUMAN')
     .option(
       '-t, --type <messageType>',
@@ -117,22 +136,36 @@ export function registerMessagingCommands(program: Command): void {
       'DIRECT'
     )
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (recipient: string, content: string, options: {
+    .action(async (posRecipient: string | undefined, posContent: string | undefined, options: {
       session: string;
+      recipient?: string;
+      body?: string;
+      content?: string;
+      bot?: string;
       sender: string;
       type: string;
       workspace?: string;
     }) => {
       try {
+        const targetRecipient = posRecipient ?? options.recipient;
+        const targetContent = posContent ?? options.body ?? options.content;
+        const senderId = options.bot ?? options.sender ?? 'HUMAN';
+
+        if (!targetRecipient || !targetContent) {
+          console.error('Error: Both recipient and body/content are required (e.g. almudaya message send <recipient> <content> or --recipient <id> --body <text>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new MessagingService(storage);
 
         const msg = await service.sendDirectMessage(options.session, {
-          recipient,
-          senderBotId: options.sender,
+          recipient: targetRecipient,
+          senderBotId: senderId,
           messageType: options.type.toUpperCase() as DirectMessageType,
-          content,
+          content: targetContent,
         });
 
         console.log(`Message sent successfully!`);
@@ -150,26 +183,35 @@ export function registerMessagingCommands(program: Command): void {
     });
 
   message
-    .command('read <botId>')
+    .command('read [botId]')
     .description("Read messages in a bot's Individual Blackboard inbox")
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <botId>', 'Bot ID whose inbox to read')
     .option('--mark-read', 'Mark unread messages as read', true)
     .option('-l, --limit <count>', 'Limit the number of messages returned', (val) => parseInt(val, 10))
     .option('-w, --workspace <path>', 'Workspace directory path')
     .option('--json', 'Output messages as JSON')
-    .action(async (botId: string, options: {
+    .action(async (posBotId: string | undefined, options: {
       session: string;
+      bot?: string;
       markRead?: boolean;
       limit?: number;
       workspace?: string;
       json?: boolean;
     }) => {
       try {
+        const targetBot = posBotId ?? options.bot;
+        if (!targetBot) {
+          console.error('Error: Bot ID is required (e.g. almudaya message read <botId> or --bot <botId>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new MessagingService(storage);
 
-        const messages = await service.readInbox(options.session, botId, {
+        const messages = await service.readInbox(options.session, targetBot, {
           markAsRead: options.markRead,
           limit: options.limit,
         });
@@ -180,11 +222,11 @@ export function registerMessagingCommands(program: Command): void {
         }
 
         if (messages.length === 0) {
-          console.log(`No messages in inbox for bot [${botId}] in session: ${options.session}`);
+          console.log(`No messages in inbox for bot [${targetBot}] in session: ${options.session}`);
           return;
         }
 
-        console.log(`Inbox messages for [${botId}] in Session [${options.session}]:\n`);
+        console.log(`Inbox messages for [${targetBot}] in Session [${options.session}]:\n`);
         for (const m of messages) {
           console.log(`  [${m.timestamp}] [${m.status.toUpperCase()}] From: ${m.sender_bot_id} (${m.message_type})`);
           console.log(`    Message ID: ${m.message_id}`);
@@ -200,20 +242,33 @@ export function registerMessagingCommands(program: Command): void {
     });
 
   message
-    .command('ack <botId> <messageId>')
+    .command('ack [botId] [messageId]')
     .description('Acknowledge a received message in a inbox')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <botId>', 'Bot ID')
+    .option('-m, --message-id <messageId>', 'Message ID to acknowledge')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (botId: string, messageId: string, options: {
+    .action(async (posBotId: string | undefined, posMessageId: string | undefined, options: {
       session: string;
+      bot?: string;
+      messageId?: string;
       workspace?: string;
     }) => {
       try {
+        const targetBot = posBotId ?? options.bot;
+        const targetMsgId = posMessageId ?? options.messageId;
+
+        if (!targetBot || !targetMsgId) {
+          console.error('Error: Both Bot ID and Message ID are required (e.g. almudaya message ack <botId> <messageId> or --bot <id> --message-id <id>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new MessagingService(storage);
 
-        const acked = await service.acknowledgeMessage(options.session, botId, messageId);
+        const acked = await service.acknowledgeMessage(options.session, targetBot, targetMsgId);
 
         console.log(`Message acknowledged successfully!`);
         console.log(`  Message ID: ${acked.message_id}`);

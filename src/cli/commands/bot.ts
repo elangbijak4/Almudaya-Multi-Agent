@@ -17,13 +17,17 @@ export function registerBotCommands(program: Command): void {
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
     .option('-b, --bot <botId>', 'Explicit stable Bot ID (e.g. BOT001)')
     .option('-n, --name <displayName>', 'Human-readable display name')
+    .option('--display-name <displayName>', 'Alias for display name')
     .option('-d, --description <description>', 'Bot description or role')
+    .option('-r, --role <role>', 'Alias for bot role/description')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .action(async (options: {
       session: string;
       bot?: string;
       name?: string;
+      displayName?: string;
       description?: string;
+      role?: string;
       workspace?: string;
     }) => {
       try {
@@ -31,10 +35,13 @@ export function registerBotCommands(program: Command): void {
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new BotService(storage);
 
+        const botDisplayName = options.displayName ?? options.name;
+        const botDescription = options.role ?? options.description;
+
         const botRecord = await service.registerBot(options.session, {
           botId: options.bot,
-          displayName: options.name,
-          description: options.description,
+          displayName: botDisplayName,
+          description: botDescription,
         });
 
         console.log(`Bot joined session successfully!`);
@@ -59,26 +66,38 @@ export function registerBotCommands(program: Command): void {
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
     .option('-b, --bot <botId>', 'Explicit stable Bot ID (e.g. BOT001)')
     .option('-n, --name <displayName>', 'Human-readable display name')
+    .option('--display-name <displayName>', 'Alias for display name')
     .option('-d, --description <description>', 'Bot description or role')
-    .option('--auto-ack', 'Automatically acknowledge incoming direct messages', false)
+    .option('-r, --role <role>', 'Alias for bot role/description')
+    .option('--interval <ms>', 'Heartbeat interval in ms (default: 2000)')
+    .option('--auto-ack', 'Automatically acknowledge incoming direct messages', true)
+    .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .action(async (options: {
       session: string;
       bot?: string;
       name?: string;
+      displayName?: string;
       description?: string;
+      role?: string;
+      interval?: string;
       autoAck?: boolean;
       workspace?: string;
     }) => {
       try {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
+        const botDisplayName = options.displayName ?? options.name;
+        const botDescription = options.role ?? options.description;
+        const heartbeatIntervalMs = options.interval ? parseInt(options.interval, 10) : 2000;
+
         const runtime = new BotRuntime(storage, {
           sessionId: options.session,
           botId: options.bot,
-          displayName: options.name,
-          description: options.description,
-          autoAcknowledge: options.autoAck,
+          displayName: botDisplayName,
+          description: botDescription,
+          heartbeatIntervalMs,
+          autoAcknowledge: options.autoAck ?? true,
           onMessage: async (msg) => {
             console.log(`[BOT ${runtime.botId}] Received message from ${msg.sender_bot_id}: ${msg.content}`);
           },
@@ -143,18 +162,26 @@ export function registerBotCommands(program: Command): void {
     });
 
   bot
-    .command('inspect <botIdOrName>')
+    .command('inspect [botIdOrName]')
     .description('Inspect details of a specific bot in a session')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <botIdOrName>', 'Bot ID or display name to inspect')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .option('--json', 'Output details as JSON')
-    .action(async (botIdOrName: string, options: { session: string; workspace?: string; json?: boolean }) => {
+    .action(async (botIdOrName: string | undefined, options: { session: string; bot?: string; workspace?: string; json?: boolean }) => {
       try {
+        const targetBot = botIdOrName ?? options.bot;
+        if (!targetBot) {
+          console.error('Error: Bot ID or name is required (e.g. almudaya bot inspect <botId> or --bot <botId>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new BotService(storage);
 
-        const botData = await service.getBot(options.session, botIdOrName);
+        const botData = await service.getBot(options.session, targetBot);
 
         if (options.json) {
           console.log(JSON.stringify(botData, null, 2));
@@ -177,17 +204,28 @@ export function registerBotCommands(program: Command): void {
     });
 
   bot
-    .command('rename <botId> <newDisplayName>')
+    .command('rename [botId] [newDisplayName]')
     .description("Rename a bot's display name without altering its stable Bot ID")
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-b, --bot <botId>', 'Bot ID to rename')
+    .option('-n, --new-name <newDisplayName>', 'New display name')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (botId: string, newDisplayName: string, options: { session: string; workspace?: string }) => {
+    .action(async (botId: string | undefined, newDisplayName: string | undefined, options: { session: string; bot?: string; newName?: string; workspace?: string }) => {
       try {
+        const targetBot = botId ?? options.bot;
+        const targetNewName = newDisplayName ?? options.newName;
+
+        if (!targetBot || !targetNewName) {
+          console.error('Error: Both Bot ID and new display name are required (e.g. almudaya bot rename <botId> <newName> or --bot <id> --new-name <name>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new BotService(storage);
 
-        const updated = await service.renameBot(options.session, botId, newDisplayName);
+        const updated = await service.renameBot(options.session, targetBot, targetNewName);
 
         console.log(`Bot renamed successfully!`);
         console.log(`  Bot ID:           ${updated.bot_id}`);

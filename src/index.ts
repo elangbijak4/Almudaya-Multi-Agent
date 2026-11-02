@@ -21,5 +21,6 @@ export * from './shared/schema.js';
 export * from './shared/service.js';
 
 export * from './ai/index.js';
+export * from './tools/index.js';
 
 export { createProgram, run } from './cli/index.js';

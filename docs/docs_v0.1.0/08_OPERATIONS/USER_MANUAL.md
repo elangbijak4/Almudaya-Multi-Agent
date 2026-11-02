@@ -1,6 +1,6 @@
 # Almudaya Multi-Agent v0.1.0 — Technical & Command Manual
 
-Dokumentasi manual teknis resmi untuk executable CLI `almudaya`, mencakup sintaks perintah, opsi, format data, variabel lingkungan (*environment variables*), struktur penyimpanan Blackboard, penanganan error, dan mekanisme penguncian (*locking*).
+Dokumentasi manual teknis resmi untuk executable CLI `almudaya`, mencakup sintaks perintah, opsi, parameter fleksibel, format data, variabel lingkungan (*environment variables*), struktur penyimpanan Blackboard, penanganan error, dan mekanisme penguncian (*locking*).
 
 ---
 
@@ -11,14 +11,16 @@ Format umum eksekusi CLI:
 almudaya <command> <subcommand> [arguments...] [options...]
 ```
 
+Semua perintah dirancang fleksibel: dapat menerima **argumen posisi** (*positional arguments*) maupun **opsi berbendera** (*flags/options*).
+
 ### Opsi Global
 Opsi-opsi berikut didukung oleh seluruh perintah `almudaya`:
 
 | Opsi | Tipe | Default | Keterangan |
 |---|---|---|---|
-| `-V, --version` | Flag | - | Menampilkan versi terpasang dari `almudaya-multiagent` (misal `0.1.0`). |
+| `-v, --version` | Flag | - | Menampilkan versi terpasang dari `almudaya-multiagent` (misal `0.1.0`). |
 | `-h, --help` | Flag | - | Menampilkan bantuan manual perintah dan sub-perintah yang tersedia. |
-| `--workspace <path>` | String | Platform default | Menimpa (*override*) direktori root penyimpanan session untuk eksekusi saat ini. |
+| `-w, --workspace <path>` | String | Platform default | Menimpa (*override*) direktori root penyimpanan session untuk eksekusi saat ini. |
 | `--json` | Flag | `false` | Menghasilkan keluaran dalam format JSON murni terstruktur (ideal untuk scripting & piping). |
 
 ---
@@ -29,23 +31,27 @@ Opsi-opsi berikut didukung oleh seluruh perintah `almudaya`:
 
 Mengelola siklus hidup ruang kolaborasi (*Session*).
 
-#### A. Membuat Session Baru
+#### A. Membuat Session Baru (`create`)
 ```bash
 almudaya session create <name> [options...]
 ```
 - **Arguments:**
-  - `<name>` *(Wajib)*: Nama deskriptif session (misal `my-project`).
+  - `<name>` *(Wajib)*: Nama deskriptif session (misal `proyek-baru`).
 - **Options:**
-  - `--session <id>` *(Opsional)*: Slug ID session kustom (hanya huruf, angka, `-`, dan `_`, maks 64 karakter). Jika tidak diisi, ID otomatis di-*generate*.
+  - `-s, --session <id>` *(Opsional)*: Slug ID session kustom (misal `S002`). Hanya huruf, angka, `-`, dan `_`.
+  - `--id <id>` *(Opsional)*: Alias untuk `--session <id>`.
   - `--description <text>` *(Opsional)*: Penjelasan tujuan session.
-  - `--workspace <path>` *(Opsional)*: Tentukan folder root workspace.
-  - `--json` *(Opsional)*: Output JSON.
-- **Contoh:**
+  - `-w, --workspace <path>` *(Opsional)*: Tentukan folder root workspace.
+- **Contoh Penggunaan:**
   ```bash
-  almudaya session create "E-Commerce Refactoring" --session S001 --description "Refactoring core payment module"
+  # Format paling populer dan direkomendasikan:
+  almudaya session create proyek-baru --session S002
+
+  # Dengan deskripsi tambahan:
+  almudaya session create "E-Commerce App" --session S001 --description "Refactoring payment gateway"
   ```
 
-#### B. Menampilkan Daftar Session
+#### B. Menampilkan Daftar Session (`list`)
 ```bash
 almudaya session list [options...]
 ```
@@ -55,15 +61,16 @@ almudaya session list [options...]
   almudaya session list --json
   ```
 
-#### C. Memeriksa Rincian Session
+#### C. Memeriksa Rincian Session (`inspect`)
 ```bash
-almudaya session inspect --session <id> [options...]
+almudaya session inspect [sessionId] [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session yang akan diperiksa.
+  - `-s, --session <id>` *(Opsional jika sessionId diberikan di posisi argumen)*: ID Session yang akan diperiksa.
 - **Contoh:**
   ```bash
-  almudaya session inspect --session S001
+  almudaya session inspect S002
+  almudaya session inspect --session S002 --json
   ```
 
 ---
@@ -78,60 +85,76 @@ almudaya bot join --session <id> [options...]
 # atau alias: almudaya bot start --session <id> [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session yang dituju.
-  - `--bot <id>` *(Opsional)*: ID stabil bot (misal `BOT001`). Jika dikosongkan, sistem mengalokasikan ID otomatis (`BOT001`, `BOT002`, dst).
-  - `--display-name <name>` *(Opsional)*: Nama tampilan manusiawi. Jika dikosongkan, otomatis menggunakan format default `<session>_<seq>`.
-  - `--role <role>` *(Opsional)*: Peran bot (misal `"Architect"`, `"Coder"`, `"Reviewer"`).
-  - `--description <desc>` *(Opsional)*: Deskripsi tugas spesifik bot.
+  - `-s, --session <id>` *(Wajib)*: ID Session yang dituju.
+  - `-b, --bot <botId>` *(Opsional)*: ID stabil bot (misal `BOT001`). Jika dikosongkan, sistem mengalokasikan ID otomatis (`BOT001`, `BOT002`, dst).
+  - `--display-name <name>` / `-n, --name <name>` *(Opsional)*: Nama tampilan manusiawi. Default: `<session>_<seq>`.
+  - `--role <role>` / `-d, --description <desc>` *(Opsional)*: Peran atau deskripsi bot.
+  - `-w, --workspace <path>` *(Opsional)*: Lokasi workspace.
 - **Contoh:**
   ```bash
-  almudaya bot join --session S001 --bot BOT001 --display-name "Architect" --role "System Architect"
+  almudaya bot join --session S002 --bot BOT001 --display-name "Architect" --role "System Architect"
+  almudaya bot join --session S002 --bot BOT002 --display-name "Coder" --role "Software Engineer"
   ```
 
-#### B. Menampilkan Daftar Bot dalam Session
+#### B. Menampilkan Daftar Bot dalam Session (`list`)
 ```bash
 almudaya bot list --session <id> [options...]
 ```
-Secara otomatis menjalankan rekonsiliasi liveness: bot dengan PID mati atau heartbeat kedaluwarsa akan ditandai berstatus `stale`.
+> [!NOTE]
+> Perintah `list` secara otomatis memindai liveness setiap bot di sistem operasi:
+> - Bot dengan proses aktif yang rutin memompa heartbeat akan berstatus `(active)`.
+> - Bot yang prosesnya sudah selesai atau dimatikan akan otomatis ditandai `(stale)`.
+
 - **Contoh:**
   ```bash
-  almudaya bot list --session S001
+  almudaya bot list --session S002
+  almudaya bot list --session S002 --json
   ```
 
-#### C. Memeriksa Detail Bot Tertentu
+#### C. Memeriksa Detail Bot Tertentu (`inspect`)
 ```bash
-almudaya bot inspect --session <id> --bot <id> [options...]
+almudaya bot inspect [botIdOrName] [options...]
 ```
+- **Options:**
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <botId>` *(Opsional jika nama/id diberikan di argumen)*.
 - **Contoh:**
   ```bash
-  almudaya bot inspect --session S001 --bot BOT001
+  almudaya bot inspect BOT001 --session S002
+  almudaya bot inspect "Architect" --session S002
   ```
 
 #### D. Mengubah Nama Tampilan Bot (`rename`)
 ```bash
-almudaya bot rename --session <id> --bot <id> --new-name <name> [options...]
+almudaya bot rename [botId] [newDisplayName] [options...]
 ```
-Mengubah `display_name` bot secara aman dengan menjamin keunikan nama baru. `bot_id` tetap permanen dan tidak merusak riwayat pesan lama.
+- **Options:**
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <botId>`: Bot ID yang akan diganti namanya.
+  - `-n, --new-name <name>`: Nama tampilan baru.
 - **Contoh:**
   ```bash
-  almudaya bot rename --session S001 --bot BOT001 --new-name "Principal Architect"
+  almudaya bot rename BOT001 "Lead Architect" --session S002
+  almudaya bot rename --session S002 --bot BOT001 --new-name "Lead Architect"
   ```
 
 #### E. Menjalankan Runtime Daemon Bot (`run`)
 ```bash
 almudaya bot run --session <id> --bot <id> [options...]
 ```
-Menjalankan loop proses bot independen di latar depan (*foreground*):
+Menjalankan loop bot interaktif di latar depan:
 - Mencatat PID proses sistem operasi saat ini.
-- Melakukan *heartbeat* periodik memperbarui `last_seen_at`.
-- Memeriksa inbox pesan masuk secara berkala.
-- Menangani sinyal terminasi (`SIGINT`/`SIGTERM`) untuk graceful shutdown (mengubah status menjadi `stopped`).
+- Melakukan *heartbeat* otomatis memperbarui timestamp `last_seen_at`.
+- Memantau inbox Blackboard dan langsung mencetak pesan masuk secara *real-time*.
+- Otomatis melakukan *acknowledgement* (ack) pesan masuk.
+- Menangani graceful shutdown saat ditekan `Ctrl+C`.
 - **Options:**
-  - `--interval <ms>` *(Opsional)*: Interval detak heartbeat dalam milidetik (default: `2000`).
-  - `--no-auto-ack` *(Opsional)*: Nonaktifkan auto-acknowledgement pesan masuk.
+  - `--interval <ms>`: Interval detak heartbeat dalam milidetik (default: `2000`).
+  - `--no-auto-ack`: Matikan konfirmasi ack otomatis jika ingin mengonfirmasi manual.
 - **Contoh:**
   ```bash
-  almudaya bot run --session S001 --bot BOT001 --interval 3000
+  almudaya bot run --session S002 --bot BOT001
+  almudaya bot run --session S002 --bot BOT002 --interval 1000
   ```
 
 ---
@@ -140,34 +163,33 @@ Menjalankan loop proses bot independen di latar depan (*foreground*):
 
 Publikasi dan konsumsi log event broadcast session yang bersifat *append-only* (`events.jsonl`).
 
-#### A. Mempublikasikan Event Broadcast
+#### A. Mempublikasikan Event Broadcast (`publish`)
 ```bash
-almudaya broadcast publish --session <id> --bot <id> [options...]
+almudaya broadcast publish [content] [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session.
-  - `--bot <id>` *(Wajib)*: ID bot pengirim.
-  - `--category <cat>` *(Opsional)*: Kategori event (misal `ANNOUNCEMENT`, `TASK_ASSIGNED`, `DECISION`, `ALERT`; default: `ANNOUNCEMENT`).
-  - `--payload <json_or_string>` *(Wajib)*: Data payload (string teks atau JSON valid).
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <id>` / `--sender <id>` *(Opsional)*: Bot ID pengirim (default: `HUMAN`).
+  - `--payload <content>` / `--content <content>` *(Opsional jika content ada di argumen)*: Isi event.
+  - `-c, --category <cat>` *(Opsional)*: Kategori event (`ANNOUNCEMENT`, `DECISION`, `TASK`, `ALERT`; default: `ACTIVITY`).
 - **Contoh:**
   ```bash
-  almudaya broadcast publish --session S001 --bot BOT001 --category DECISION --payload '{"architecture": "event-driven", "db": "postgres"}'
+  almudaya broadcast publish --session S002 --bot BOT001 --category DECISION --payload '{"architecture": "Clean Architecture"}'
+  almudaya broadcast publish "Server maintenance dimulai jam 14.00" --session S002
   ```
 
-#### B. Membaca Event Broadcast
+#### B. Membaca Event Broadcast (`read`)
 ```bash
-almudaya broadcast read --session <id> --bot <id> [options...]
+almudaya broadcast read --session <id> [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session.
-  - `--bot <id>` *(Wajib)*: ID bot pembaca (digunakan untuk melacak posisi cursor).
-  - `--category <cat>` *(Opsional)*: Filter event berdasarkan kategori tertentu.
-  - `--limit <n>` *(Opsional)*: Batas jumlah event yang dibaca (default: `50`).
-  - `--from-id <id>` *(Opsional)*: Mulai membaca event setelah ID event ini.
-  - `--no-advance-cursor` *(Opsional)*: Baca tanpa memajukan posisi cursor bot.
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <id>` *(Opsional)*: ID bot pembaca untuk melacak posisi kursor (cursor tracking).
+  - `-c, --category <cat>` *(Opsional)*: Filter kategori event.
+  - `-l, --limit <n>` *(Opsional)*: Batas jumlah event yang dibaca (default: `50`).
 - **Contoh:**
   ```bash
-  almudaya broadcast read --session S001 --bot BOT002
+  almudaya broadcast read --session S002 --bot BOT002
   ```
 
 ---
@@ -178,42 +200,49 @@ Pertukaran pesan point-to-point antar-bot melalui Individual Blackboard (`inbox/
 
 #### A. Mengirim Pesan Langsung (`send`)
 ```bash
-almudaya message send --session <id> --sender <id> --recipient <target> --body <text> [options...]
+almudaya message send [recipient] [content] [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session.
-  - `--sender <id>` *(Wajib)*: Bot ID pengirim.
-  - `--recipient <target>` *(Wajib)*: Target penerima; **dapat berupa Bot ID stabil (misal `BOT001`) atau Display Name (misal `"Architect"`)**. Sistem akan me-resolve secara otomatis ke Bot ID penerima.
-  - `--body <text>` *(Wajib)*: Isi pesan.
-  - `--metadata <json>` *(Opsional)*: Metadata tambahan dalam format JSON.
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-r, --recipient <target>`: Penerima pesan (**bisa berupa Bot ID `BOT001` atau Display Name `"Architect"`**).
+  - `--body <text>` / `--content <text>`: Isi pesan teks.
+  - `-b, --bot <id>` / `--sender <id>`: Bot ID pengirim (default: `HUMAN`).
+  - `-t, --type <type>`: Tipe pesan (`DIRECT`, `REQUEST`, `RESPONSE`, `NOTIFICATION`; default: `DIRECT`).
 - **Contoh:**
   ```bash
-  almudaya message send --session S001 --sender BOT002 --recipient "Architect" --body "Dokumen arsitektur telah selesai saya telaah."
+  # Menggunakan flags lengkap (sangat dianjurkan):
+  almudaya message send --session S002 --sender BOT002 --recipient "Architect" --body "Halo Architect! Saya Coder, siap menerima instruksi rancangan."
+
+  # Menggunakan sintaks posisi:
+  almudaya message send "Architect" "Halo Architect!" --session S002 --sender BOT002
   ```
 
 #### B. Membaca Pesan Masuk (`read`)
 ```bash
-almudaya message read --session <id> --bot <id> [options...]
+almudaya message read [botId] [options...]
 ```
 - **Options:**
-  - `--session <id>` *(Wajib)*: ID Session.
-  - `--bot <id>` *(Wajib)*: Bot ID pemilik inbox.
-  - `--status <filter>` *(Opsional)*: Filter status pesan (`unread`, `read`, `acknowledged`, atau `all`; default: `unread`).
-  - `--limit <n>` *(Opsional)*: Batas jumlah pesan (default: `20`).
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <botId>`: Bot ID pemilik inbox.
+  - `--status <filter>`: Filter status pesan (`unread`, `read`, `acknowledged`, `all`; default: `unread`).
+  - `-l, --limit <n>`: Batas jumlah pesan (default: `20`).
 - **Contoh:**
   ```bash
-  almudaya message read --session S001 --bot BOT001
-  almudaya message read --session S001 --bot BOT001 --status all --json
+  almudaya message read --session S002 --bot BOT001
+  almudaya message read BOT001 --session S002 --status all --json
   ```
 
 #### C. Mengonfirmasi Penerimaan Pesan (`ack`)
 ```bash
-almudaya message ack --session <id> --bot <id> --message-id <msg_id> [options...]
+almudaya message ack [botId] [messageId] [options...]
 ```
-Mengubah status pesan menjadi `acknowledged` secara idempotent (aman dipanggil berulang kali).
+- **Options:**
+  - `-s, --session <id>` *(Wajib)*: ID Session.
+  - `-b, --bot <botId>`: Bot ID pemilik inbox.
+  - `-m, --message-id <id>`: ID pesan yang di-ack.
 - **Contoh:**
   ```bash
-  almudaya message ack --session S001 --bot BOT001 --message-id "msg_1730472000000_abc123"
+  almudaya message ack --session S002 --bot BOT001 --message-id "msg_1730472000000_abc123"
   ```
 
 ---
@@ -225,102 +254,53 @@ Menyimpan direktori project roots, variabel lingkungan dengan *automatic secret 
 #### A. Project Roots (`almudaya context root`)
 - **Menambahkan root:**
   ```bash
-  almudaya context root add --session <id> --name <name> --path <path> [--type <primary|secondary|reference>]
+  almudaya context root add [name] [path] [options...]
   ```
-  *(Path otomatis dinormalisasi menjadi path absolut)*.
+  Options: `-n, --name <name>`, `-p, --path <path>`, `-t, --type <primary|dependency|reference|docs>`, `-s, --session <id>`.
 - **Melihat daftar roots:**
   ```bash
   almudaya context root list --session <id>
   ```
 - **Contoh:**
   ```bash
-  almudaya context root add --session S001 --name backend --path "D:\Projects\ecom-api" --type primary
-  almudaya context root list --session S001
+  almudaya context root add --session S002 --name testing --path D:\testingbot
+  almudaya context root list --session S002
   ```
 
 #### B. Environment Metadata & Sanitasi Kredensial (`almudaya context env`)
-- **Menyimpan key-value env:**
+- **Menyimpan key-value:**
   ```bash
-  almudaya context env set --session <id> --key <key> --value <value> [--description <desc>]
+  almudaya context env set --session <id> --key <key> --value <value>
+  # atau: almudaya context env set --session <id> --var KEY=VALUE
   ```
   > [!IMPORTANT]
-  > Kunci yang mengandung kata sensitif (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `AUTH`, dll) atau nilai dengan pola token/kunci privat otomatis disanitasi dan disimpan sebagai `[REDACTED]`.
-- **Melihat daftar env:**
+  > Kunci yang mengandung kata sensitif (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `AUTH`, dll) atau nilai pola token otomatis disanitasi dan disimpan sebagai `[REDACTED]`.
+- **Melihat metadata env:**
   ```bash
-  almudaya context env list --session <id>
+  almudaya context env show --session <id>
   ```
 
 #### C. Katalog Dokumen SDLC (`almudaya context doc`)
 - **Mendaftarkan dokumen:**
   ```bash
-  almudaya context doc add --session <id> --doc-id <id> --title <title> --doc-path <path> --type <type> [--doc-version <v>]
+  almudaya context doc add [title] [path] [options...]
   ```
-  *(Tipe dokumen: `REQUIREMENTS`, `ARCHITECTURE`, `DESIGN`, `TEST_PLAN`, `USER_MANUAL`, `RUNBOOK`, `OTHER`)*.
-- **Melihat katalog dokumen:**
+  Options: `--title <title>`, `--doc-path <path>`, `-t, --type <SRS|ARCHITECTURE|DESIGN|USER_GUIDE|OTHER>`, `--doc-version <v>`, `-s, --session <id>`.
+- **Melihat dokumen:**
   ```bash
-  almudaya context doc list --session <id> [--type <type>] [--status <status>]
+  almudaya context doc list --session <id>
   ```
 
 ---
 
-## 3. Variabel Lingkungan (Environment Variables)
+## 3. Variabel Lingkungan & Lokasi Workspace
 
 | Variabel | Keterangan | Nilai Standar |
 |---|---|---|
-| `ALMUDAYA_WORKSPACE` | Menentukan lokasi root folder penyimpanan Blackboard session. | Lihat tabel platform di bawah. |
-| `ALMUDAYA_WORKSPACE_ROOT` | Alias alternatif untuk `ALMUDAYA_WORKSPACE`. | Sama dengan `ALMUDAYA_WORKSPACE`. |
+| `ALMUDAYA_WORKSPACE` | Menentukan lokasi root folder penyimpanan Blackboard session. | Direktori AppData sistem. |
+| `ALMUDAYA_WORKSPACE_ROOT` | Alias untuk `ALMUDAYA_WORKSPACE`. | Sama dengan `ALMUDAYA_WORKSPACE`. |
 
-### Lokasi Default Berdasarkan Sistem Operasi:
+### Lokasi Default Sistem Operasi:
 - **Windows:** `%LOCALAPPDATA%\almudaya` (misal: `C:\Users\<User>\AppData\Local\almudaya`)
 - **macOS:** `~/Library/Application Support/almudaya`
 - **Linux:** `$XDG_DATA_HOME/almudaya` atau `~/.local/share/almudaya`
-
-Prioritas penentuan workspace:
-1. Flag eksplisit `--workspace <path>`
-2. Variabel `ALMUDAYA_WORKSPACE` / `ALMUDAYA_WORKSPACE_ROOT`
-3. Direktori default sistem operasi
-
----
-
-## 4. Layout Fisik Blackboard pada Filesystem
-
-Setiap Session tersimpan dalam struktur folder terisolasi:
-
-```text
-<workspace_root>/
-└── sessions/
-    └── <session_id>/
-        ├── session.json             # Metadata session, status, & timestamp
-        ├── .lock                    # File lock kooperatif multi-proses
-        ├── registry/
-        │   └── bots.json            # Daftar bot terdaftar, PID, status liveness
-        ├── broadcast/
-        │   └── events.jsonl         # Log broadcast append-only (1 baris = 1 event)
-        ├── inbox/
-        │   ├── <bot_id_1>/
-        │   │   ├── messages.json    # Daftar pesan masuk langsung
-        │   │   └── cursors.json     # Catatan posisi baca broadcast
-        │   └── <bot_id_2>/
-        │       ├── messages.json
-        │       └── cursors.json
-        └── context/
-            └── context.json         # Project roots, metadata env, referensi dokumen
-```
-
-Semua file JSON memiliki field `"schema_version": "0.1.0"` untuk memastikan kompatibilitas dan validasi saat proses deserialisasi.
-
----
-
-## 5. Penanganan Error & Kode Exit
-
-Aplikasi Almudaya menggunakan kode exit standar sistem operasi:
-- `0`: Berhasil (Success).
-- `1`: Terjadi kegagalan operasional / domain error.
-
-### Hierarki Error Domain:
-- `SessionNotFoundError`: Session yang diminta belum dibuat atau path tidak ditemukan.
-- `BotNotFoundError` / `RecipientNotFoundError`: Bot target tidak ditemukan di dalam registri session.
-- `DisplayNameConflictError`: Nama display yang diminta telah digunakan oleh bot lain di session yang sama.
-- `ProjectRootAlreadyExistsError` / `DocumentAlreadyExistsError`: Duplikasi ID pada registri konteks bersama.
-- `LockAcquisitionError` / `LockTimeoutError`: Terjadi perebutan akses tulis (*write contention*) yang melebihi batas toleransi waktu.
-- `CorruptStorageError`: File JSON rusak atau tidak dapat di-parse secara valid.

@@ -1,218 +1,236 @@
 # Almudaya Multi-Agent — Hands-on Step-by-Step Tutorial
 
-Tutorial praktis langkah demi langkah untuk mencoba langsung ekosistem multi-agent Almudaya Multi-Agent (`almudaya-multiagent` v0.1.0) di komputer lokal Anda.
+Panduan praktis langkah demi langkah untuk menguji dan memahami ekosistem kolaborasi multi-agent Almudaya Multi-Agent (`almudaya-multiagent` v0.1.0) secara langsung di komputer Anda.
+
+Tutorial ini disusun berdasarkan alur pengujian nyata yang terbukti berhasil menghubungkan proses bot independen dalam multi-terminal.
 
 ---
 
-## Skenario Tutorial
+## 📋 Skenario Tutorial
 
-Kita akan mensimulasikan lingkungan kolaborasi pengembangan software nyata dengan:
-1. **Dua Bot Independen:**
-   - `BOT001` dengan nama tampilan `"Architect"` (Arsitek Sistem) di Terminal 1.
-   - `BOT002` dengan nama tampilan `"Coder"` (Software Engineer) di Terminal 2.
-2. **Satu Operator Manusia:**
-   - Mengendalikan session, mengamati Blackboard, dan mengirim instruksi di Terminal 3.
-3. **Satu Proyek Target Nyata:**
-   - Proyek target berada di folder tersendiri di luar engine Almudaya.
+Kita akan membangun lingkungan kolaborasi nyata dengan konfigurasi:
+1. **Target Proyek Eksternal:** Folder kerja baru di luar engine, misalnya di `D:\testingbot`.
+2. **Session Kolaborasi:** Session `S002` bernama `proyek-baru`.
+3. **Dua Bot Independen:**
+   - `BOT001` ("Architect") — Arsitek Sistem (Terminal 1).
+   - `BOT002` ("Coder") — Software Engineer (Terminal 2).
+4. **Satu Terminal Operator (Terminal 3):** Untuk mengirim instruksi langsung antar-bot.
 
 ---
 
-## Langkah 1: Build & Daftarkan CLI Global
+## Langkah 1: Persiapan Global CLI Engine
 
-Buka PowerShell di folder engine Almudaya (`d:\almudaya_multiagent_v0.1.0`):
+Buka PowerShell / Command Prompt pertama Anda, arahkan ke folder engine Almudaya:
 
 ```powershell
-# 1. Pastikan kompilasi TypeScript selesai
+cd D:\almudaya_multiagent_v0.1.0
+
+# 1. Kompilasi kode sumber TypeScript
 npm run build
 
-# 2. Daftarkan CLI ke sistem Windows secara global
+# 2. Daftarkan CLI 'almudaya' ke sistem global Windows
 npm link
 
-# 3. Pastikan CLI aktif dan siap
+# 3. Uji apakah CLI sudah aktif secara global
 almudaya --version
 ```
-Jika muncul `0.1.0`, maka perintah `almudaya` kini siap dipanggil dari **folder mana saja di terminal Anda**.
+Jika muncul output `0.1.0`, artinya perintah `almudaya` kini dapat dipanggil dari folder mana pun di komputer Anda!
 
 ---
 
-## Langkah 2: Siapkan Folder Proyek Target di Luar Engine
+## Langkah 2: Pindah ke Direktori Target di Luar Engine
 
-Mari kita buat folder proyek contoh yang terpisah dari folder engine Almudaya (misalnya di drive `D:\TutorialApp`):
+Pindah ke folder di luar engine (misalnya folder proyek Anda di `D:\testingbot`):
 
 ```powershell
-# Buat folder proyek target di luar Almudaya
-mkdir D:\TutorialApp
-cd D:\TutorialApp
-
-# Buat berkas README sederhana di proyek target
-Set-Content -Path README.md -Value "# Tutorial App Project"
+# Buat folder jika belum ada, lalu masuk ke dalamnya:
+cd D:\
+mkdir testingbot
+cd testingbot
 ```
+
+Periksa daftar session awal:
+```powershell
+almudaya session list
+```
+Sistem akan melaporkan:
+`No sessions found in workspace: C:\Users\<User>\AppData\Local\almudaya`
+*(Ini membuktikan bahwa workspace tersimpan di folder sistem yang aman dan tidak mengotori `D:\testingbot`).*
 
 ---
 
-## Langkah 3: Buat Session Baru (Terminal 1 - Operator)
+## Langkah 3: Buat Session Baru
 
-Tetap berada di `D:\TutorialApp` (atau folder mana pun yang Anda sukai), buat Session baru bernama `tutorial-session` dengan ID `S001`:
-
-```powershell
-almudaya session create "Tutorial Project" --session S001 --description "Kolaborasi Perdana Architect dan Coder"
-```
-
-Output yang dihasilkan:
-```text
-Session "Tutorial Project" (ID: S001) successfully created.
-Status: active
-Workspace: C:\Users\<User>\AppData\Local\almudaya\sessions\S001
-```
-
-Sekarang hubungkan proyek target `D:\TutorialApp` ke dalam konteks Session `S001`:
-```powershell
-almudaya context root add --session S001 --name core-app --path D:\TutorialApp --type primary
-```
-
----
-
-## Langkah 4: Jalankan Bot 1 ("Architect") di Terminal Baru
-
-Buka **jendela terminal baru (Terminal 2)**:
+Di dalam `D:\testingbot`, buat Session baru dengan ID `S002`:
 
 ```powershell
-# 1. Daftarkan bot ke Session S001
-almudaya bot join --session S001 --bot BOT001 --display-name "Architect" --role "System Architect"
-
-# 2. Jalankan runtime daemon bot Architect
-almudaya bot run --session S001 --bot BOT001 --interval 2000
-```
-
-Terminal 2 sekarang akan menampilkan status aktif:
-```text
-Bot "Architect" (ID: BOT001) runtime started in session S001.
-Operating System PID: 14208
-Heartbeat interval: 2000ms
-Auto-acknowledge inbox: enabled
-Listening for incoming direct messages and maintaining heartbeat...
-(Press Ctrl+C to stop)
-```
-
----
-
-## Langkah 5: Jalankan Bot 2 ("Coder") di Terminal Baru
-
-Buka **jendela terminal ketiga (Terminal 3)**:
-
-```powershell
-# 1. Daftarkan bot Coder ke Session S001
-almudaya bot join --session S001 --bot BOT002 --display-name "Coder" --role "Software Engineer"
-
-# 2. Jalankan runtime daemon bot Coder
-almudaya bot run --session S001 --bot BOT002 --interval 2000
-```
-
-Terminal 3 kini berjalan sebagai proses bot mandiri dengan PID berbeda dari Terminal 2!
-
----
-
-## Langkah 6: Buktikan Peer Discovery (Terminal 1)
-
-Kembali ke **Terminal 1 (Operator)**. Mari kita lihat apakah kedua bot saling mengenali:
-
-```powershell
-almudaya bot list --session S001
+almudaya session create proyek-baru --session S002
 ```
 
 Output:
 ```text
-Registered bots in session S001 (2):
-- BOT001 | Architect (System Architect) [active] (PID: 14208)
-- BOT002 | Coder (Software Engineer) [active] (PID: 18452)
+Session created successfully!
+  Session ID:   S002
+  Name:         proyek-baru
+  Status:       active
+  Created:      2026-11-02T...
+  Location:     C:\Users\<User>\AppData\Local\almudaya\sessions\S002
 ```
-Kedua bot terdaftar dan aktif secara simultan di proses sistem operasi yang berbeda!
 
 ---
 
-## Langkah 7: Publikasi Broadcast Arsitektur
+## Langkah 4: Daftarkan Target Proyek ke dalam Konteks Session
 
-Sebagai bot `"Architect"`, publikasikan keputusan arsitektur ke seluruh Session:
+Beri tahu para bot bahwa folder `D:\testingbot` adalah basis proyek yang sedang digarap:
 
 ```powershell
-almudaya broadcast publish --session S001 --bot BOT001 --category DECISION --payload '{"architecture":"Clean Architecture","database":"PostgreSQL"}'
+almudaya context root add --session S002 --name testing --path D:\testingbot
 ```
 
-Sekarang baca broadcast tersebut sebagai bot `"Coder"`:
+Verifikasi dengan melihat daftar root:
 ```powershell
-almudaya broadcast read --session S001 --bot BOT002
+almudaya context root list --session S002
 ```
-
 Output:
 ```text
-Broadcast events for bot BOT002 (1):
-- [DECISION] Event evt_... from BOT001: {"architecture":"Clean Architecture","database":"PostgreSQL"}
-Cursor advanced to: evt_...
+Project roots in Session [S002]:
+
+  - [testing] testing (primary) -> D:\testingbot
 ```
-*(Posisi baca bot `BOT002` otomatis diperbarui, sehingga pemanggilan berikutnya tidak akan membaca ulang event yang sama).*
 
 ---
 
-## Langkah 8: Kirim Pesan Langsung (Direct Message) & Acknowledgement
+## Langkah 5: Daftarkan Kedua Bot ke Session (Join)
 
-Kirim pesan langsung dari `"Coder"` ke `"Architect"`. Anda bisa menyapa langsung menggunakan **display name** (`"Architect"`):
-
+Daftarkan bot pertama (`BOT001` - "Architect"):
 ```powershell
-almudaya message send --session S001 --sender BOT002 --recipient "Architect" --body "Arsitektur Clean Architecture telah saya pelajari. Saya mulai implementasi modul user."
+almudaya bot join --session S002 --bot BOT001 --display-name "Architect" --role "System Architect"
 ```
 
-Sekarang periksa inbox milik `"Architect"`:
+Daftarkan bot kedua (`BOT002` - "Coder"):
 ```powershell
-almudaya message read --session S001 --bot BOT001
+almudaya bot join --session S002 --bot BOT002 --display-name "Coder" --role "Software Engineer"
 ```
 
+Periksa daftar bot terdaftar (Peer Discovery):
+```powershell
+almudaya bot list --session S002
+```
 Output:
 ```text
-Direct messages in inbox of BOT001 (1):
-- Message msg_... from BOT002 [unread]: "Arsitektur Clean Architecture telah saya pelajari. Saya mulai implementasi modul user."
+Bots in Session [S002]:
+
+  - [BOT001] "Architect" (stale)
+      Role: System Architect
+      PID: 31420, Joined: 2026-11-02T...
+  - [BOT002] "Coder" (stale)
+      Role: Software Engineer
+      PID: 21036, Joined: 2026-11-02T...
 ```
 
-Konfirmasikan penerimaan pesan (*acknowledgement*):
+> [!TIP]
+> **Mengapa statusnya `(stale)`?**
+> Karena perintah `bot join` adalah perintah pendaftaran satu kali yang langsung selesai (*exit*). Fitur *Stale Detection* Almudaya secara akurat mendeteksi bahwa proses PID tersebut sudah tidak berjalan di Windows. Di langkah berikutnya, kita akan membuat bot menjadi `(active)` secara live!
+
+---
+
+## Langkah 6: Jalankan Multi-Terminal Interaktif (3 Jendela)
+
+Sekarang atur layar Anda agar menampilkan **3 jendela terminal berdampingan**:
+
+### 🖥️ Terminal 1 (Kiri): Jalankan Daemon Bot "Architect"
+Di terminal pertama Anda di `D:\testingbot`, jalankan runtime bot `BOT001`:
 ```powershell
-almudaya message ack --session S001 --bot BOT001 --message-id <masukkan_id_pesan_di_atas>
+almudaya bot run --session S002 --bot BOT001
+```
+Output:
+```text
+Bot runtime started successfully!
+  Session ID:   S002
+  Bot ID:       BOT001
+  Display Name: Architect
+  PID:          27724
+Press Ctrl+C to terminate bot process.
+```
+*(Terminal 1 sekarang aktif secara live, memompa heartbeat, dan mengawasi inbox).*
+
+---
+
+### 🖥️ Terminal 2 (Kanan Atas): Jalankan Daemon Bot "Coder"
+Buka jendela Command Prompt / PowerShell baru, masuk ke `D:\testingbot`, lalu jalankan:
+```powershell
+cd D:\testingbot
+almudaya bot run --session S002 --bot BOT002
+```
+Output:
+```text
+Bot runtime started successfully!
+  Session ID:   S002
+  Bot ID:       BOT002
+  Display Name: Coder
+  PID:          25872
+Press Ctrl+C to terminate bot process.
+```
+*(Terminal 2 sekarang aktif secara live dengan PID sistem operasi yang berbeda dari Terminal 1).*
+
+---
+
+### 🖥️ Terminal 3 (Kanan Bawah): Operator / Interaksi Antar-Bot
+Buka jendela terminal ketiga di `D:\testingbot`. Kirimkan pesan langsung dari `BOT002` kepada `"Architect"`:
+
+```powershell
+almudaya message send --session S002 --sender BOT002 --recipient "Architect" --body "Halo Architect! Saya Coder, siap menerima instruksi rancangan."
+```
+
+Output di Terminal 3:
+```text
+Message sent successfully!
+  Message ID: msg_...
+  Session ID: S002
+  Sender:     BOT002
+  Recipient:  BOT001
+  Type:       DIRECT
+  Timestamp:  2026-11-02T...
+  Content:    Halo Architect! Saya Coder, siap menerima instruksi rancangan.
 ```
 
 ---
 
-## Langkah 9: Mengubah Nama Bot (Rename) & Integritas Pesan
+## Langkah 7: Amati Hasil Real-Time di Terminal 1! 🚀
 
-Ubah nama bot `BOT001` menjadi `"Lead Architect"`:
-```powershell
-almudaya bot rename --session S001 --bot BOT001 --new-name "Lead Architect"
+Sekarang perhatikan apa yang terjadi di **Terminal 1 (Bot "Architect")**:
+Tanpa Anda sentuh sama sekali, Terminal 1 akan langsung menampilkan pesan:
+
+```text
+[BOT BOT001] Received message from BOT002: Halo Architect! Saya Coder, siap menerima instruksi rancangan.
 ```
 
-Verifikasi daftar bot:
-```powershell
-almudaya bot list --session S001
-```
-*(Nama bot telah berubah menjadi `Lead Architect`, namun `BOT001` tetap sama dan seluruh inbox pesan historis tetap terjaga utuh!)*
+Ini membuktikan secara langsung:
+1. **Dynamic Name Resolution:** Nama `"Architect"` otomatis diantarkan ke inbox `BOT001`.
+2. **Process Isolation:** Terminal 1 dan Terminal 2 berjalan pada proses independen tanpa saling memblokir.
+3. **Reactive Delivery:** Pesan terkirim, terbaca, dan di-acknowledge secara instan di Blackboard.
 
 ---
 
-## Langkah 10: Simulasi Crash Recovery & Persistensi
+## Langkah 8: Broadcast Pengumuman Bersama
 
-1. Buka Terminal 2 tempat bot `BOT001` berjalan, lalu tekan **Ctrl + C** untuk mematikannya.
-2. Di Terminal 1 (Operator), cek status bot:
-   ```powershell
-   almudaya bot list --session S001
-   ```
-   *(Status `BOT001` akan terdeteksi sebagai `stopped` atau `stale`)*.
-3. Jalankan kembali bot tersebut:
-   ```powershell
-   almudaya bot run --session S001 --bot BOT001
-   ```
-4. Baca kembali riwayat pesan di `BOT001`:
-   ```powershell
-   almudaya message read --session S001 --bot BOT001 --status all
-   ```
-   Seluruh riwayat pesan, session, dan konteks tetap tersimpan rapi dan tidak ada data yang hilang!
+Di Terminal 3 (Operator), coba publikasikan sebuah keputusan arsitektur untuk seluruh bot:
+
+```powershell
+almudaya broadcast publish --session S002 --bot BOT001 --category DECISION --payload '{"architecture": "Clean Architecture", "db": "PostgreSQL"}'
+```
+
+Kedua terminal daemon (Terminal 1 dan Terminal 2) dapat memantau dan mencatat event broadcast tersebut!
+
+---
+
+## Langkah 9: Mematikan & Memulihkan Proses (Crash Recovery)
+
+1. Di Terminal 1, tekan `Ctrl + C`. Bot `BOT001` akan berhenti secara aman (*graceful shutdown*).
+2. Di Terminal 3, ketik `almudaya bot list --session S002`. Sistem akan langsung mendeteksi `BOT001` sebagai `stopped` atau `stale`, sedangkan `BOT002` tetap `active`.
+3. Jalankan kembali `almudaya bot run --session S002 --bot BOT001`. Bot akan langsung pulih kembali dan seluruh riwayat percakapan masa lalu tetap tersimpan utuh di Blackboard.
 
 ---
 
 ## Selamat! 🎉
-Anda telah berhasil mempraktikkan kolaborasi multi-agent independen dengan Almudaya Multi-Agent.
+Anda telah menguasai alur kerja lengkap kolaborasi multi-agent independen dengan Almudaya Multi-Agent.

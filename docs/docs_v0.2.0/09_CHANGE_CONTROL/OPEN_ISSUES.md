@@ -2,8 +2,8 @@
 
 Melacak isu terbuka dan keputusan teknis yang perlu dimatangkan sebelum fase implementasi kode v0.2.0.
 
-| Issue ID | Pertanyaan | Dampak | Opsi Solusi | Status |
+| Issue ID | Pertanyaan | Dampak | Keputusan & Rujukan ADR | Status |
 |---|---|---|---|:---:|
-| **OI-201** | SDK Google Gemini mana yang akan digunakan? | Dependensi runtime & kompatibilitas model terbaru | **Opsi A (Direkomendasikan):** Menggunakan `@google/genai` (SDK generasi terbaru dari Google yang mendukung Gemini 2.5 Flash/Pro dan Live API).<br>**Opsi B:** Menggunakan legacy `@google/generative-ai`. | Open (Pilihan A direkomendasikan) |
-| **OI-202** | Bagaimana interaksi prompt persetujuan di CLI untuk mode `REQUEST_REVIEW`? | Pengalaman pengguna & kelancaran terminal | Menggunakan `node:readline/promises` bawaan Node.js tanpa menambah dependensi pihak ketiga yang berat. Menampilkan diff ringkas dan prompt `[y/n/d]`. | Open |
-| **OI-203** | Di mana log audit pemanggilan tool AI dicatat di Blackboard? | Struktur penyimpanan data Blackboard | **Opsi A (Direkomendasikan):** Dicatat sebagai event kategori `ACTIVITY` / `ARTIFACT` di `events.jsonl` agar rekan bot lain juga bisa mengamati riwayat tool secara terdesentralisasi.<br>**Opsi B:** Dibuatkan folder baru `audit/`. | Open |
+| **OI-201** | SDK Google Gemini mana yang akan digunakan? | Dependensi runtime & kompatibilitas model terbaru | **Dipilih Opsi A:** Menggunakan SDK modern `@google/genai` resmi untuk Gemini 2.5 Pro/Flash. | **Resolved** (ADR-201) |
+| **OI-202** | Bagaimana interaksi prompt persetujuan di CLI untuk mode `REQUEST_REVIEW`? | Pengalaman pengguna & kelancaran terminal | Menggunakan `node:readline/promises` bawaan Node.js tanpa dependensi tambahan; menampilkan pratinjau diff dan prompt `[y/n/d]`. | **Resolved** (ADR-203) |
+| **OI-203** | Di mana log audit pemanggilan tool AI dicatat di Blackboard? | Struktur penyimpanan data Blackboard | **Dipilih Opsi A:** Dicatat sebagai event kategori `ACTIVITY` / `DECISION` di `events.jsonl` agar peer bot lain bisa mengamati secara transparan. | **Resolved** (ADR-204) |

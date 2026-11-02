@@ -1,6 +1,6 @@
-# Almudaya Multi-Agent v0.1.0 — Technical & Command Manual
+# Almudaya Multi-Agent v0.2.0 — Technical & Command Manual
 
-Dokumentasi manual teknis resmi untuk executable CLI `almudaya`, mencakup sintaks perintah, opsi, parameter fleksibel, format data, variabel lingkungan (*environment variables*), struktur penyimpanan Blackboard, penanganan error, dan mekanisme penguncian (*locking*).
+Dokumentasi manual teknis resmi untuk executable CLI `almudaya`, mencakup sintaks perintah, opsi, parameter fleksibel, format data, variabel lingkungan (*environment variables*), struktur penyimpanan Blackboard, penanganan error, mekanisme penguncian (*locking*), arsitektur AI multi-provider, perkakas koding otonom (*sandboxed file & shell tools*), dan mode keamanan eksekusi (*Request Review vs Turbo*).
 
 ---
 
@@ -142,19 +142,36 @@ almudaya bot rename [botId] [newDisplayName] [options...]
 ```bash
 almudaya bot run --session <id> --bot <id> [options...]
 ```
-Menjalankan loop bot interaktif di latar depan:
+Menjalankan loop bot runtime di terminal dengan kapabilitas penalaran AI otonom (*Autonomous Agent Loop*):
 - Mencatat PID proses sistem operasi saat ini.
 - Melakukan *heartbeat* otomatis memperbarui timestamp `last_seen_at`.
 - Memantau inbox Blackboard dan langsung mencetak pesan masuk secara *real-time*.
+- Otomatis mengalirkan pesan masuk ke model AI yang dipilih untuk penalaran ReAct mandiri.
+- Mengeksekusi perkakas koding (`read_file`, `write_file`, `edit_file`, `list_dir`, `search_files`, `run_command`) di dalam sandbox target project root.
+- Menerapkan mode keamanan eksekusi (`REQUEST_REVIEW` dengan konfirmasi manusia vs `TURBO` otonom).
+- Otomatis mengirimkan balasan langsung (*direct message*) ke bot pengirim setelah tugas selesai.
+- Otomatis mencatat seluruh jejak audit ke Session Blackboard (`events.jsonl`).
 - Otomatis melakukan *acknowledgement* (ack) pesan masuk.
 - Menangani graceful shutdown saat ditekan `Ctrl+C`.
 - **Options:**
+  - `--provider <gemini|mock>`: Provider AI untuk bot ini (default: otomatis menggunakan `gemini` jika `GEMINI_API_KEY` terdeteksi, atau `mock` jika offline).
+  - `--model <modelName>`: Nama model LLM spesifik (default: `gemini-2.5-flash`).
+  - `-m, --mode <review|turbo>`: Mode keamanan eksekusi (default: `review`).
+    - `review`: Menahan mutasi berkas dan shell command hingga operator menyetujui (`y/n/d`).
+    - `turbo`: Menjalankan seluruh perkakas secara mandiri tanpa konfirmasi per langkah.
+  - `--max-iterations <count>`: Batas maksimal perulangan ReAct loop per pesan (default: `10`).
   - `--interval <ms>`: Interval detak heartbeat dalam milidetik (default: `2000`).
   - `--no-auto-ack`: Matikan konfirmasi ack otomatis jika ingin mengonfirmasi manual.
 - **Contoh:**
   ```bash
+  # Menjalankan bot Coder dengan Gemini AI di mode TURBO otonom:
+  almudaya bot run --session S002 --bot BOT002 --provider gemini --mode turbo
+
+  # Menjalankan bot Coder dengan Gemini AI di mode REQUEST_REVIEW (Human-in-the-Loop):
+  almudaya bot run --session S002 --bot BOT002 --provider gemini --mode review
+
+  # Menjalankan bot Architect untuk monitoring & koordinasi:
   almudaya bot run --session S002 --bot BOT001
-  almudaya bot run --session S002 --bot BOT002 --interval 1000
   ```
 
 ---
@@ -297,6 +314,7 @@ Menyimpan direktori project roots, variabel lingkungan dengan *automatic secret 
 
 | Variabel | Keterangan | Nilai Standar |
 |---|---|---|
+| `GEMINI_API_KEY` | Kunci API Google Gemini untuk mengaktifkan penalaran LLM pada bot. Disimpan murni dalam memori proses lokal (*Invariant 7*). | - |
 | `ALMUDAYA_WORKSPACE` | Menentukan lokasi root folder penyimpanan Blackboard session. | Direktori AppData sistem. |
 | `ALMUDAYA_WORKSPACE_ROOT` | Alias untuk `ALMUDAYA_WORKSPACE`. | Sama dengan `ALMUDAYA_WORKSPACE`. |
 
@@ -304,3 +322,65 @@ Menyimpan direktori project roots, variabel lingkungan dengan *automatic secret 
 - **Windows:** `%LOCALAPPDATA%\almudaya` (misal: `C:\Users\<User>\AppData\Local\almudaya`)
 - **macOS:** `~/Library/Application Support/almudaya`
 - **Linux:** `$XDG_DATA_HOME/almudaya` atau `~/.local/share/almudaya`
+
+---
+
+## 4. Mesin Perkakas Koding Otonom (Autonomous Tools)
+
+Setiap bot yang dijalankan dengan provider AI aktif (`--provider gemini` atau `--provider mock`) memiliki akses ke 6 perkakas koding standar yang bekerja di dalam batasan sandbox project root:
+
+### A. `read_file`
+Membaca konten berkas teks secara aman.
+- `path` (string, wajib): Path relatif terhadap project root.
+- `start_line` (number, opsional): Baris awal (1-indexed).
+- `end_line` (number, opsional): Baris akhir (1-indexed).
+- *Proteksi:* Maksimal ukuran berkas 10 MB untuk mencegah crash akibat membaca file biner raksasa (*NFR-204*).
+
+### B. `write_file`
+Menulis atau menimpa berkas teks secara atomik.
+- `path` (string, wajib): Path relatif berkas target.
+- `content` (string, wajib): Teks lengkap yang akan ditulis.
+- `overwrite` (boolean, opsional): Jika `false` (default) dan file sudah ada, sistem menolak operasi untuk mencegah penimpaan tak disengaja.
+- *Atomisitas:* Menggunakan file sementara `.tmp` dan rename atomik guna mencegah berkas rusak akibat kegagalan daya/proses tengah jalan (*ADR-202*). Folder induk dibuat otomatis (*mkdir -p*).
+
+### C. `edit_file`
+Melakukan penggantian potongan blok teks eksak secara presisi.
+- `path` (string, wajib): Path relatif berkas.
+- `target` (string, wajib): Potongan teks eksak yang akan dicari dan diganti (memperhatikan indentasi dan baris baru).
+- `replacement` (string, wajib): Teks baru pengganti.
+
+### D. `list_dir`
+Menjelajahi struktur pohon folder direktori target.
+- `path` (string, opsional): Sub-folder yang akan diinspeksi (default: root `.`).
+- `recursive` (boolean, opsional): Menjelajah seluruh sub-folder secara rekursif (default: `false`).
+- *Filter Otomatis:* Folder bising seperti `.git`, `node_modules`, dan `.almudaya` otomatis diabaikan.
+
+### E. `search_files`
+Mencari berkas berdasarkan pola nama atau isi teks.
+- `pattern` (string, wajib): Kata kunci atau substring yang dicari.
+- `path` (string, opsional): Direktori pencarian (default: root `.`).
+
+### F. `run_command`
+Mengeksekusi perintah shell/sistem operasi di dalam direktori project root.
+- `command` (string, wajib): Perintah shell lengkap (misal: `npm test`, `git status`, `python main.py`).
+- `timeout_ms` (number, opsional): Batas waktu eksekusi dalam milidetik (default: `30000`).
+- `working_dir` (string, opsional): Sub-direktori kerja di dalam project root.
+- *Proteksi:* Menangkap stdout, stderr, kode keluar, serta melakukan *process tree kill* jika waktu eksekusi melampaui batas (*FR-212*).
+
+---
+
+## 5. Aturan Keamanan & Kedaulatan Manusia (Security Invariants)
+
+1. **Invariant 5 (Sandbox Boundary & Anti-Traversal):**
+   Bot sama sekali tidak dapat mengakses, membaca, atau memodifikasi file di luar direktori yang terdaftar di `almudaya context root`. Upaya akses menggunakan `..` atau path absolut di luar root langsung dibatalkan dengan eksepsi keamanan `PathTraversalSecurityError`.
+2. **Invariant 6 (Review Sovereignty):**
+   Pada mode `REQUEST_REVIEW` (default), setiap kali bot memutuskan untuk memanggil perkakas mutasi (`write_file`, `edit_file`, `run_command`), bot akan menjeda eksekusi dan meminta konfirmasi manusia di terminal:
+   ```text
+   [REVIEW REQUIRED] Bot "Coder" (BOT002) meminta izin eksekusi:
+     Aksi: write_file
+     Berkas Target: src/Button.tsx
+   Apakah Anda menyetujui aksi ini? [y = Setuju, n = Tolak, d = Lihat Detail] (y/n/d): 
+   ```
+   Operator memiliki hak veto penuh: jika dijawab `n`, operasi dibatalkan dan alasan penolakan dikembalikan ke model AI untuk mencari solusi alternatif.
+3. **Invariant 7 (Credential Privacy):**
+   Nilai API key diselesaikan murni dari memori proses lokal (`process.env.GEMINI_API_KEY`). Dilarang keras menuliskan API key ke Blackboard storage, berkas JSON, atau log event publik.

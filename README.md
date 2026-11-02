@@ -1,13 +1,14 @@
-# Almudaya Multi-Agent (`almudaya-multiagent`)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.2.0)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 77 Passed](https://img.shields.io/badge/Tests-77%20Passed-brightgreen.svg)](./docs/docs_v0.1.0/06_TESTING/VERIFICATION_REPORT.md)
+[![Tests: 137 Passed](https://img.shields.io/badge/Tests-137%20Passed-brightgreen.svg)](./docs/docs_v0.2.0/10_PHASE_GATES/PHASE_7_VERIFICATION_GATE.md)
+[![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
 
-A session-centric, multi-process bot collaboration foundation for AI coding agents and human developers.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation.
 
-Almudaya Multi-Agent provides the underlying infrastructure required for multiple autonomous or human-guided bot processes to collaborate within an isolated, persistent **Session Blackboard** without requiring a central monolith or mandatory orchestrator daemon.
+Almudaya Multi-Agent provides the underlying infrastructure required for multiple autonomous AI bots and human engineers to collaborate within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases.
 
 ---
 
@@ -48,7 +49,9 @@ Almudaya Multi-Agent provides the underlying infrastructure required for multipl
 2. **Stable Bot Identity:** Each bot is allocated an immutable, permanent `bot_id` (e.g., `BOT001`). Its human-friendly `display_name` (e.g., `"Architect"`) can be edited at any time without altering identity or breaking historical message references.
 3. **Storage Persistence & Durability:** All state is saved to disk immediately using atomic file writes and kernel-atomic cooperative locking. Sessions survive process crashes and full system restarts.
 4. **Independent Process Isolation:** Every bot runs in its own operating system process (e.g., distinct CLI terminals or background daemon processes). A slow, blocked, or crashed bot cannot crash or stall other bots in the session.
-5. **Secret Redaction:** High-entropy secret patterns (API keys, bearer tokens, private keys) and sensitive configuration keys are automatically detected and masked as `[REDACTED]`.
+5. **Sandbox Isolation (FR-210):** All AI coding file tools (`read_file`, `write_file`, `edit_file`, `list_dir`, `search_files`) and shell commands (`run_command`) are strictly confined to registered project roots. Path traversal attempts (`..`) are denied immediately.
+6. **Review Sovereignty (FR-213):** In `REQUEST_REVIEW` mode, no file mutation or system command executes without explicit human approval (`y/n/d`).
+7. **Credential Privacy (FR-204):** API keys (e.g. `GEMINI_API_KEY`) reside exclusively in local process memory and are never written to Blackboard storage or logs.
 
 ---
 

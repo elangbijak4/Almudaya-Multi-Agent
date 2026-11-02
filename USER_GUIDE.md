@@ -1,12 +1,12 @@
-# Almudaya Multi-Agent — User & Operator Guide
+# Almudaya Multi-Agent v0.2.0 — User & Operator Guide
 
-Panduan konseptual dan operasional komprehensif untuk pengembang, arsitek sistem, dan operator yang mengelola lingkungan kolaborasi multi-agent dengan Almudaya Multi-Agent (`almudaya-multiagent` v0.1.0).
+Panduan konseptual dan operasional komprehensif untuk pengembang, arsitek sistem, dan operator yang mengelola lingkungan kolaborasi multi-agent dengan Almudaya Multi-Agent (`almudaya-multiagent` v0.2.0 — The Autonomous AI Coding Agent Engine).
 
 ---
 
 ## 1. Filosofi & Arsitektur Sistem
 
-Almudaya dirancang untuk mengatasi kelemahan arsitektur agen tradisional yang memusatkan semua agen ke dalam satu proses monolitik (*single-process loop*). Almudaya mengadopsi prinsip **Session-Centric**, **Multi-Process**, dan **Persistent Blackboard**.
+Almudaya dirancang untuk mengatasi kelemahan arsitektur agen tradisional yang memusatkan semua agen ke dalam satu proses monolitik (*single-process loop*). Almudaya mengadopsi prinsip **Session-Centric**, **Multi-Process**, **Persistent Blackboard**, dan **Multi-Provider AI Reasoning**.
 
 ```text
                       ┌───────────────────────────────────────────────┐
@@ -32,9 +32,21 @@ Almudaya dirancang untuk mengatasi kelemahan arsitektur agen tradisional yang me
           ┌────────────┴─────────────┐                ┌────────────┴─────────────┐
           │  Bot Process 1 (Node.js) │                │  Bot Process 2 (Node.js) │
           │  - Bot ID: BOT001        │                │  - Bot ID: BOT002        │
-          │  - Display: "Architect"  │                │  - Display: "Engineer"   │
-          │  - OS Process / PID: 1204│                │  - OS Process / PID: 1205│
-          └──────────────────────────┘                └──────────────────────────┘
+          │  - Display: "Architect"  │                │  - Display: "Coder"      │
+          │  - Provider: Gemini AI   │                │  - Provider: Gemini AI   │
+          │  - Mode: REQUEST_REVIEW  │                │  - Mode: TURBO (Otonom)  │
+          └────────────┬─────────────┘                └────────────┬─────────────┘
+                       │                                           │
+                       └─────────────────────┬─────────────────────┘
+                                             │
+                                             ▼
+                      ┌───────────────────────────────────────────────┐
+                      │    Target Project Root (Sandboxed Codebase)   │
+                      │             D:\testingbot\                    │
+                      │  - read_file, write_file, edit_file           │
+                      │  - list_dir, search_files                     │
+                      │  - run_command (test runner, compiler, git)   │
+                      └───────────────────────────────────────────────┘
 ```
 
 ### Empat Pilar Arsitektur:
@@ -134,14 +146,31 @@ Saat agen bekerja sama, sering kali variabel lingkungan atau token API dibagikan
 
 ---
 
-## 7. Rencana Pengembangan Antarmuka (GUI Roadmap)
+## 7. Mesin Agen Koding Otonom (Autonomous ReAct Loop & AI Engine)
 
-Meskipun versi v0.1.0 berfokus 100% pada CLI dan fondasi storage, arsitektur v0.1.0 sudah siap untuk antarmuka grafis di rilis mendatang:
+Mulai versi v0.2.0, bot Almudaya bukan sekadar penerima pesan pasif, melainkan **agen rekayasa perangkat lunak otonom** yang mampu memahami tugas koding, menjelajahi kode sumber, membuat file baru, mengedit kode secara bedah, dan mengeksekusi tes sistem.
 
-1. **Web Dashboard Lokal (Rencana v0.2.0):**
-   - Server web lokal ringan berbasis Vite/React.
-   - Visualisasi graf interaksi bot, timeline broadcast live, dan visual inbox.
-2. **Terminal UI (TUI):**
-   - Dashboard terminal interaktif (*split screen*) berbasis `ink`.
-3. **Integrasi AI Agent (LLM Engine):**
-   - Menghubungkan bot dengan model AI (Gemini, Claude, OpenAI) melalui adaptor antarmuka yang membaca inbox Blackboard dan memproduksi aksi kode.
+### A. Alur Siklus Otonom (ReAct Loop)
+Ketika sebuah bot menerima pesan instruksi di inbox-nya:
+1. **Dynamic Prompt Assembly:** Sistem menyusun prompt sistem dinamis yang memuat identitas bot, peran bot, rekan-rekan bot aktif dalam session, dan direktori target project root yang didaftarkan.
+2. **Reasoning (Penalaran AI):** AI Model Provider (misal Google Gemini 2.5) memproses pesan dan memutuskan langkah yang harus diambil (misal memanggil tool `write_file` atau `read_file`).
+3. **Action & Sandboxing:** Perkakas dijalankan di dalam batasan target project root. Jika berada di mode `REQUEST_REVIEW`, sistem meminta persetujuan manusia terlebih dahulu.
+4. **Observation:** Hasil eksekusi berkas atau tangkapan output shell dikembalikan ke AI.
+5. **Autonomous Reply:** Setelah tugas selesai, bot otomatis mengirim balasan langsung ke bot pengirim dan mencatat keputusan ke Blackboard event stream.
+6. **Guardrail Bounded Loop:** Siklus dibatasi maksimal 10 iterasi per pesan untuk mencegah infinite loop tak terkendali.
+
+### B. Mode Keamanan: Request Review vs Turbo
+- **Mode `REQUEST_REVIEW` (Human-in-the-Loop / Invariant 6):**
+  Untuk tugas-tugas kritis di mana pengembang ingin memverifikasi setiap perubahan file atau eksekusi perintah shell. Sistem akan menampilkan pratinjau dan meminta input:
+  `[y = Setuju, n = Tolak, d = Lihat Detail] (y/n/d):`
+- **Mode `TURBO` (Autonomous Mode):**
+  Bot mengeksekusi semua perkakas secara mandiri dan cepat tanpa henti, dengan seluruh tindakan tercatat secara transparan di log audit Blackboard.
+
+---
+
+## 8. Rencana Pengembangan Antarmuka (GUI Roadmap v0.3.0)
+
+Dengan tuntasnya mesin otonom v0.2.0, rilis v0.3.0 mendatang akan menghadirkan:
+1. **Web Dashboard Lokal:** Visualisasi real-time interaksi bot, status file di project root, dan linimasa event Blackboard.
+2. **Terminal UI (TUI):** Multi-pane split screen untuk mengamati aktivitas beberapa bot sekaligus dalam satu jendela terminal.
+3. **Webhooks & Notification:** Integrasi pengiriman notifikasi penyelesaian tugas ke Discord, Slack, atau Telegram.

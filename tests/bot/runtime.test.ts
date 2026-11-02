@@ -99,7 +99,9 @@ describe('Bot Runtime Lifecycle & Heartbeat', () => {
     });
 
     // Wait for runtime to poll and process
-    await new Promise((r) => setTimeout(r, 150));
+    for (let i = 0; i < 20 && !messageReceived; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
 
     expect(messageReceived).toBe(true);
 

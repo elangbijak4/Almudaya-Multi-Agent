@@ -20,4 +20,6 @@ export * from './messaging/service.js';
 export * from './shared/schema.js';
 export * from './shared/service.js';
 
+export * from './ai/index.js';
+
 export { createProgram, run } from './cli/index.js';

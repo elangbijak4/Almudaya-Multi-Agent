@@ -59,6 +59,24 @@ export class GeminiProvider implements IAIModelProvider {
           }
         }
 
+        // Extract text safely without triggering SDK getter warning for functionCall parts
+        let extractedText: string | undefined;
+        const candidateParts = response.candidates?.[0]?.content?.parts;
+        if (candidateParts && Array.isArray(candidateParts)) {
+          const textParts = candidateParts
+            .filter((p) => p && typeof p.text === 'string')
+            .map((p) => p.text as string);
+          if (textParts.length > 0) {
+            extractedText = textParts.join('');
+          }
+        } else {
+          try {
+            extractedText = response.text ?? undefined;
+          } catch {
+            extractedText = undefined;
+          }
+        }
+
         const usage = response.usageMetadata
           ? {
               promptTokens: response.usageMetadata.promptTokenCount,
@@ -68,7 +86,7 @@ export class GeminiProvider implements IAIModelProvider {
           : undefined;
 
         return {
-          text: response.text ?? undefined,
+          text: extractedText,
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           usage,
         };

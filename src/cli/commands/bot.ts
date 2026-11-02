@@ -79,6 +79,7 @@ export function registerBotCommands(program: Command): void {
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
     .option('--provider <provider>', 'AI model provider ("gemini" | "mock")')
     .option('--model <model>', 'AI model name (defaults to "gemini-2.5-flash")')
+    .option('--api-key <key>', 'Explicit AI model API key (memory-only, Invariant 7)')
     .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
     .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
     .option('-w, --workspace <path>', 'Workspace directory path')
@@ -93,6 +94,7 @@ export function registerBotCommands(program: Command): void {
       autoAck?: boolean;
       provider?: string;
       model?: string;
+      apiKey?: string;
       mode?: string;
       maxIterations?: string;
       workspace?: string;
@@ -111,15 +113,17 @@ export function registerBotCommands(program: Command): void {
 
         if (providerName === 'gemini') {
           aiProvider = new GeminiProvider({
+            apiKey: options.apiKey,
             modelName: options.model ?? 'gemini-2.5-flash'
           });
         } else if (providerName === 'mock') {
           aiProvider = new MockAIProvider('mock-model', [
             { text: 'Tugas telah diproses oleh Mock AI.' }
           ]);
-        } else if (process.env.GEMINI_API_KEY && !providerName) {
-          // Auto-enable Gemini if API key is present in environment
+        } else if ((process.env.GEMINI_API_KEY || options.apiKey) && !providerName) {
+          // Auto-enable Gemini if API key is present
           aiProvider = new GeminiProvider({
+            apiKey: options.apiKey,
             modelName: options.model ?? 'gemini-2.5-flash'
           });
         }

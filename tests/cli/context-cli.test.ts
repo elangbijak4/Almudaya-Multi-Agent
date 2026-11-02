@@ -78,6 +78,31 @@ describe('CLI Shared Context Commands', () => {
     expect(Array.isArray(roots)).toBe(true);
     expect(roots.length).toBe(1);
     expect(roots[0].root_id).toBe('web');
+
+    logSpy.mockClear();
+
+    // Test flags --name and --path format
+    const flagProgram = createProgram();
+    flagProgram.exitOverride();
+    await flagProgram.parseAsync([
+      'node',
+      'almudaya',
+      'context',
+      'root',
+      'add',
+      '--session',
+      'S001',
+      '--name',
+      'testing',
+      '--path',
+      'D:\\testingbot',
+      '-w',
+      tmpWorkspace,
+    ]);
+
+    logs = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logs).toContain('Project root registered successfully!');
+    expect(logs).toContain('testing');
   });
 
   it('should set and show environment metadata via CLI with secret redaction', async () => {

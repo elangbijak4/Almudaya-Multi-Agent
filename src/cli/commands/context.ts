@@ -15,29 +15,42 @@ export function registerContextCommands(program: Command): void {
     .description('Manage shared project root directories');
 
   root
-    .command('add <name> <path>')
+    .command('add [name] [path]')
     .description('Register a project directory root in the Session')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-n, --name <name>', 'Root name')
+    .option('-p, --path <path>', 'Root directory path')
     .option('--id <rootId>', 'Optional slug identifier for the root')
     .option('-t, --type <type>', 'Root type (primary, dependency, reference, docs)', 'primary')
     .option('-d, --description <description>', 'Root description')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (name: string, dirPath: string, options: {
+    .action(async (posName: string | undefined, posPath: string | undefined, options: {
       session: string;
+      name?: string;
+      path?: string;
       id?: string;
       type: string;
       description?: string;
       workspace?: string;
     }) => {
       try {
+        const rootName = posName ?? options.name;
+        const rootPath = posPath ?? options.path;
+
+        if (!rootName || !rootPath) {
+          console.error('Error: Both root name and path are required (e.g. almudaya context root add <name> <path> or --name <name> --path <path>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new SharedContextService(storage);
 
         const record = await service.registerProjectRoot(options.session, {
           rootId: options.id,
-          name,
-          path: dirPath,
+          name: rootName,
+          path: rootPath,
           rootType: options.type.toLowerCase() as ProjectRootType,
           description: options.description,
         });
@@ -102,15 +115,20 @@ export function registerContextCommands(program: Command): void {
     .command('set')
     .description('Capture and save host environment metadata with secret redaction')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('-k, --key <key>', 'Environment variable key')
+    .option('-v, --value <value>', 'Environment variable value')
     .option('--var <keyVal...>', 'Custom environment variable in key=value format (repeatable)')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (options: { session: string; var?: string[]; workspace?: string }) => {
+    .action(async (options: { session: string; key?: string; value?: string; var?: string[]; workspace?: string }) => {
       try {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new SharedContextService(storage);
 
         const customVars: Record<string, string> = {};
+        if (options.key && options.value !== undefined) {
+          customVars[options.key.trim()] = options.value.trim();
+        }
         if (options.var) {
           for (const item of options.var) {
             const eqIdx = item.indexOf('=');
@@ -187,9 +205,12 @@ export function registerContextCommands(program: Command): void {
     .description('Manage references to SDLC documents');
 
   doc
-    .command('add <title> <uriOrPath>')
+    .command('add [title] [uriOrPath]')
     .description('Register an SDLC document reference')
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
+    .option('--title <title>', 'Document title')
+    .option('--doc-path <path>', 'Document file path or URI')
+    .option('--path <path>', 'Alias for --doc-path')
     .option('--id <documentId>', 'Optional slug identifier for the document')
     .option(
       '-t, --type <documentType>',
@@ -199,8 +220,11 @@ export function registerContextCommands(program: Command): void {
     .option('--doc-version <version>', 'Document version (e.g. 1.0.0)')
     .option('--status <status>', 'Document status (draft, approved, deprecated)', 'draft')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (title: string, uriOrPath: string, options: {
+    .action(async (posTitle: string | undefined, posUri: string | undefined, options: {
       session: string;
+      title?: string;
+      docPath?: string;
+      path?: string;
       id?: string;
       type: string;
       docVersion?: string;
@@ -208,14 +232,23 @@ export function registerContextCommands(program: Command): void {
       workspace?: string;
     }) => {
       try {
+        const docTitle = posTitle ?? options.title;
+        const docUriOrPath = posUri ?? options.docPath ?? options.path;
+
+        if (!docTitle || !docUriOrPath) {
+          console.error('Error: Both document title and path are required (e.g. almudaya context doc add <title> <path> or --title <title> --doc-path <path>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new SharedContextService(storage);
 
         const document = await service.registerDocument(options.session, {
           documentId: options.id,
-          title,
-          uriOrPath,
+          title: docTitle,
+          uriOrPath: docUriOrPath,
           documentType: options.type.toUpperCase() as DocumentType,
           version: options.docVersion,
           status: options.status.toLowerCase() as DocumentStatus,

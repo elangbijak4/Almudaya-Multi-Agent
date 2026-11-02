@@ -48,7 +48,7 @@ export function resolveWorkspaceRoot(options?: WorkspaceOptions): string {
     return path.resolve(options.workspace.trim());
   }
 
-  const envWorkspace = process.env['ALMUDAYA_WORKSPACE'];
+  const envWorkspace = process.env['ALMUDAYA_WORKSPACE'] ?? process.env['ALMUDAYA_WORKSPACE_ROOT'];
   if (envWorkspace && envWorkspace.trim().length > 0) {
     return path.resolve(envWorkspace.trim());
   }

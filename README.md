@@ -175,7 +175,12 @@ Almudaya Multi-Agent v0.1.0 is intentionally **infrastructure-first**. The follo
 
 ---
 
-## Documentation
+## Documentation & User Manuals
+
+Panduan penggunaan dan referensi teknis lengkap:
+- 📖 [**USER_MANUAL.md**](./USER_MANUAL.md) — Manual referensi teknis perintah CLI, opsi, environment variables, skema filesystem, dan error handling.
+- 📘 [**USER_GUIDE.md**](./USER_GUIDE.md) — Panduan konseptual, arsitektur proses, filosofi pemisahan 3 direktori (Engine, Blackboard, Target Project), dan ketahanan crash.
+- 📗 [**USER_TUTORIAL.md**](./USER_TUTORIAL.md) — Tutorial praktis hands-on langkah demi langkah simulasi multi-terminal dari nol.
 
 Full architectural specifications, decision records, and test reports are maintained under [`docs/docs_v0.1.0/`](./docs/docs_v0.1.0/):
 - [`01_PROJECT_CHARTER.md`](./docs/docs_v0.1.0/01_PROJECT_CHARTER.md) — Charter, vision, principles, and stakeholders.
@@ -184,7 +189,9 @@ Full architectural specifications, decision records, and test reports are mainta
 - [`04_DESIGN/ADR/`](./docs/docs_v0.1.0/04_DESIGN/ADR/) — Architecture Decision Records (ADR-001 through ADR-008).
 - [`06_TESTING/VERIFICATION_REPORT.md`](./docs/docs_v0.1.0/06_TESTING/VERIFICATION_REPORT.md) — Test verification and validation report.
 - [`07_RELEASE/RELEASE_PLAN.md`](./docs/docs_v0.1.0/07_RELEASE/RELEASE_PLAN.md) — Release checklist and verification.
-- [`08_OPERATIONS/USER_GUIDE.md`](./docs/docs_v0.1.0/08_OPERATIONS/USER_GUIDE.md) — Complete operator walkthrough.
+- [`08_OPERATIONS/USER_GUIDE.md`](./docs/docs_v0.1.0/08_OPERATIONS/USER_GUIDE.md) — Operator walkthrough & architecture guide.
+- [`08_OPERATIONS/USER_MANUAL.md`](./docs/docs_v0.1.0/08_OPERATIONS/USER_MANUAL.md) — CLI commands technical manual.
+- [`08_OPERATIONS/USER_TUTORIAL.md`](./docs/docs_v0.1.0/08_OPERATIONS/USER_TUTORIAL.md) — Step-by-step hands-on tutorial.
 - [`10_PHASE_GATES/`](./docs/docs_v0.1.0/10_PHASE_GATES/) — Formal Phase Gate approval records.
 
 ---

@@ -11,17 +11,19 @@ export function registerSessionCommands(program: Command): void {
   session
     .command('create <name>')
     .description('Create a new collaboration session')
-    .option('--id <id>', 'Specify a stable session ID (defaults to derived slug)')
+    .option('-s, --session <id>', 'Specify a stable session ID (defaults to derived slug)')
+    .option('--id <id>', 'Alias for --session ID')
     .option('--description <description>', 'Optional session description')
     .option('-w, --workspace <path>', 'Workspace directory path')
-    .action(async (name: string, options: { id?: string; description?: string; workspace?: string }) => {
+    .action(async (name: string, options: { session?: string; id?: string; description?: string; workspace?: string }) => {
       try {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new SessionService(storage);
 
+        const targetSessionId = options.session ?? options.id;
         const created = await service.createSession({
-          sessionId: options.id,
+          sessionId: targetSessionId,
           sessionName: name,
           description: options.description,
         });
@@ -80,17 +82,25 @@ export function registerSessionCommands(program: Command): void {
     });
 
   session
-    .command('inspect <sessionId>')
+    .command('inspect [sessionId]')
     .description('Inspect details of an existing session')
+    .option('-s, --session <id>', 'Session ID to inspect')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .option('--json', 'Output details as JSON')
-    .action(async (sessionId: string, options: { workspace?: string; json?: boolean }) => {
+    .action(async (sessionId: string | undefined, options: { session?: string; workspace?: string; json?: boolean }) => {
       try {
+        const targetSessionId = sessionId ?? options.session;
+        if (!targetSessionId) {
+          console.error('Error: Session ID is required (e.g. almudaya session inspect <id> or --session <id>)');
+          process.exitCode = 1;
+          return;
+        }
+
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const service = new SessionService(storage);
 
-        const sessionData = await service.getSession(sessionId);
+        const sessionData = await service.getSession(targetSessionId);
         const sessionPath = service.getSessionDir(sessionData.session_id);
 
         if (options.json) {

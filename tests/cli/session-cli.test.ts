@@ -139,4 +139,46 @@ describe('CLI Session Commands', () => {
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBe(2);
   });
+
+  it('should support --session flag for create and inspect', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'session',
+      'create',
+      'My Custom Session',
+      '--session',
+      'S003',
+      '-w',
+      tmpWorkspace,
+    ]);
+
+    const logs = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logs).toContain('Session created successfully!');
+    expect(logs).toContain('S003');
+
+    logSpy.mockClear();
+
+    const inspectProgram = createProgram();
+    inspectProgram.exitOverride();
+    await inspectProgram.parseAsync([
+      'node',
+      'almudaya',
+      'session',
+      'inspect',
+      '--session',
+      'S003',
+      '-w',
+      tmpWorkspace,
+      '--json',
+    ]);
+
+    const inspectLogs = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    const details = JSON.parse(inspectLogs);
+    expect(details.session_id).toBe('S003');
+    expect(details.session_name).toBe('My Custom Session');
+  });
 });

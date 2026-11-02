@@ -5,3 +5,4 @@
 
 export * from './sandbox.js';
 export * from './file-tools.js';
+export * from './command-tools.js';

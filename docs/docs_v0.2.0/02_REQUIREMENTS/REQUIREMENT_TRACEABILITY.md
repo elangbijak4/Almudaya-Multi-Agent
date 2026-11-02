@@ -1,6 +1,6 @@
 # Requirement Traceability Matrix — Almudaya Multi-Agent v0.2.0
 
-**Status:** IN PROGRESS (Phase 4 Verified)  
+**Status:** IN PROGRESS (Phase 5 Verified)  
 **Date:** 2026-11-02  
 
 Dokumen ini memetakan setiap kebutuhan fungsional dan non-fungsional v0.2.0 ke modul desain, modul implementasi, dan pengujian otomatis pendukungnya.
@@ -21,11 +21,11 @@ Dokumen ini memetakan setiap kebutuhan fungsional dan non-fungsional v0.2.0 ke m
 | **FR-208** | File Tool: `edit_file` | ADR-202, SYSTEM_DESIGN | `src/tools/file-tools.ts` | `tests/tools/file-tools.test.ts` | **VERIFIED** |
 | **FR-209** | File Tools: `list_dir` & `search_files` | ADR-202, SYSTEM_DESIGN | `src/tools/file-tools.ts` | `tests/tools/file-tools.test.ts` | **VERIFIED** |
 | **FR-210** | Path Traversal Sandbox Enforcement | ADR-202, SYSTEM_DESIGN | `src/tools/sandbox.ts` | `tests/tools/sandbox.test.ts` | **VERIFIED** |
-| **FR-211** | Command Tool: `run_command` | ADR-203, SYSTEM_DESIGN | `src/tools/command-tools.ts`| `tests/tools/command-tools.test.ts` | PENDING |
-| **FR-212** | Command Tool: Timeout & stdout/stderr | ADR-203, SYSTEM_DESIGN | `src/tools/command-tools.ts`| `tests/tools/command-tools.test.ts` | PENDING |
-| **FR-213** | Mode Keamanan: `REQUEST_REVIEW` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/review-mode.test.ts` | PENDING |
-| **FR-214** | Mode Keamanan: `TURBO` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/turbo-mode.test.ts` | PENDING |
-| **FR-215** | Konfigurasi mode via CLI flag | ADR-203, SYSTEM_DESIGN | `src/cli/commands/bot.ts` | `tests/cli/bot-cli.test.ts` | PENDING |
+| **FR-211** | Command Tool: `run_command` | ADR-203, SYSTEM_DESIGN | `src/tools/command-tools.ts`| `tests/tools/command-tools.test.ts` | **VERIFIED** |
+| **FR-212** | Command Tool: Timeout & stdout/stderr | ADR-203, SYSTEM_DESIGN | `src/tools/command-tools.ts`| `tests/tools/command-tools.test.ts` | **VERIFIED** |
+| **FR-213** | Mode Keamanan: `REQUEST_REVIEW` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
+| **FR-214** | Mode Keamanan: `TURBO` | ADR-203, SYSTEM_DESIGN | `src/bot/execution-mode.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
+| **FR-215** | Konfigurasi mode via CLI flag | ADR-203, SYSTEM_DESIGN | `src/cli/commands/bot.ts` | `tests/bot/execution-mode.test.ts` | **VERIFIED** |
 | **FR-216** | Autonomous Multi-Bot ReAct Loop | ADR-204, SYSTEM_DESIGN | `src/bot/agent-loop.ts` | `tests/bot/agent-loop.test.ts` | PENDING |
 | **FR-217** | Audit Trail Logging di Blackboard | ADR-204, SYSTEM_DESIGN | `src/blackboard/` | `tests/e2e/autonomous-coding.test.ts` | PENDING |
 | **FR-218** | CLI `almudaya bot run` AI parameters | ADR-204, SYSTEM_DESIGN | `src/cli/commands/bot.ts` | `tests/cli/bot-cli.test.ts` | PENDING |

@@ -1,7 +1,10 @@
+import path from 'node:path';
 import type { IBlackboardStorage } from '../blackboard/interface.js';
 import { BotService } from './service.js';
+import type { BotRecord } from './schema.js';
 import { MessagingService } from '../messaging/service.js';
 import { SharedContextService } from '../shared/service.js';
+import type { ProjectRootRecord } from '../shared/schema.js';
 import type { DirectMessage } from '../messaging/schema.js';
 import type {
   IAIModelProvider,
@@ -13,6 +16,9 @@ import type {
 import { buildDynamicSystemPrompt } from '../ai/prompts.js';
 import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
+import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js';
+import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
+import { isPathInsideRoot } from '../tools/sandbox.js';
 import { ExecutionModeController } from './execution-mode.js';
 
 export interface AgentStepEvent {
@@ -52,6 +58,7 @@ export class AutonomousAgentLoop {
   private readonly botService: BotService;
   private readonly messagingService: MessagingService;
   private readonly sharedContextService: SharedContextService;
+  private readonly workLogService: WorkLogService;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
 
   constructor(options: AgentLoopOptions) {
@@ -68,6 +75,7 @@ export class AutonomousAgentLoop {
       options.messagingService ?? new MessagingService(this.storage, this.botService);
     this.sharedContextService =
       options.sharedContextService ?? new SharedContextService(this.storage);
+    this.workLogService = new WorkLogService(this.storage);
     this.onStepCallback = options.onStep;
   }
 
@@ -80,6 +88,10 @@ export class AutonomousAgentLoop {
     const peerBots = await this.botService.listBots(this.sessionId);
     const projectRoots = await this.sharedContextService.listProjectRoots(this.sessionId);
     const projectRootPaths = projectRoots.map((r) => r.path);
+    const recentWorkLogsMarkdown = await this.workLogService.getRecentSummaryMarkdown(
+      this.sessionId,
+      10
+    );
 
     const systemPrompt = buildDynamicSystemPrompt({
       sessionId: this.sessionId,
@@ -89,11 +101,16 @@ export class AutonomousAgentLoop {
       description: currentBot.description,
       peerBots,
       projectRoots,
-      executionMode: this.executionModeController.getMode()
+      executionMode: this.executionModeController.getMode(),
+      recentWorkLogsMarkdown,
     });
 
-    // 2. Prepare available tools (File Tools + Command Execution Tool)
-    const availableTools: ToolDefinition[] = [...FILE_TOOLS, RUN_COMMAND_TOOL];
+    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool)
+    const availableTools: ToolDefinition[] = [
+      ...FILE_TOOLS,
+      RUN_COMMAND_TOOL,
+      GET_WORK_LOG_TOOL,
+    ];
 
     // 3. Initialize conversation messages
     const senderName = message.sender_bot_id;
@@ -178,7 +195,13 @@ export class AutonomousAgentLoop {
           try {
             let result: unknown;
 
-            if (toolCall.name === 'run_command') {
+            if (toolCall.name === 'get_work_log') {
+              result = await executeGetWorkLog(
+                this.storage,
+                this.sessionId,
+                toolCall.arguments
+              );
+            } else if (toolCall.name === 'run_command') {
               const cmdArgs: RunCommandArgs = {
                 command: String(toolCall.arguments['command'] ?? ''),
                 timeout_ms:
@@ -190,13 +213,56 @@ export class AutonomousAgentLoop {
                     ? toolCall.arguments['working_dir']
                     : undefined
               };
-              result = await executeRunCommand(projectRootPaths, cmdArgs);
+              const cmdResult = await executeRunCommand(projectRootPaths, cmdArgs);
+              result = cmdResult;
+
+              // Automatic Work Log Recording (FR-313, ADR-302)
+              await this.recordToolExecutionWorkLog(
+                currentBot,
+                projectRoots,
+                'COMMAND',
+                cmdArgs.working_dir,
+                `Ran command: ${cmdArgs.command} (exitCode: ${cmdResult.exitCode})`,
+                {
+                  command: cmdArgs.command,
+                  exit_code: cmdResult.exitCode,
+                  stdout_snippet: cmdResult.stdout.slice(0, 200),
+                }
+              );
             } else {
               result = await executeFileTool(
                 projectRootPaths,
                 toolCall.name,
                 toolCall.arguments
               );
+
+              // Automatic Work Log Recording for file mutations (FR-313, ADR-302)
+              if (toolCall.name === 'write_file') {
+                const filePath = String(toolCall.arguments['path'] ?? '');
+                await this.recordToolExecutionWorkLog(
+                  currentBot,
+                  projectRoots,
+                  'WRITE',
+                  filePath,
+                  `Wrote file ${filePath}`,
+                  {
+                    path: filePath,
+                    bytes: String(toolCall.arguments['content'] ?? '').length,
+                  }
+                );
+              } else if (toolCall.name === 'edit_file') {
+                const filePath = String(toolCall.arguments['path'] ?? '');
+                await this.recordToolExecutionWorkLog(
+                  currentBot,
+                  projectRoots,
+                  'EDIT',
+                  filePath,
+                  `Edited file ${filePath}`,
+                  {
+                    path: filePath,
+                  }
+                );
+              }
             }
 
             toolResults.push({
@@ -293,5 +359,58 @@ export class AutonomousAgentLoop {
     }
 
     return finalResponseText;
+  }
+
+  /**
+   * Automatically records a work action entry to the shared work log with precise project root resolution.
+   */
+  private async recordToolExecutionWorkLog(
+    currentBot: BotRecord,
+    projectRoots: ProjectRootRecord[],
+    actionType: WorkActionType,
+    targetPathOrDir: string | undefined,
+    summary: string,
+    details?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      let targetRoot = projectRoots[0];
+      let relPath: string | undefined = undefined;
+      let fullPath: string | undefined = undefined;
+
+      if (targetPathOrDir && projectRoots.length > 0) {
+        const matched = projectRoots.find((r) =>
+          isPathInsideRoot(r.path, targetPathOrDir) ||
+          targetPathOrDir.startsWith(r.root_id)
+        );
+
+        if (matched) {
+          targetRoot = matched;
+          if (isPathInsideRoot(matched.path, targetPathOrDir)) {
+            relPath = path.relative(matched.path, targetPathOrDir).replace(/\\/g, '/');
+            fullPath = path.resolve(targetPathOrDir);
+          } else {
+            relPath = targetPathOrDir.replace(/\\/g, '/');
+          }
+        } else if (targetRoot) {
+          relPath = targetPathOrDir.replace(/\\/g, '/');
+          fullPath = path.resolve(targetRoot.path, targetPathOrDir);
+        }
+      }
+
+      await this.workLogService.recordWork(this.sessionId, {
+        botId: currentBot.bot_id,
+        botName: currentBot.display_name,
+        actionType,
+        targetRootId: targetRoot?.root_id ?? 'default',
+        targetRootName: targetRoot?.name ?? 'Project Root',
+        targetRootPath: targetRoot?.path ?? '',
+        relativePath: relPath,
+        fullPath: fullPath,
+        summary,
+        details,
+      });
+    } catch {
+      // Prevent failure in work log recording from interrupting ReAct agent loop
+    }
   }
 }

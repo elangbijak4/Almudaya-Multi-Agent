@@ -10,6 +10,7 @@ export interface PromptContext {
   peerBots?: BotRecord[];
   projectRoots?: ProjectRootRecord[];
   executionMode?: 'REQUEST_REVIEW' | 'TURBO';
+  recentWorkLogsMarkdown?: string;
 }
 
 /**
@@ -53,6 +54,12 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
       }
       sections.push('Anda dapat saling berkoordinasi, meminta review, atau membagi tugas dengan rekan-rekan bot di atas.');
     }
+  }
+
+  // Recent Work Log & Team Situational Awareness (v0.3.0, FR-314)
+  if (context.recentWorkLogsMarkdown) {
+    sections.push('\n## Riwayat Kerja Terakhir di Sesi Ini (Shared Work Memory):');
+    sections.push(context.recentWorkLogsMarkdown);
   }
 
   // Guidelines for Tool Calling & Collaboration

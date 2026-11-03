@@ -99,4 +99,16 @@ describe('AI Provider Abstraction & Prompts', () => {
     expect(prompt).toContain('Coder');
     expect(prompt).toContain('Software Engineer');
   });
+
+  it('should inject recent work memory markdown into system prompt (FR-314)', () => {
+    const prompt = buildDynamicSystemPrompt({
+      sessionId: 'S003',
+      botId: 'B001',
+      displayName: 'Architect',
+      recentWorkLogsMarkdown: '- [2026-11-03 11:20:00] Coder [WRITE] root "backend" (server.ts): Created server',
+    });
+
+    expect(prompt).toContain('Riwayat Kerja Terakhir di Sesi Ini (Shared Work Memory)');
+    expect(prompt).toContain('Coder [WRITE] root "backend" (server.ts): Created server');
+  });
 });

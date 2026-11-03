@@ -10,6 +10,7 @@ import { SharedContextService } from '../../src/shared/service.js';
 import { AutonomousAgentLoop } from '../../src/bot/agent-loop.js';
 import { ExecutionModeController } from '../../src/bot/execution-mode.js';
 import { MockAIProvider } from '../../src/ai/mock-provider.js';
+import { WorkLogService } from '../../src/shared/work-log.js';
 import type { DirectMessage } from '../../src/messaging/schema.js';
 
 describe('Autonomous Multi-Bot Agent Loop (FR-216, FR-217, ADR-204)', () => {
@@ -250,5 +251,110 @@ describe('Autonomous Multi-Bot Agent Loop (FR-216, FR-217, ADR-204)', () => {
 
     const reply = await agentLoop.handleMessage(incomingMsg);
     expect(reply).toContain('Mencapai batas maksimal 4 iterasi');
+  });
+
+  it('should automatically record work log entries when tools mutate files (FR-313, ADR-302)', async () => {
+    const mockProvider = new MockAIProvider('mock-model', [
+      {
+        text: 'Membuat file konfigurasi server.',
+        toolCalls: [
+          {
+            id: 'call_write_1',
+            name: 'write_file',
+            arguments: {
+              path: 'config.json',
+              content: '{"port": 8080}'
+            }
+          }
+        ]
+      },
+      {
+        text: 'Konfigurasi telah disimpan.'
+      }
+    ]);
+
+    const agentLoop = new AutonomousAgentLoop({
+      sessionId,
+      botId: 'BOT_CODER',
+      storage,
+      provider: mockProvider,
+      executionModeController: new ExecutionModeController('TURBO'),
+      botService,
+      messagingService,
+      sharedContextService
+    });
+
+    const msg: DirectMessage = {
+      message_id: 'MSG_WORK_LOG_1',
+      session_id: sessionId,
+      sender_bot_id: 'BOT_ARCHITECT',
+      recipient_bot_id: 'BOT_CODER',
+      content: 'Buat config.json',
+      created_at: new Date().toISOString()
+    };
+
+    await agentLoop.handleMessage(msg);
+
+    // Verify automatic work log recording
+    const workLogService = new WorkLogService(storage);
+    const logs = await workLogService.readWorkLogs(sessionId);
+    expect(logs.length).toBe(1);
+    expect(logs[0]!.bot_id).toBe('BOT_CODER');
+    expect(logs[0]!.action_type).toBe('WRITE');
+    expect(logs[0]!.relative_path).toBe('config.json');
+    expect(logs[0]!.summary).toContain('Wrote file config.json');
+  });
+
+  it('should allow AI to call get_work_log to inspect peer activities (FR-314, FR-315)', async () => {
+    const workLogService = new WorkLogService(storage);
+    await workLogService.recordWork(sessionId, {
+      botId: 'BOT_ARCHITECT',
+      botName: 'System Architect',
+      actionType: 'WRITE',
+      targetRootId: 'target_repo',
+      targetRootName: 'target_repo',
+      targetRootPath: targetProjectDir,
+      relativePath: 'schema.sql',
+      summary: 'Created initial SQL schema',
+    });
+
+    const mockProvider = new MockAIProvider('mock-model', [
+      {
+        text: 'Saya akan memeriksa apa yang sudah dibuat Architect.',
+        toolCalls: [
+          {
+            id: 'call_get_log',
+            name: 'get_work_log',
+            arguments: { limit: 5 }
+          }
+        ]
+      },
+      {
+        text: 'Saya melihat schema.sql telah dibuat. Sekarang saya siap melanjutkan.'
+      }
+    ]);
+
+    const agentLoop = new AutonomousAgentLoop({
+      sessionId,
+      botId: 'BOT_CODER',
+      storage,
+      provider: mockProvider,
+      executionModeController: new ExecutionModeController('TURBO'),
+      botService,
+      messagingService,
+      sharedContextService
+    });
+
+    const msg: DirectMessage = {
+      message_id: 'MSG_WORK_LOG_2',
+      session_id: sessionId,
+      sender_bot_id: 'BOT_ARCHITECT',
+      recipient_bot_id: 'BOT_CODER',
+      content: 'Lanjutkan pekerjaan setelah schema dibuat.',
+      created_at: new Date().toISOString()
+    };
+
+    const reply = await agentLoop.handleMessage(msg);
+    expect(reply).toContain('Saya melihat schema.sql telah dibuat.');
   });
 });

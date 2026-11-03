@@ -6,6 +6,7 @@ import { BotService } from '../../bot/service.js';
 import { BotRuntime } from '../../bot/runtime.js';
 import { AutonomousAgentLoop } from '../../bot/agent-loop.js';
 import { ExecutionModeController, type ExecutionMode } from '../../bot/execution-mode.js';
+import { BotConsole } from '../../bot/console.js';
 import { GeminiProvider } from '../../ai/gemini.js';
 import { MockAIProvider } from '../../ai/mock-provider.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
@@ -134,6 +135,7 @@ export function registerBotCommands(program: Command): void {
         const executionModeController = new ExecutionModeController(executionMode);
 
         let agentLoop: AutonomousAgentLoop | undefined;
+        let consoleInstance: BotConsole | undefined;
 
         const runtime = new BotRuntime(storage, {
           sessionId: options.session,
@@ -143,27 +145,46 @@ export function registerBotCommands(program: Command): void {
           heartbeatIntervalMs,
           autoAcknowledge: options.autoAck ?? true,
           onMessage: async (msg) => {
-            console.log(`\n📨 [BOT ${runtime.botId}] Pesan masuk dari ${msg.sender_bot_id}: "${msg.content}"`);
+            const notif = `📨 [BOT ${runtime.botId}] Pesan masuk dari ${msg.sender_bot_id}: "${msg.content}"`;
+            if (consoleInstance) {
+              consoleInstance.printNotification(notif);
+            } else {
+              console.log(`\n${notif}`);
+            }
 
             if (agentLoop && aiProvider) {
-              console.log(
-                `🤖 Menjalankan ReAct Agent Loop (${aiProvider.providerId} | Mode: ${executionModeController.getMode()})...`
-              );
+              const startMsg = `🤖 Menjalankan ReAct Agent Loop (${aiProvider.providerId} | Mode: ${executionModeController.getMode()})...`;
+              if (consoleInstance) {
+                consoleInstance.printNotification(startMsg);
+              } else {
+                console.log(startMsg);
+              }
+
               try {
                 const reply = await agentLoop.handleMessage(msg);
-                console.log(`✅ [BOT ${runtime.botId}] Balasan otonom terkirim:`);
-                console.log(`   "${reply.slice(0, 160)}${reply.length > 160 ? '...' : ''}"\n`);
+                const replyMsg = `✅ [BOT ${runtime.botId}] Balasan otonom terkirim:\n   "${reply.slice(0, 160)}${reply.length > 160 ? '...' : ''}"`;
+                if (consoleInstance) {
+                  consoleInstance.printNotification(replyMsg);
+                } else {
+                  console.log(replyMsg);
+                }
               } catch (err: unknown) {
-                console.error(
-                  `❌ [BOT ${runtime.botId}] Gagal memproses pesan: ${(err as Error).message}`
-                );
+                const errMsg = `❌ [BOT ${runtime.botId}] Gagal memproses pesan: ${(err as Error).message}`;
+                if (consoleInstance) {
+                  consoleInstance.printNotification(errMsg);
+                } else {
+                  console.error(errMsg);
+                }
               }
             }
           },
           onBroadcast: async (evt) => {
-            console.log(
-              `📢 [BOT ${runtime.botId}] Broadcast dari ${evt.sender_bot_id} [${evt.category}]: ${evt.content}`
-            );
+            const bcastMsg = `📢 [BOT ${runtime.botId}] Broadcast dari ${evt.sender_bot_id} [${evt.category}]: ${evt.content}`;
+            if (consoleInstance) {
+              consoleInstance.printNotification(bcastMsg);
+            } else {
+              console.log(bcastMsg);
+            }
           },
         });
 
@@ -177,21 +198,21 @@ export function registerBotCommands(program: Command): void {
             storage,
             provider: aiProvider,
             executionModeController,
-            maxIterations: maxIter
+            maxIterations: maxIter,
           });
         }
 
-        console.log(`Bot runtime started successfully!`);
-        console.log(`  Session ID:     ${botRecord.session_id}`);
-        console.log(`  Bot ID:         ${botRecord.bot_id}`);
-        console.log(`  Display Name:   ${botRecord.display_name}`);
-        console.log(`  PID:            ${process.pid}`);
-        console.log(`  AI Provider:    ${aiProvider ? `${aiProvider.providerId} (${aiProvider.modelName})` : 'Disabled (Messaging only)'}`);
-        console.log(`  Execution Mode: ${executionMode}`);
-        console.log(`Press Ctrl+C to terminate bot process.`);
+        // Launch All-in-One Interactive Bot Console REPL (FR-301..310, ADR-301)
+        consoleInstance = new BotConsole({
+          runtime,
+          agentLoop,
+          storage,
+          executionModeController,
+          aiProvider,
+        });
 
-        // Keep process running until interrupted
-        await new Promise<void>(() => {});
+        await consoleInstance.start();
+        await consoleInstance.waitForClose();
       } catch (error: unknown) {
         console.error(`Error running bot runtime: ${(error as Error).message}`);
         process.exitCode = 1;

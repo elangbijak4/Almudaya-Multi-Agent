@@ -8,3 +8,4 @@ export * from './service.js';
 export * from './runtime.js';
 export * from './execution-mode.js';
 export * from './agent-loop.js';
+export * from './console.js';

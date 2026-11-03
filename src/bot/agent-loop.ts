@@ -266,18 +266,22 @@ export class AutonomousAgentLoop {
     // 5. Send automated reply back to sender bot (FR-216)
     if (message.sender_bot_id && message.sender_bot_id !== this.botId) {
       try {
-        await this.messagingService.sendDirectMessage(this.sessionId, {
-          senderBotId: this.botId,
-          recipient: message.sender_bot_id,
-          content: finalResponseText || '(Tugas telah diselesaikan.)',
-          metadata: { correlationId: message.message_id }
-        });
+        if (message.sender_bot_id !== 'OPERATOR') {
+          await this.messagingService.sendDirectMessage(this.sessionId, {
+            senderBotId: this.botId,
+            recipient: message.sender_bot_id,
+            content: finalResponseText || '(Tugas telah diselesaikan.)',
+            metadata: { correlationId: message.message_id }
+          });
+        }
 
         // Log completion decision to Blackboard
         await this.messagingService.publishBroadcast(this.sessionId, {
           senderBotId: this.botId,
           category: 'DECISION',
-          content: `Bot "${currentBot.display_name}" menyelesaikan tugas dari "${senderName}".`,
+          content: message.sender_bot_id === 'OPERATOR'
+            ? `Bot "${currentBot.display_name}" menyelesaikan instruksi operator.`
+            : `Bot "${currentBot.display_name}" menyelesaikan tugas dari "${senderName}".`,
           metadata: {
             replyToMessageId: message.message_id,
             iterations: iteration

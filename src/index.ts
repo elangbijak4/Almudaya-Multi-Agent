@@ -17,6 +17,7 @@ export * from './messaging/service.js';
 
 export * from './shared/schema.js';
 export * from './shared/service.js';
+export * from './shared/work-log.js';
 
 export * from './ai/index.js';
 export * from './tools/index.js';

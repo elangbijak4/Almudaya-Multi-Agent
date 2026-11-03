@@ -33,6 +33,8 @@ import {
   ProjectRootsRegistrySchema,
   SdlcDocumentsRegistrySchema,
 } from '../shared/schema.js';
+import type { WorkLogEntry } from '../shared/work-log.js';
+import { WorkLogEntrySchema } from '../shared/work-log.js';
 import {
   SessionAlreadyExistsError,
   SessionNotFoundError,
@@ -95,6 +97,10 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   private getCursorFilePath(sessionId: string, botId: string): string {
     return path.join(this.getInboxDir(sessionId, botId), 'broadcast_cursor.json');
+  }
+
+  public getWorkLogFilePath(sessionId: string): string {
+    return path.join(this.getSessionDir(sessionId), 'work_log.jsonl');
   }
 
   public async sessionExists(sessionId: string): Promise<boolean> {
@@ -462,5 +468,53 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     const file = this.getDocumentsFilePath(validId);
     const validated = SdlcDocumentsRegistrySchema.parse(registry);
     await atomicWriteJson(file, validated);
+  }
+
+  // --- Work Log Operations ---
+
+  public async appendWorkLog(sessionId: string, entry: WorkLogEntry): Promise<void> {
+    const validId = validateSessionId(sessionId);
+    if (!(await this.sessionExists(validId))) {
+      throw new SessionNotFoundError(validId);
+    }
+
+    const workLogFile = this.getWorkLogFilePath(validId);
+    const validated = WorkLogEntrySchema.parse(entry);
+    const line = JSON.stringify(validated) + '\n';
+
+    await this.withSessionLock(validId, async () => {
+      await fs.appendFile(workLogFile, line, 'utf-8');
+    });
+  }
+
+  public async readWorkLogs(sessionId: string): Promise<WorkLogEntry[]> {
+    const validId = validateSessionId(sessionId);
+    if (!(await this.sessionExists(validId))) {
+      throw new SessionNotFoundError(validId);
+    }
+
+    const workLogFile = this.getWorkLogFilePath(validId);
+    if (!(await pathExists(workLogFile))) {
+      return [];
+    }
+
+    const content = await fs.readFile(workLogFile, 'utf-8');
+    const lines = content.split('\n').filter((l) => l.trim().length > 0);
+    const entries: WorkLogEntry[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      try {
+        const parsed = JSON.parse(line);
+        entries.push(WorkLogEntrySchema.parse(parsed));
+      } catch (err: unknown) {
+        throw new CorruptedDataError(
+          workLogFile,
+          `Invalid JSONL record at line ${i + 1}: ${(err as Error).message}`
+        );
+      }
+    }
+
+    return entries;
   }
 }

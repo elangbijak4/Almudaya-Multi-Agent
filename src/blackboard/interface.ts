@@ -11,6 +11,7 @@ import type {
   ProjectRootsRegistry,
   SdlcDocumentsRegistry,
 } from '../shared/schema.js';
+import type { WorkLogEntry } from '../shared/work-log.js';
 
 /**
  * Persistence abstraction for Session storage operations.
@@ -68,10 +69,19 @@ export interface ISharedContextStorage {
 }
 
 /**
+ * Persistence abstraction for Shared Work Log (location-aware session work memory).
+ */
+export interface IWorkLogStorage {
+  appendWorkLog(sessionId: string, entry: WorkLogEntry): Promise<void>;
+  readWorkLogs(sessionId: string): Promise<WorkLogEntry[]>;
+}
+
+/**
  * Combined Blackboard Storage interface.
  */
 export interface IBlackboardStorage
   extends ISessionStorage,
     IBotRegistryStorage,
     IMessagingStorage,
-    ISharedContextStorage {}
+    ISharedContextStorage,
+    IWorkLogStorage {}

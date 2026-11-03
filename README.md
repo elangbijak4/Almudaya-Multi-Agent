@@ -1,14 +1,28 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.2.0)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.0)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 137 Passed](https://img.shields.io/badge/Tests-137%20Passed-brightgreen.svg)](./docs/docs_v0.2.0/10_PHASE_GATES/PHASE_7_VERIFICATION_GATE.md)
+[![Tests: 179 Passed](https://img.shields.io/badge/Tests-179%20Passed-brightgreen.svg)](./docs/docs_v0.3.0/10_PHASE_GATES/PHASE_6_VERIFICATION_GATE.md)
 [![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Interactive All-in-One Bot Console REPL** and **Cross-Root Location-Aware Session Work Memory**.
 
-Almudaya Multi-Agent provides the underlying infrastructure required for multiple autonomous AI bots and human engineers to collaborate within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases.
+Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases.
+
+---
+
+## What's New in Version 0.3.0
+
+1. **All-in-One Interactive Bot Console REPL (`almudaya bot run`):**
+   - Transformed the passive blocking daemon into an active non-blocking interactive command prompt (`<BotName>> `).
+   - Full slash command set: `/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/status`, `/clear`, `/help`, `/exit`.
+   - Direct natural language typing forwards instructions directly to local AI ReAct reasoning.
+   - **Non-Destructive TTY Output Rendering (ANSI `\r\x1b[K`):** Incoming Blackboard messages or broadcasts never corrupt or overwrite the operator's active keyboard typing buffer.
+2. **Cross-Root Location-Aware Session Work Memory (`work_log.jsonl`):**
+   - Every file mutation (`write_file`, `edit_file`) and shell execution (`run_command`) automatically records a structured work log entry with complete multi-root coordinates (`target_root_id`, `target_root_name`, `target_root_path`, `relative_path`).
+   - Model ReAct loop automatically injects recent work logs into dynamic system prompts for full team situational awareness.
+   - Built-in AI Function Calling tool: `get_work_log(limit, root_id, bot_id)` for dynamic cross-root dependency discovery.
 
 ---
 
@@ -24,33 +38,35 @@ Almudaya Multi-Agent provides the underlying infrastructure required for multipl
                       │  ├──────────────────────────────────────────┤ │
                       │  │ Broadcast Event Stream (events.jsonl)    │ │
                       │  ├──────────────────────────────────────────┤ │
-                      │  │ Shared Project Context (context.json)    │ │
+                      │  │ Shared Project Roots (roots.json)        │ │
+                      │  ├──────────────────────────────────────────┤ │
+                      │  │ Shared Work Memory (work_log.jsonl)      │ │
                       │  └──────────────────────────────────────────┘ │
                       │  ┌──────────────────────────────────────────┐ │
                       │  │ Individual Inboxes (inbox/<bot_id>/)     │ │
                       │  │ - messages.json                          │ │
-                      │  │ - cursors.json                           │ │
+                      │  │ - broadcast_cursor.json                  │ │
                       │  └──────────────────────────────────────────┘ │
                       └──────────────────────▲────────────────────────┘
                                              │
                        ┌─────────────────────┴─────────────────────┐
                        │                                           │
           ┌────────────┴─────────────┐                ┌────────────┴─────────────┐
-          │  Bot Process 1 (Node.js) │                │  Bot Process 2 (Node.js) │
-          │  - Bot ID: BOT001        │                │  - Bot ID: BOT002        │
-          │  - Display: "Architect"  │                │  - Display: "Engineer"   │
-          │  - Terminal 1            │                │  - Terminal 2            │
+          │  Bot Console 1 (Terminal)│                │  Bot Console 2 (Terminal)│
+          │  Prompt: "Architect> "   │                │  Prompt: "Coder> "       │
+          │  PID: 1420 (active REPL) │                │  PID: 8520 (active REPL) │
+          │  Root: [backend, frontend│                │  Root: [backend]         │
           └──────────────────────────┘                └──────────────────────────┘
 ```
 
 ### Core Invariants
 
-1. **Session-Centric Boundary:** A Session is the collaboration boundary. All bots, events, inboxes, and shared context reside inside their respective session workspace.
+1. **Session-Centric Boundary:** A Session is the collaboration boundary. All bots, events, inboxes, work logs, and shared context reside inside their respective session workspace.
 2. **Stable Bot Identity:** Each bot is allocated an immutable, permanent `bot_id` (e.g., `BOT001`). Its human-friendly `display_name` (e.g., `"Architect"`) can be edited at any time without altering identity or breaking historical message references.
 3. **Storage Persistence & Durability:** All state is saved to disk immediately using atomic file writes and kernel-atomic cooperative locking. Sessions survive process crashes and full system restarts.
 4. **Independent Process Isolation:** Every bot runs in its own operating system process (e.g., distinct CLI terminals or background daemon processes). A slow, blocked, or crashed bot cannot crash or stall other bots in the session.
-5. **Sandbox Isolation (FR-210):** All AI coding file tools (`read_file`, `write_file`, `edit_file`, `list_dir`, `search_files`) and shell commands (`run_command`) are strictly confined to registered project roots. Path traversal attempts (`..`) are denied immediately.
-6. **Review Sovereignty (FR-213):** In `REQUEST_REVIEW` mode, no file mutation or system command executes without explicit human approval (`y/n/d`).
+5. **Sandbox Isolation (FR-210, FR-316):** All AI coding file tools (`read_file`, `write_file`, `edit_file`, `list_dir`, `search_files`) and shell commands (`run_command`) are strictly confined to registered project roots. Path traversal attempts (`..`) are denied immediately.
+6. **Review Sovereignty (FR-213, FR-317):** In `REQUEST_REVIEW` mode, no file mutation or system command executes without explicit human approval (`y/n/d`).
 7. **Credential Privacy (FR-204):** API keys (e.g. `GEMINI_API_KEY`) reside exclusively in local process memory and are never written to Blackboard storage or logs.
 
 ---
@@ -72,17 +88,21 @@ npm link
 almudaya session create my-workspace --session S001 --description "Core Development Session"
 ```
 
-### 2. Join Bots (In Separate Terminals)
-**Terminal 1:**
+### 2. Run Bots in Interactive REPL Mode (Separate Terminals)
+**Terminal 1 (Architect Console):**
 ```bash
-almudaya bot join --session S001 --bot BOT001 --display-name "Architect" --role "System Architect"
-almudaya bot run --session S001 --bot BOT001
+almudaya bot run --session S001 --bot BOT001 --name "Architect" --role "System Architect"
+# Directly opens the non-blocking interactive REPL:
+# Architect> /peers
+# Architect> /msg Coder Buatkan REST endpoint di backend/src/server.js
 ```
 
-**Terminal 2:**
-```bash
-almudaya bot join --session S001 --bot BOT002 --display-name "Engineer" --role "Software Engineer"
-almudaya bot run --session S001 --bot BOT002
+**Terminal 2 (Coder Console with Gemini AI & Turbo Mode):**
+```powershell
+$env:GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+almudaya bot run --session S001 --bot BOT002 --name "Coder" --role "Software Engineer" --provider gemini --mode turbo
+# Coder automatically handles incoming messages, executes tools, and logs to work_log.jsonl:
+# Coder> /log
 ```
 
 ### 3. Discover Peers

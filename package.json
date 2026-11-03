@@ -1,6 +1,6 @@
 {
   "name": "almudaya-multiagent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Session-centric multi-process autonomous AI coding agent collaboration foundation",
   "type": "module",
   "main": "dist/index.js",

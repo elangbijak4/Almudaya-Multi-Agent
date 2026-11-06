@@ -145,6 +145,7 @@ describe('Phase 6: End-to-End Multi-Root Orchestration Benchmark (v0.3.0)', () =
       displayName: 'Coder',
       description: 'Backend Developer',
       autoAcknowledge: true,
+      pollIntervalMs: 60000,
       onMessage: async (msg) => {
         await coderAgentLoop.handleMessage(msg);
       }
@@ -219,6 +220,7 @@ describe('Phase 6: End-to-End Multi-Root Orchestration Benchmark (v0.3.0)', () =
       displayName: 'Tester',
       description: 'QA & Test Engineer',
       autoAcknowledge: true,
+      pollIntervalMs: 60000,
       onMessage: async (msg) => {
         await testerAgentLoop.handleMessage(msg);
       }

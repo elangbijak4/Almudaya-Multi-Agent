@@ -1,3 +1,21 @@
+import { AlmudayaError } from '../core/errors.js';
+
+/**
+ * Thrown when an AI provider hits an API rate limit / quota throttle (HTTP 429).
+ * Carries the duration in seconds requested by the server before the next attempt.
+ * Enforces NT-05, NT-06 & FR-322.
+ */
+export class RateLimitPauseError extends AlmudayaError {
+  constructor(
+    message: string,
+    public readonly retryDelaySeconds: number,
+    public readonly cause?: unknown
+  ) {
+    super(`Rate Limit Pause: ${message} (retry in ${retryDelaySeconds}s)`);
+    this.name = 'RateLimitPauseError';
+  }
+}
+
 /**
  * Core AI Model Provider Interface and Schema Definitions.
  * Implements vendor-agnostic abstraction for Multi-Provider AI integration (ADR-201).

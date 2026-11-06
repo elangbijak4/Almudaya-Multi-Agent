@@ -1,12 +1,44 @@
 import { GoogleGenAI } from '@google/genai';
 import type { IAIModelProvider, AIRequest, AIResponse, ToolCallRequest } from './provider.js';
+import { RateLimitPauseError } from './provider.js';
 import { resolveApiKey } from './credentials.js';
 import { AlmudayaError } from '../core/errors.js';
+
+export { RateLimitPauseError };
 
 export class GeminiProviderError extends AlmudayaError {
   constructor(message: string, public readonly cause?: unknown) {
     super(`Google Gemini Provider Error: ${message}`);
   }
+}
+
+/**
+ * Extracts retry delay duration in seconds from Google API error details or error message.
+ * Enforces NT-05, NT-06 & FR-322.
+ */
+export function parseRetryDelay(errorObj: any): number | null {
+  try {
+    // 1. Google GenAI errorDetails array (RetryInfo format)
+    const details = errorObj?.errorDetails || errorObj?.cause?.errorDetails;
+    if (Array.isArray(details)) {
+      for (const d of details) {
+        if (d?.retryDelay) {
+          const m = String(d.retryDelay).match(/^([\d.]+)s?$/);
+          if (m) return parseFloat(m[1]!);
+        }
+      }
+    }
+
+    // 2. Message regex: "retry in 39.61s" or "wait 40s"
+    const text = String(errorObj?.message || errorObj || '');
+    const m = text.match(/retry in ([\d.]+)s/i) || text.match(/wait ([\d.]+)s/i);
+    if (m) {
+      return parseFloat(m[1]!);
+    }
+  } catch {
+    // Ignore parsing error
+  }
+  return null;
 }
 
 export interface GeminiProviderOptions {
@@ -93,6 +125,13 @@ export class GeminiProvider implements IAIModelProvider {
       } catch (err: unknown) {
         lastError = err;
         const errMsg = (err as Error)?.message ?? String(err);
+        const serverDelay = parseRetryDelay(err);
+
+        // If server explicitly requested a significant delay (e.g. > 5s), immediately throw RateLimitPauseError
+        // to let the agent loop pause adaptively and inform the user/console.
+        if (serverDelay && serverDelay > 5) {
+          throw new RateLimitPauseError(errMsg, serverDelay, err);
+        }
 
         // Check if retryable (e.g. rate limit, 429, 503, network transient)
         const isTransient =
@@ -100,12 +139,24 @@ export class GeminiProvider implements IAIModelProvider {
           errMsg.includes('503') ||
           errMsg.includes('RESOURCE_EXHAUSTED') ||
           errMsg.includes('quota') ||
-          errMsg.includes('ETIMEDOUT');
+          errMsg.includes('ETIMEDOUT') ||
+          errMsg.includes('ECONNRESET');
 
         if (isTransient && attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * 500 + Math.floor(Math.random() * 200);
+          const delay = serverDelay
+            ? Math.ceil(serverDelay * 1000)
+            : Math.pow(2, attempt) * 500 + Math.floor(Math.random() * 200);
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
+        }
+
+        if (
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED') ||
+          errMsg.includes('quota')
+        ) {
+          const fallbackDelay = serverDelay ?? 15;
+          throw new RateLimitPauseError(errMsg, fallbackDelay, err);
         }
 
         throw new GeminiProviderError(errMsg, err);

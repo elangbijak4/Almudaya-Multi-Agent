@@ -1,14 +1,35 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.0)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.1)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 179 Passed](https://img.shields.io/badge/Tests-179%20Passed-brightgreen.svg)](./docs/docs_v0.3.0/10_PHASE_GATES/PHASE_6_VERIFICATION_GATE.md)
+[![Tests: 201 Passed](https://img.shields.io/badge/Tests-201%20Passed-brightgreen.svg)](./docs/docs_v0.3.1/10_PHASE_GATES/PHASE_6_VERIFICATION_GATE.md)
 [![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Interactive All-in-One Bot Console REPL** and **Cross-Root Location-Aware Session Work Memory**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Interactive All-in-One Bot Console REPL**, **Cross-Root Location-Aware Session Work Memory**, and **Hardened Security & Reliability Isolation**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases.
+
+---
+
+## What's New in Version 0.3.1 (Security, Concurrency & Reliability Patch)
+
+1. **Subprocess Environment Sanitization & Output Redaction (`SEC-01`, Invariant 7):**
+   - Subprocess shells spawned via `run_command` only inherit an explicit allowlist of non-sensitive system environment variables (`PATH`, `SYSTEMROOT`, `TEMP`, etc.).
+   - Host secrets, API keys (`GEMINI_API_KEY`, tokens, auth credentials) are stripped to prevent child processes from exfiltrating credentials.
+   - Command stdout/stderr is filtered through regex patterns redacting accidentally printed API keys.
+2. **Canonical Sandbox Isolation & Symlink/Junction Defense (`§14/6`, Invariant 5):**
+   - File sandboxing enforces dual canonical physical (`fs.realpathSync`) and lexical boundary verification, defeating Windows directory junction (`mklink /J`) and Unix symlink traversal attacks.
+3. **Transactional Inbox Processing & At-Least-Once Delivery (`RELIA-01`, Invariant 4):**
+   - Inbox messages remain `status: 'unread'` until the bot completes its reasoning and action turn, preventing dropped messages during crashes or unhandled exceptions.
+4. **Adaptive Gemini 429 Rate-Limit Throttling Latch (`NT-05`, `NT-06`):**
+   - Parses `RetryInfo: retryDelay` duration headers from Gemini 429 quota exhaustion responses, pausing gracefully with non-destructive operator notification before automatically retrying without losing the ReAct turn.
+5. **Atomic Broadcast Cursor Tracking (`CONC-02`):**
+   - Session-locked broadcast reader advances cursor positions only to delivered events, preventing missed events when reading filtered categories.
+6. **CLI Improvements & Documentation Sync:**
+   - Added `--no-mark-read` option to `almudaya message read`.
+   - Added `--doc-id` alias support in `almudaya context doc add`.
+   - Updated documentation to strictly reference valid Zod broadcast categories (`ACTIVITY`, `OBSERVATION`, `DECISION`, `TASK`, `ARTIFACT`, `QUESTION`, `STATUS`, `ALERT`).
 
 ---
 
@@ -112,7 +133,8 @@ almudaya bot list --session S001
 
 ### 4. Broadcast Announcements
 ```bash
-almudaya broadcast publish --session S001 --bot BOT001 --category SPEC_READY --payload '{"spec": "v1.0"}'
+# Valid categories: ACTIVITY, OBSERVATION, DECISION, TASK, ARTIFACT, QUESTION, STATUS, ALERT
+almudaya broadcast publish --session S001 --bot BOT001 --category DECISION --payload '{"spec": "v1.0", "status": "approved"}'
 almudaya broadcast read --session S001 --bot BOT002
 ```
 
@@ -121,8 +143,13 @@ almudaya broadcast read --session S001 --bot BOT002
 # Send by display name or stable Bot ID
 almudaya message send --session S001 --sender BOT002 --recipient "Architect" --body "Design review ready."
 
-# Read and acknowledge
+# Read (marks unread messages as read by default)
 almudaya message read --session S001 --bot BOT001
+
+# Inspect inbox without marking messages as read (FR-325)
+almudaya message read --session S001 --bot BOT001 --no-mark-read
+
+# Acknowledge message idempotently
 almudaya message ack --session S001 --bot BOT001 --message-id <msg_id>
 ```
 
@@ -134,8 +161,8 @@ almudaya context root add --session S001 --name backend --path ./backend
 # Register environment metadata (sensitive values automatically masked)
 almudaya context env set --session S001 --key GITHUB_TOKEN --value "ghp_abcdef1234567890"
 
-# Register SDLC document references
-almudaya context doc add --session S001 --doc-id SRS-01 --title "Software Requirements Specification" --doc-path docs/SRS.md --type SRS
+# Register SDLC document references (--id or --doc-id)
+almudaya context doc add --session S001 --id SRS-01 --title "Software Requirements Specification" --doc-path docs/SRS.md --type SRS
 ```
 
 ---

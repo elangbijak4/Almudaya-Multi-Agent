@@ -188,7 +188,7 @@ almudaya broadcast publish [content] [options...]
   - `-s, --session <id>` *(Wajib)*: ID Session.
   - `-b, --bot <id>` / `--sender <id>` *(Opsional)*: Bot ID pengirim (default: `HUMAN`).
   - `--payload <content>` / `--content <content>` *(Opsional jika content ada di argumen)*: Isi event.
-  - `-c, --category <cat>` *(Opsional)*: Kategori event (`ANNOUNCEMENT`, `DECISION`, `TASK`, `ALERT`; default: `ACTIVITY`).
+  - `-c, --category <cat>` *(Opsional)*: Kategori event (`ACTIVITY`, `OBSERVATION`, `DECISION`, `TASK`, `ARTIFACT`, `QUESTION`, `STATUS`, `ALERT`; default: `ACTIVITY`).
 - **Contoh:**
   ```bash
   almudaya broadcast publish --session S002 --bot BOT001 --category DECISION --payload '{"architecture": "Clean Architecture"}'
@@ -203,7 +203,8 @@ almudaya broadcast read --session <id> [options...]
   - `-s, --session <id>` *(Wajib)*: ID Session.
   - `-b, --bot <id>` *(Opsional)*: ID bot pembaca untuk melacak posisi kursor (cursor tracking).
   - `-c, --category <cat>` *(Opsional)*: Filter kategori event.
-  - `-l, --limit <n>` *(Opsional)*: Batas jumlah event yang dibaca (default: `50`).
+  - `-l, --limit <n>` *(Opsional)*: Batas jumlah event yang dibaca.
+  - `--json`: Format keluaran dalam JSON.
 - **Contoh:**
   ```bash
   almudaya broadcast read --session S002 --bot BOT002
@@ -240,13 +241,16 @@ almudaya message read [botId] [options...]
 ```
 - **Options:**
   - `-s, --session <id>` *(Wajib)*: ID Session.
-  - `-b, --bot <botId>`: Bot ID pemilik inbox.
-  - `--status <filter>`: Filter status pesan (`unread`, `read`, `acknowledged`, `all`; default: `unread`).
-  - `-l, --limit <n>`: Batas jumlah pesan (default: `20`).
+  - `-b, --bot <botId>`: Bot ID pemilik inbox (dapat diberikan sebagai argumen posisi atau opsi `-b`).
+  - `--mark-read`: Tandai pesan `unread` sebagai dibaca (default: true).
+  - `--no-mark-read`: Membaca pesan tanpa mengubah status pesan `unread` menjadi `read`.
+  - `-l, --limit <n>`: Batas jumlah pesan yang dibaca.
+  - `--json`: Format keluaran dalam JSON.
 - **Contoh:**
   ```bash
   almudaya message read --session S002 --bot BOT001
-  almudaya message read BOT001 --session S002 --status all --json
+  almudaya message read BOT001 --session S002 --no-mark-read
+  almudaya message read BOT001 --session S002 --json
   ```
 
 #### C. Mengonfirmasi Penerimaan Pesan (`ack`)

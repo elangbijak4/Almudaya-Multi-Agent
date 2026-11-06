@@ -10,6 +10,7 @@ import { MessagingService } from '../messaging/service.js';
 import { SharedContextService } from '../shared/service.js';
 import { WorkLogService } from '../shared/work-log.js';
 import { generateMessageId, type DirectMessage } from '../messaging/schema.js';
+import { VERSION } from '../core/version.js';
 
 export interface BotConsoleOptions {
   runtime: BotRuntime;
@@ -455,7 +456,7 @@ export class BotConsole {
 
   private printBanner(): void {
     this.writeLine(`================================================================`);
-    this.writeLine(` Almudaya Multi-Agent v0.3.0 — Interactive Bot Console REPL`);
+    this.writeLine(` Almudaya Multi-Agent v${VERSION} — Interactive Bot Console REPL`);
     this.writeLine(` Bot: "${this.botDisplayName}" [${this.botId}] | Session: ${this.sessionId}`);
     this.writeLine(` Mode: ${this.executionModeController.getMode()} | Provider: ${this.aiProvider ? `${this.aiProvider.providerId} (${this.aiProvider.modelName})` : 'Disabled (Messaging only)'}`);
     this.writeLine(` Ketik /help untuk daftar perintah slash atau ketik instruksi langsung.`);

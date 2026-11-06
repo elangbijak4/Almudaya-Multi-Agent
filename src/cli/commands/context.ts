@@ -212,6 +212,7 @@ export function registerContextCommands(program: Command): void {
     .option('--doc-path <path>', 'Document file path or URI')
     .option('--path <path>', 'Alias for --doc-path')
     .option('--id <documentId>', 'Optional slug identifier for the document')
+    .option('--doc-id <documentId>', 'Alias for --id')
     .option(
       '-t, --type <documentType>',
       'Document type (SRS, REQUIREMENTS, ARCHITECTURE, DESIGN, API_SPEC, TEST_PLAN, USER_GUIDE, OTHER)',
@@ -226,6 +227,7 @@ export function registerContextCommands(program: Command): void {
       docPath?: string;
       path?: string;
       id?: string;
+      docId?: string;
       type: string;
       docVersion?: string;
       status: string;
@@ -246,7 +248,7 @@ export function registerContextCommands(program: Command): void {
         const service = new SharedContextService(storage);
 
         const document = await service.registerDocument(options.session, {
-          documentId: options.id,
+          documentId: options.id ?? options.docId,
           title: docTitle,
           uriOrPath: docUriOrPath,
           documentType: options.type.toUpperCase() as DocumentType,

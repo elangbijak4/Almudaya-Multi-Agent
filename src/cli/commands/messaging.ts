@@ -188,6 +188,7 @@ export function registerMessagingCommands(program: Command): void {
     .requiredOption('-s, --session <sessionId>', 'Target session ID')
     .option('-b, --bot <botId>', 'Bot ID whose inbox to read')
     .option('--mark-read', 'Mark unread messages as read', true)
+    .option('--no-mark-read', 'Do not mark unread messages as read')
     .option('-l, --limit <count>', 'Limit the number of messages returned', (val) => parseInt(val, 10))
     .option('-w, --workspace <path>', 'Workspace directory path')
     .option('--json', 'Output messages as JSON')

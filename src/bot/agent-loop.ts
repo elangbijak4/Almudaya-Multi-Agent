@@ -9,10 +9,12 @@ import type { DirectMessage } from '../messaging/schema.js';
 import type {
   IAIModelProvider,
   AIMessage,
+  AIResponse,
   ToolCallRequest,
   ToolCallResult,
-  ToolDefinition
+  ToolDefinition,
 } from '../ai/provider.js';
+import { RateLimitPauseError } from '../ai/provider.js';
 import { buildDynamicSystemPrompt } from '../ai/prompts.js';
 import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
@@ -39,6 +41,7 @@ export interface AgentLoopOptions {
   messagingService?: MessagingService;
   sharedContextService?: SharedContextService;
   onStep?: (event: AgentStepEvent) => Promise<void> | void;
+  onStatus?: (statusMessage: string) => Promise<void> | void;
 }
 
 /**
@@ -60,6 +63,7 @@ export class AutonomousAgentLoop {
   private readonly sharedContextService: SharedContextService;
   private readonly workLogService: WorkLogService;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
+  private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
 
   constructor(options: AgentLoopOptions) {
     this.sessionId = options.sessionId;
@@ -77,6 +81,7 @@ export class AutonomousAgentLoop {
       options.sharedContextService ?? new SharedContextService(this.storage);
     this.workLogService = new WorkLogService(this.storage);
     this.onStepCallback = options.onStep;
+    this.onStatusCallback = options.onStatus;
   }
 
   /**
@@ -128,11 +133,26 @@ export class AutonomousAgentLoop {
     while (iteration < this.maxIterations) {
       iteration++;
 
-      const aiResponse = await this.provider.generateResponse({
-        systemPrompt,
-        messages: conversation,
-        tools: availableTools
-      });
+      let aiResponse: AIResponse;
+      try {
+        aiResponse = await this.provider.generateResponse({
+          systemPrompt,
+          messages: conversation,
+          tools: availableTools
+        });
+      } catch (err: unknown) {
+        if (err instanceof RateLimitPauseError) {
+          const delaySec = Math.ceil(err.retryDelaySeconds);
+          const notifyMsg = `⏳ Kuota Gemini tercapai (429 RESOURCE_EXHAUSTED). Menunggu jeda ${delaySec} detik sebelum mencoba kembali...`;
+          if (this.onStatusCallback) {
+            await this.onStatusCallback(notifyMsg);
+          }
+          await new Promise((resolve) => setTimeout(resolve, (delaySec + 1) * 1000));
+          iteration--; // Retry this turn without incrementing bounded counter
+          continue;
+        }
+        throw err;
+      }
 
       const thought = aiResponse.text;
       const toolCalls = aiResponse.toolCalls;

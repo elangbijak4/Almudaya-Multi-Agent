@@ -154,16 +154,18 @@ export class BotRuntime {
         }
       }
 
-      // Read unread messages in inbox
+      // Read unread messages in inbox without marking them as read upfront (RELIA-01, FR-321)
       const unreadMessages = await this.messagingService.readInbox(this.sessionId, this.botId, {
         status: 'unread',
-        markAsRead: true,
+        markAsRead: false,
       });
 
       for (const msg of unreadMessages) {
         if (this.onMessageCallback) {
           await this.onMessageCallback(msg);
         }
+        // ONLY mark as read and acknowledge after processing finishes with success (At-Least-Once Delivery)
+        await this.messagingService.markMessagesAsRead(this.sessionId, this.botId, [msg.message_id]);
         if (this.autoAcknowledge) {
           await this.messagingService.acknowledgeMessage(
             this.sessionId,

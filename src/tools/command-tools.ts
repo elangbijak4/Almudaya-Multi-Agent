@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process';
 import type { ToolDefinition } from '../ai/provider.js';
-import { validateSandboxedPath } from './sandbox.js';
+import {
+  validateSandboxedPath,
+  sanitizeChildEnv,
+  redactSensitiveOutput
+} from './sandbox.js';
 
 export interface RunCommandArgs {
   command: string;
@@ -54,11 +58,7 @@ export async function executeRunCommand(
     try {
       child = spawn(shellExecutable, shellArgs, {
         cwd: resolvedWorkingDir,
-        env: {
-          ...process.env,
-          FORCE_COLOR: '0',
-          CI: 'true'
-        },
+        env: sanitizeChildEnv(process.env),
         windowsVerbatimArguments: isWin,
         stdio: ['ignore', 'pipe', 'pipe']
       });
@@ -113,8 +113,8 @@ export async function executeRunCommand(
       resolve({
         command: args.command,
         exitCode: timedOut ? null : exitCode,
-        stdout: stdoutBuffer.trim(),
-        stderr: stderrBuffer.trim(),
+        stdout: redactSensitiveOutput(stdoutBuffer.trim()),
+        stderr: redactSensitiveOutput(stderrBuffer.trim()),
         durationMs,
         timedOut
       });

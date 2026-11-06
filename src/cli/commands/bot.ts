@@ -175,6 +175,7 @@ export function registerBotCommands(program: Command): void {
                 } else {
                   console.error(errMsg);
                 }
+                throw err;
               }
             }
           },
@@ -199,6 +200,13 @@ export function registerBotCommands(program: Command): void {
             provider: aiProvider,
             executionModeController,
             maxIterations: maxIter,
+            onStatus: (msg) => {
+              if (consoleInstance) {
+                consoleInstance.printNotification(msg);
+              } else {
+                console.log(msg);
+              }
+            },
           });
         }
 

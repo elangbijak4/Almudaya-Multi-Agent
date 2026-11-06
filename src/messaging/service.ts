@@ -53,55 +53,68 @@ export class MessagingService {
     sessionId: string,
     options: ReadBroadcastOptions = {}
   ): Promise<BroadcastEvent[]> {
-    const allEvents = await this.storage.readBroadcasts(sessionId);
+    return await this.storage.withSessionLock(sessionId, async () => {
+      const allEvents = await this.storage.readBroadcasts(sessionId);
 
-    let filtered = allEvents;
+      let filtered = allEvents;
 
-    // Handle per-bot cursor tracking
-    if (options.botId && options.autoAdvanceCursor) {
-      const canonicalBotId = await this.botService.resolveBotId(sessionId, options.botId);
-      const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
+      // Handle per-bot cursor tracking
+      if (options.botId && options.autoAdvanceCursor) {
+        const canonicalBotId = await this.botService.resolveBotId(sessionId, options.botId);
+        const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
 
-      if (cursor.last_read_event_id) {
-        const lastIndex = allEvents.findIndex(
-          (e) => e.event_id === cursor.last_read_event_id
-        );
-        if (lastIndex !== -1) {
-          filtered = allEvents.slice(lastIndex + 1);
+        if (cursor.last_read_event_id) {
+          const lastIndex = allEvents.findIndex(
+            (e) => e.event_id === cursor.last_read_event_id
+          );
+          if (lastIndex !== -1) {
+            filtered = allEvents.slice(lastIndex + 1);
+          }
         }
-      }
 
-      // If new events exist, advance cursor to the latest event
-      if (filtered.length > 0) {
-        const latest = filtered[filtered.length - 1]!;
-        await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
-          last_read_event_id: latest.event_id,
-          last_read_timestamp: latest.timestamp,
-        });
-      }
-    } else {
-      if (options.afterEventId) {
-        const idx = filtered.findIndex((e) => e.event_id === options.afterEventId);
-        if (idx !== -1) {
-          filtered = filtered.slice(idx + 1);
+        // Apply filters before advancing cursor to prevent skipping unconsumed events (CONC-02, FR-324)
+        if (options.category) {
+          filtered = filtered.filter((e) => e.category === options.category);
         }
+
+        if (options.limit && options.limit > 0) {
+          filtered = filtered.slice(-options.limit);
+        }
+
+        // Advance cursor to the latest event actually consumed/delivered
+        if (filtered.length > 0) {
+          const latest = filtered[filtered.length - 1]!;
+          await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
+            last_read_event_id: latest.event_id,
+            last_read_timestamp: latest.timestamp,
+          });
+        }
+
+        return filtered;
+      } else {
+        if (options.afterEventId) {
+          const idx = filtered.findIndex((e) => e.event_id === options.afterEventId);
+          if (idx !== -1) {
+            filtered = filtered.slice(idx + 1);
+          }
+        }
+
+        if (options.since) {
+          const sinceTime = new Date(options.since).getTime();
+          filtered = filtered.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
+        }
+
+        if (options.category) {
+          filtered = filtered.filter((e) => e.category === options.category);
+        }
+
+        if (options.limit && options.limit > 0) {
+          filtered = filtered.slice(-options.limit);
+        }
+
+        return filtered;
       }
-
-      if (options.since) {
-        const sinceTime = new Date(options.since).getTime();
-        filtered = filtered.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
-      }
-    }
-
-    if (options.category) {
-      filtered = filtered.filter((e) => e.category === options.category);
-    }
-
-    if (options.limit && options.limit > 0) {
-      filtered = filtered.slice(-options.limit);
-    }
-
-    return filtered;
+    });
   }
 
   /**
@@ -172,6 +185,39 @@ export class MessagingService {
       }
 
       return matched;
+    });
+  }
+
+  /**
+   * Explicitly marks specific messages in a bot's inbox as 'read'.
+   * Enforces transactional message processing (RELIA-01, FR-321).
+   */
+  public async markMessagesAsRead(
+    sessionId: string,
+    botIdentifier: string,
+    messageIds: string[]
+  ): Promise<void> {
+    if (!messageIds || messageIds.length === 0) return;
+    const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
+    const idSet = new Set(messageIds);
+
+    await this.storage.withSessionLock(sessionId, async () => {
+      const inbox = await this.storage.getInbox(sessionId, canonicalBotId);
+      const now = new Date().toISOString();
+      let needsSave = false;
+
+      for (const msg of inbox.messages) {
+        if (idSet.has(msg.message_id) && msg.status === 'unread') {
+          msg.status = 'read';
+          msg.read_at = now;
+          needsSave = true;
+        }
+      }
+
+      if (needsSave) {
+        inbox.updated_at = now;
+        await this.storage.saveInbox(sessionId, canonicalBotId, inbox);
+      }
     });
   }
 

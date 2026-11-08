@@ -94,6 +94,12 @@ describe('Bot Runtime Lifecycle & Heartbeat', () => {
 
     await runtime.start();
 
+    await botService.registerBot('S001', {
+      botId: 'BOT002',
+      displayName: 'Sender Bot',
+      status: 'active',
+    });
+
     // External sender sends a direct message to BOT001
     await messagingService.sendDirectMessage('S001', {
       senderBotId: 'BOT002',

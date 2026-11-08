@@ -156,4 +156,28 @@ describe('CLI Messaging Commands', () => {
     expect(logs).toContain('Message acknowledged successfully!');
     expect(logs).toContain('acknowledged');
   });
+
+  it('AUD-10 regression: CLI message send should reject unregistered sender', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'message',
+      'send',
+      'BOT002',
+      'Unauthorized task',
+      '--session',
+      'S001',
+      '--sender',
+      'BOT_NOT_REGISTERED',
+      '-w',
+      tmpWorkspace,
+    ]);
+
+    const errors = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toContain('Error sending message:');
+    expect(process.exitCode).toBe(1);
+  });
 });

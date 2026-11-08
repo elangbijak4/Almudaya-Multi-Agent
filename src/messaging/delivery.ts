@@ -73,6 +73,7 @@ export class InboxDeliveryService {
       candidate.delivery_state = 'PROCESSING';
       candidate.status = 'read';
       candidate.attempt_count = (candidate.attempt_count ?? 0) + 1;
+      candidate.fence_token = (candidate.fence_token ?? 0) + 1;
       candidate.lease_owner = consumerId;
       candidate.lease_expires_at = new Date(nowMs + leaseDurationMs).toISOString();
       candidate.last_attempt_at = nowIso;
@@ -90,12 +91,15 @@ export class InboxDeliveryService {
   /**
    * Marks a message as successfully processed.
    * State transition: PROCESSING -> COMPLETED (and acknowledged).
+   * Enforces exact consumer ownership and fencing token (AUD-08, REQ-04).
    */
   public async completeMessage(
     sessionId: string,
     botIdentifier: string,
     messageId: string,
-    consumerId?: string
+    consumerId?: string,
+    fenceToken?: number,
+    options?: { adminOverride?: boolean; reason?: string }
   ): Promise<DirectMessage> {
     const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
 
@@ -118,11 +122,31 @@ export class InboxDeliveryService {
         );
       }
 
-      // If consumerId is provided, verify lease ownership unless expired
-      if (consumerId && target.lease_owner && target.lease_owner !== consumerId) {
-        if (!isMessageLeaseExpired(target)) {
+      const isAdmin = options?.adminOverride === true;
+
+      if (!isAdmin) {
+        // Enforce lease ownership and fencing token (AUD-08, REQ-04)
+        if (!consumerId) {
           throw new Error(
-            `Cannot complete message ${messageId}: lease held by another consumer (${target.lease_owner})`
+            `Cannot complete message ${messageId}: consumerId is required for worker acknowledgement.`
+          );
+        }
+
+        if (!target.lease_owner || target.lease_owner !== consumerId) {
+          throw new Error(
+            `Cannot complete message ${messageId}: lease held by another consumer (${target.lease_owner ?? 'none'})`
+          );
+        }
+
+        if (isMessageLeaseExpired(target)) {
+          throw new Error(
+            `Cannot complete message ${messageId}: lease has expired and can no longer be acknowledged by stale consumer.`
+          );
+        }
+
+        if (fenceToken !== undefined && target.fence_token !== fenceToken) {
+          throw new Error(
+            `Cannot complete message ${messageId}: stale fencing token (${fenceToken} vs current ${target.fence_token}).`
           );
         }
       }
@@ -147,13 +171,16 @@ export class InboxDeliveryService {
   /**
    * Records processing failure for a message.
    * State transition: PROCESSING -> RETRY_PENDING (or DEAD_LETTER if attempts exhausted).
+   * Enforces exact consumer ownership and fencing token (AUD-08, REQ-04).
    */
   public async failMessage(
     sessionId: string,
     botIdentifier: string,
     messageId: string,
     error: string,
-    _consumerId?: string
+    consumerId?: string,
+    fenceToken?: number,
+    options?: { adminOverride?: boolean; reason?: string }
   ): Promise<DirectMessage> {
     const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
 
@@ -163,6 +190,35 @@ export class InboxDeliveryService {
 
       if (!target) {
         throw new MessageNotFoundError(messageId, canonicalBotId);
+      }
+
+      const isAdmin = options?.adminOverride === true;
+
+      if (!isAdmin) {
+        // Enforce lease ownership and fencing token (AUD-08, REQ-04)
+        if (!consumerId) {
+          throw new Error(
+            `Cannot fail message ${messageId}: consumerId is required for worker failure reporting.`
+          );
+        }
+
+        if (!target.lease_owner || target.lease_owner !== consumerId) {
+          throw new Error(
+            `Cannot fail message ${messageId}: lease held by another consumer (${target.lease_owner ?? 'none'})`
+          );
+        }
+
+        if (isMessageLeaseExpired(target)) {
+          throw new Error(
+            `Cannot fail message ${messageId}: lease has expired and can no longer be failed by stale consumer.`
+          );
+        }
+
+        if (fenceToken !== undefined && target.fence_token !== fenceToken) {
+          throw new Error(
+            `Cannot fail message ${messageId}: stale fencing token (${fenceToken} vs current ${target.fence_token}).`
+          );
+        }
       }
 
       const nowIso = new Date().toISOString();
@@ -183,6 +239,36 @@ export class InboxDeliveryService {
       await this.storage.saveInbox(sessionId, canonicalBotId, inbox);
 
       return target;
+    });
+  }
+
+  /**
+   * Administrative override to force completion of a message regardless of lease ownership.
+   */
+  public async forceCompleteMessage(
+    sessionId: string,
+    botIdentifier: string,
+    messageId: string,
+    reason: string = 'Administrative override'
+  ): Promise<DirectMessage> {
+    return await this.completeMessage(sessionId, botIdentifier, messageId, undefined, undefined, {
+      adminOverride: true,
+      reason,
+    });
+  }
+
+  /**
+   * Administrative override to force failure of a message regardless of lease ownership.
+   */
+  public async forceFailMessage(
+    sessionId: string,
+    botIdentifier: string,
+    messageId: string,
+    reason: string = 'Administrative override'
+  ): Promise<DirectMessage> {
+    return await this.failMessage(sessionId, botIdentifier, messageId, reason, undefined, undefined, {
+      adminOverride: true,
+      reason,
     });
   }
 

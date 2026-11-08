@@ -29,6 +29,8 @@ export type BroadcastEvent = z.infer<typeof BroadcastEventSchema>;
 export const BroadcastCursorSchema = z.object({
   last_read_event_id: z.string().nullable().default(null),
   last_read_timestamp: z.string().nullable().default(null),
+  category_cursors: z.record(z.string(), z.string()).optional().default({}),
+  acknowledged_event_ids: z.array(z.string()).optional().default([]),
 });
 export type BroadcastCursor = z.infer<typeof BroadcastCursorSchema>;
 
@@ -78,6 +80,7 @@ export const DirectMessageSchema = z.object({
   delivery_state: InboxDeliveryStateSchema.default('RECEIVED'),
   attempt_count: z.number().int().nonnegative().default(0),
   max_attempts: z.number().int().positive().default(3),
+  fence_token: z.number().int().nonnegative().default(0),
   lease_owner: z.string().nullable().optional().default(null),
   lease_expires_at: z.string().datetime().nullable().optional().default(null),
   last_attempt_at: z.string().datetime().nullable().optional().default(null),
@@ -126,6 +129,13 @@ export interface ReadInboxOptions {
   status?: MessageStatus;
   deliveryState?: InboxDeliveryState;
   limit?: number;
+}
+
+export interface MessageAckOptions {
+  consumerId?: string;
+  fenceToken?: number;
+  adminOverride?: boolean;
+  reason?: string;
 }
 
 export function generateEventId(): string {

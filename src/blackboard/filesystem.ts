@@ -305,7 +305,12 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
   public async getBroadcastCursor(sessionId: string, botId: string): Promise<BroadcastCursor> {
     const cursorFile = this.getCursorFilePath(sessionId, botId);
     if (!(await pathExists(cursorFile))) {
-      return { last_read_event_id: null, last_read_timestamp: null };
+      return {
+        last_read_event_id: null,
+        last_read_timestamp: null,
+        category_cursors: {},
+        acknowledged_event_ids: [],
+      };
     }
     return await readJsonValidated(cursorFile, BroadcastCursorSchema);
   }

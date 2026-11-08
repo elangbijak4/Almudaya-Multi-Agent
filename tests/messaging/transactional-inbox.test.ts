@@ -32,6 +32,11 @@ describe('Transactional Inbox Message Processing (RELIA-01, FR-321)', () => {
       displayName: 'Worker',
       status: 'active'
     });
+    await botService.registerBot(sessionId, {
+      botId: 'BOT_DISPATCHER',
+      displayName: 'Dispatcher',
+      status: 'active'
+    });
   });
 
   afterEach(async () => {

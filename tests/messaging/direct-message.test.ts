@@ -134,4 +134,100 @@ describe('Direct Messaging & Acknowledgements', () => {
     expect(reloaded[0]?.message_id).toBe(sent.message_id);
     expect(reloaded[0]?.status).toBe('acknowledged');
   });
+
+  describe('AUD-06: readInbox limit before mutation', () => {
+    it('should mark ONLY returned message as read when limit=1 is used with markAsRead: true', async () => {
+      // 1. Send three unread messages
+      const m1 = await messagingService.sendDirectMessage('S001', {
+        senderBotId: 'BOT001',
+        recipient: 'BOT002',
+        content: 'Message 1',
+      });
+      const m2 = await messagingService.sendDirectMessage('S001', {
+        senderBotId: 'BOT001',
+        recipient: 'BOT002',
+        content: 'Message 2',
+      });
+      const m3 = await messagingService.sendDirectMessage('S001', {
+        senderBotId: 'BOT001',
+        recipient: 'BOT002',
+        content: 'Message 3',
+      });
+
+      // 2. Read with limit: 1 and markAsRead: true
+      const returned = await messagingService.readInbox('S001', 'BOT002', {
+        status: 'unread',
+        markAsRead: true,
+        limit: 1,
+      });
+
+      expect(returned).toHaveLength(1);
+      expect(returned[0]?.message_id).toBe(m3.message_id);
+      expect(returned[0]?.status).toBe('read');
+
+      // 3. Verify in raw storage that M1 and M2 are STILL unread, and only M3 is read
+      const rawInbox = await storage.getInbox('S001', 'BOT002');
+      const rawM1 = rawInbox.messages.find((m) => m.message_id === m1.message_id);
+      const rawM2 = rawInbox.messages.find((m) => m.message_id === m2.message_id);
+      const rawM3 = rawInbox.messages.find((m) => m.message_id === m3.message_id);
+
+      expect(rawM1?.status).toBe('unread');
+      expect(rawM1?.read_at).toBeUndefined();
+      expect(rawM2?.status).toBe('unread');
+      expect(rawM2?.read_at).toBeUndefined();
+      expect(rawM3?.status).toBe('read');
+      expect(rawM3?.read_at).toBeDefined();
+
+      // 4. Reading remaining unread returns M1 and M2
+      const remainingUnread = await messagingService.readInbox('S001', 'BOT002', {
+        status: 'unread',
+      });
+      expect(remainingUnread).toHaveLength(2);
+      expect(remainingUnread.map((m) => m.message_id)).toEqual([m1.message_id, m2.message_id]);
+    });
+  });
+
+  describe('AUD-10: Sender identity verification at service boundary', () => {
+    it('should reject direct message from unregistered sender bot ID', async () => {
+      await expect(
+        messagingService.sendDirectMessage('S001', {
+          senderBotId: 'BOT_NOT_REGISTERED',
+          recipient: 'BOT002',
+          content: 'Imposter message',
+        })
+      ).rejects.toThrow(BotNotFoundError);
+    });
+
+    it('should reject direct message from inactive/stopped sender bot', async () => {
+      await botService.registerBot('S001', {
+        botId: 'BOT_INACTIVE',
+        displayName: 'Sleeping Bot',
+        status: 'stopped',
+      });
+
+      await expect(
+        messagingService.sendDirectMessage('S001', {
+          senderBotId: 'BOT_INACTIVE',
+          recipient: 'BOT002',
+          content: 'Message from stopped bot',
+        })
+      ).rejects.toThrow(/not an active bot/);
+    });
+
+    it('should accept direct message from explicit typed principal HUMAN or SYSTEM', async () => {
+      const humanMsg = await messagingService.sendDirectMessage('S001', {
+        senderBotId: 'HUMAN',
+        recipient: 'BOT002',
+        content: 'Hello from human operator',
+      });
+      expect(humanMsg.sender_bot_id).toBe('HUMAN');
+
+      const systemMsg = await messagingService.sendDirectMessage('S001', {
+        senderBotId: 'SYSTEM',
+        recipient: 'BOT002',
+        content: 'System notification',
+      });
+      expect(systemMsg.sender_bot_id).toBe('SYSTEM');
+    });
+  });
 });

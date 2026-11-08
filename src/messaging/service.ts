@@ -12,7 +12,7 @@ import {
   generateEventId,
   generateMessageId,
 } from './schema.js';
-import { MessageNotFoundError } from '../core/errors.js';
+import { MessageNotFoundError, ValidationError } from '../core/errors.js';
 import { InboxDeliveryService } from './delivery.js';
 import { DEFAULT_MAX_ATTEMPTS } from './inbox-state.js';
 
@@ -28,16 +28,44 @@ export class MessagingService {
   }
 
   /**
+   * Authenticates sender identity at the messaging boundary (AUD-10, REQ-02).
+   * Verifies against active bot registry or permits explicit typed human/system principals.
+   */
+  private async authenticateSender(sessionId: string, sender: string): Promise<string> {
+    const trimmed = (sender || '').trim();
+    if (!trimmed) {
+      throw new ValidationError('Sender identity cannot be empty.');
+    }
+
+    const allowedTypedPrincipals = ['HUMAN', 'SYSTEM', 'OPERATOR', 'ADMIN', 'CONSOLE'];
+    if (allowedTypedPrincipals.includes(trimmed.toUpperCase())) {
+      return trimmed.toUpperCase();
+    }
+
+    const bot = await this.botService.getBot(sessionId, trimmed);
+    if (bot.status !== 'active') {
+      throw new Error(
+        `Sender "${trimmed}" is not an active bot in session "${sessionId}" (status: ${bot.status}).`
+      );
+    }
+
+    return bot.bot_id;
+  }
+
+  /**
    * Publishes a broadcast event to the shared Session broadcast log.
+   * Sender identity is authenticated against the session bot registry (AUD-10, REQ-02).
    */
   public async publishBroadcast(
     sessionId: string,
     input: PublishBroadcastInput
   ): Promise<BroadcastEvent> {
+    const senderId = await this.authenticateSender(sessionId, input.senderBotId);
+
     const event: BroadcastEvent = {
       event_id: generateEventId(),
       session_id: sessionId,
-      sender_bot_id: input.senderBotId.trim(),
+      sender_bot_id: senderId,
       timestamp: new Date().toISOString(),
       category: input.category ?? 'ACTIVITY',
       content: input.content.trim(),
@@ -50,8 +78,8 @@ export class MessagingService {
 
   /**
    * Reads events from the Session broadcast log.
-   * If a botId is provided with autoAdvanceCursor = true, only unread events since the
-   * bot's last read cursor are returned, and its cursor is persistently updated.
+   * Uses per-category cursor tracking and delivery acknowledgement (AUD-07, REQ-05).
+   * If autoAdvanceCursor = true, returned events advance the bot's cursor and ack set.
    */
   public async readBroadcasts(
     sessionId: string,
@@ -63,61 +91,189 @@ export class MessagingService {
       let filtered = allEvents;
 
       // Handle per-bot cursor tracking
-      if (options.botId && options.autoAdvanceCursor) {
-        const canonicalBotId = await this.botService.resolveBotId(sessionId, options.botId);
-        const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
+      if (options.botId) {
+        let canonicalBotId: string | null = null;
+        try {
+          canonicalBotId = await this.botService.resolveBotId(sessionId, options.botId);
+        } catch {
+          canonicalBotId = null;
+        }
 
-        if (cursor.last_read_event_id) {
-          const lastIndex = allEvents.findIndex(
-            (e) => e.event_id === cursor.last_read_event_id
-          );
-          if (lastIndex !== -1) {
-            filtered = allEvents.slice(lastIndex + 1);
+        if (canonicalBotId) {
+          const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
+          const ackedSet = new Set(cursor.acknowledged_event_ids ?? []);
+          const catCursors = cursor.category_cursors ?? {};
+
+          if (options.category) {
+            // 1. Filter events matching this category
+            filtered = filtered.filter((e) => e.category === options.category);
+
+            // 2. High-water mark for this category
+            const catLastId = catCursors[options.category];
+            if (catLastId) {
+              const idx = filtered.findIndex((e) => e.event_id === catLastId);
+              if (idx !== -1) {
+                filtered = filtered.slice(idx + 1);
+              }
+            }
+
+            // 3. Exclude acknowledged events
+            filtered = filtered.filter((e) => !ackedSet.has(e.event_id));
+          } else {
+            // Unfiltered stream: exclude events already consumed or acknowledged
+            filtered = filtered.filter((e) => {
+              if (ackedSet.has(e.event_id)) {
+                return false;
+              }
+              const catLastId = catCursors[e.category];
+              if (catLastId) {
+                const catEvents = allEvents.filter((ev) => ev.category === e.category);
+                const catIdx = catEvents.findIndex((ev) => ev.event_id === catLastId);
+                const myCatIdx = catEvents.findIndex((ev) => ev.event_id === e.event_id);
+                if (catIdx !== -1 && myCatIdx !== -1 && myCatIdx <= catIdx) {
+                  return false;
+                }
+              }
+              if (cursor.last_read_event_id && !options.afterEventId && Object.keys(catCursors).length === 0) {
+                const globalIdx = allEvents.findIndex((ev) => ev.event_id === cursor.last_read_event_id);
+                const myIdx = allEvents.findIndex((ev) => ev.event_id === e.event_id);
+                if (globalIdx !== -1 && myIdx !== -1 && myIdx <= globalIdx) {
+                  return false;
+                }
+              }
+              return true;
+            });
           }
-        }
 
-        // Apply filters before advancing cursor to prevent skipping unconsumed events (CONC-02, FR-324)
-        if (options.category) {
-          filtered = filtered.filter((e) => e.category === options.category);
-        }
-
-        if (options.limit && options.limit > 0) {
-          filtered = filtered.slice(-options.limit);
-        }
-
-        // Advance cursor to the latest event actually consumed/delivered
-        if (filtered.length > 0) {
-          const latest = filtered[filtered.length - 1]!;
-          await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
-            last_read_event_id: latest.event_id,
-            last_read_timestamp: latest.timestamp,
-          });
-        }
-
-        return filtered;
-      } else {
-        if (options.afterEventId) {
-          const idx = filtered.findIndex((e) => e.event_id === options.afterEventId);
-          if (idx !== -1) {
-            filtered = filtered.slice(idx + 1);
+          if (options.afterEventId) {
+            const idx = filtered.findIndex((e) => e.event_id === options.afterEventId);
+            if (idx !== -1) {
+              filtered = filtered.slice(idx + 1);
+            }
           }
-        }
 
-        if (options.since) {
-          const sinceTime = new Date(options.since).getTime();
-          filtered = filtered.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
-        }
+          if (options.since) {
+            const sinceTime = new Date(options.since).getTime();
+            filtered = filtered.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
+          }
 
-        if (options.category) {
-          filtered = filtered.filter((e) => e.category === options.category);
-        }
+          // Apply pagination / limit in FIFO order for unread streams
+          if (options.limit && options.limit > 0) {
+            filtered = filtered.slice(0, options.limit);
+          }
 
-        if (options.limit && options.limit > 0) {
-          filtered = filtered.slice(-options.limit);
-        }
+          // Advance cursor to the latest event actually consumed/delivered
+          if (options.autoAdvanceCursor && filtered.length > 0) {
+            const updatedAcked = Array.from(
+              new Set([...(cursor.acknowledged_event_ids ?? []), ...filtered.map((e) => e.event_id)])
+            );
+            if (updatedAcked.length > 1000) {
+              updatedAcked.splice(0, updatedAcked.length - 1000);
+            }
 
-        return filtered;
+            const updatedCatCursors = { ...(cursor.category_cursors ?? {}) };
+            for (const ev of filtered) {
+              updatedCatCursors[ev.category] = ev.event_id;
+            }
+
+            const latest = filtered[filtered.length - 1]!;
+            await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
+              last_read_event_id: latest.event_id,
+              last_read_timestamp: latest.timestamp,
+              category_cursors: updatedCatCursors,
+              acknowledged_event_ids: updatedAcked,
+            });
+          }
+
+          return filtered;
+        }
       }
+
+      // Read without botId cursor tracking (stateless read)
+      if (options.afterEventId) {
+        const idx = filtered.findIndex((e) => e.event_id === options.afterEventId);
+        if (idx !== -1) {
+          filtered = filtered.slice(idx + 1);
+        }
+      }
+
+      if (options.since) {
+        const sinceTime = new Date(options.since).getTime();
+        filtered = filtered.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
+      }
+
+      if (options.category) {
+        filtered = filtered.filter((e) => e.category === options.category);
+      }
+
+      if (options.limit && options.limit > 0) {
+        filtered = filtered.slice(-options.limit);
+      }
+
+      return filtered;
+    });
+  }
+
+  /**
+   * Advances a bot's broadcast cursor past a successfully processed event (AUD-07, REQ-05).
+   * Ensures cursors are only advanced after consumer callbacks succeed.
+   */
+  public async advanceBroadcastCursor(
+    sessionId: string,
+    botIdentifier: string,
+    event: BroadcastEvent
+  ): Promise<void> {
+    const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
+
+    await this.storage.withSessionLock(sessionId, async () => {
+      const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
+      const catCursors = { ...(cursor.category_cursors ?? {}) };
+      catCursors[event.category] = event.event_id;
+
+      const acked = new Set(cursor.acknowledged_event_ids ?? []);
+      acked.add(event.event_id);
+      const updatedAcked = Array.from(acked);
+      if (updatedAcked.length > 1000) {
+        updatedAcked.splice(0, updatedAcked.length - 1000);
+      }
+
+      await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
+        last_read_event_id: event.event_id,
+        last_read_timestamp: event.timestamp,
+        category_cursors: catCursors,
+        acknowledged_event_ids: updatedAcked,
+      });
+    });
+  }
+
+  /**
+   * Acknowledges specific broadcast events for a bot (AUD-07, REQ-05).
+   */
+  public async acknowledgeBroadcasts(
+    sessionId: string,
+    botIdentifier: string,
+    eventIds: string[]
+  ): Promise<void> {
+    if (!eventIds || eventIds.length === 0) return;
+    const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
+
+    await this.storage.withSessionLock(sessionId, async () => {
+      const cursor = await this.storage.getBroadcastCursor(sessionId, canonicalBotId);
+      const acked = new Set(cursor.acknowledged_event_ids ?? []);
+      for (const id of eventIds) {
+        acked.add(id);
+      }
+      const updatedAcked = Array.from(acked);
+      if (updatedAcked.length > 1000) {
+        updatedAcked.splice(0, updatedAcked.length - 1000);
+      }
+
+      await this.storage.saveBroadcastCursor(sessionId, canonicalBotId, {
+        last_read_event_id: cursor.last_read_event_id,
+        last_read_timestamp: cursor.last_read_timestamp,
+        category_cursors: cursor.category_cursors,
+        acknowledged_event_ids: updatedAcked,
+      });
     });
   }
 
@@ -130,6 +286,7 @@ export class MessagingService {
     sessionId: string,
     input: SendDirectMessageInput
   ): Promise<DirectMessage> {
+    const senderId = await this.authenticateSender(sessionId, input.senderBotId);
     // Resolve recipient (display name or Bot ID) to canonical stable Bot ID
     const recipientBotId = await this.botService.resolveBotId(sessionId, input.recipient);
 
@@ -149,7 +306,7 @@ export class MessagingService {
       const message: DirectMessage = {
         message_id: generateMessageId(),
         session_id: sessionId,
-        sender_bot_id: input.senderBotId.trim(),
+        sender_bot_id: senderId,
         recipient_bot_id: recipientBotId,
         timestamp: new Date().toISOString(),
         message_type: input.messageType ?? 'DIRECT',
@@ -159,6 +316,7 @@ export class MessagingService {
         delivery_state: 'RECEIVED',
         attempt_count: 0,
         max_attempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+        fence_token: 0,
         lease_owner: null,
         lease_expires_at: null,
         last_attempt_at: null,
@@ -195,13 +353,18 @@ export class MessagingService {
         if (options.status === 'unread') {
           matched = matched.filter(
             (m) =>
-              m.status === 'unread' ||
-              m.delivery_state === 'RECEIVED' ||
-              m.delivery_state === 'RETRY_PENDING'
+              m.status === 'unread' &&
+              m.delivery_state !== 'COMPLETED' &&
+              m.delivery_state !== 'DEAD_LETTER'
           );
         } else {
           matched = matched.filter((m) => m.status === options.status);
         }
+      }
+
+      // Apply limit BEFORE mutating status to read (AUD-06, REQ-04)
+      if (options.limit && options.limit > 0) {
+        matched = matched.slice(-options.limit);
       }
 
       if (options.markAsRead) {
@@ -218,10 +381,6 @@ export class MessagingService {
           inbox.updated_at = now;
           await this.storage.saveInbox(sessionId, canonicalBotId, inbox);
         }
-      }
-
-      if (options.limit && options.limit > 0) {
-        matched = matched.slice(-options.limit);
       }
 
       return matched;

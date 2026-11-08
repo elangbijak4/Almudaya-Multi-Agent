@@ -211,7 +211,8 @@ describe('Inbox Delivery State Machine & Reliability (Phase 4, RELIA-01, ADR-004
         sessionId,
         'B_WORKER',
         msg.message_id,
-        'Database connection dropped'
+        'Database connection dropped',
+        'consumer-1'
       );
 
       expect(failed.delivery_state).toBe('RETRY_PENDING');
@@ -231,11 +232,17 @@ describe('Inbox Delivery State Machine & Reliability (Phase 4, RELIA-01, ADR-004
 
       // Attempt 1: claim & fail
       await deliveryService.claimNextMessage(sessionId, 'B_WORKER', 'consumer-1');
-      await deliveryService.failMessage(sessionId, 'B_WORKER', msg.message_id, 'Error 1');
+      await deliveryService.failMessage(sessionId, 'B_WORKER', msg.message_id, 'Error 1', 'consumer-1');
 
       // Attempt 2: claim & fail
       await deliveryService.claimNextMessage(sessionId, 'B_WORKER', 'consumer-1');
-      const failed2 = await deliveryService.failMessage(sessionId, 'B_WORKER', msg.message_id, 'Error 2');
+      const failed2 = await deliveryService.failMessage(
+        sessionId,
+        'B_WORKER',
+        msg.message_id,
+        'Error 2',
+        'consumer-1'
+      );
 
       expect(failed2.delivery_state).toBe('DEAD_LETTER');
       expect(failed2.attempt_count).toBe(2);
@@ -274,7 +281,7 @@ describe('Inbox Delivery State Machine & Reliability (Phase 4, RELIA-01, ADR-004
       });
 
       await deliveryService.claimNextMessage(sessionId, 'B_WORKER', 'consumer-1');
-      await deliveryService.failMessage(sessionId, 'B_WORKER', msg.message_id, 'Fatal failure');
+      await deliveryService.failMessage(sessionId, 'B_WORKER', msg.message_id, 'Fatal failure', 'consumer-1');
 
       // Re-queue dead letter
       const requeued = await deliveryService.requeueDeadLetter(sessionId, 'B_WORKER', msg.message_id);
@@ -310,6 +317,154 @@ describe('Inbox Delivery State Machine & Reliability (Phase 4, RELIA-01, ADR-004
 
       const inbox = await messagingService.readInbox(sessionId, 'B_WORKER');
       expect(inbox.filter((m) => m.idempotency_key === key).length).toBe(1);
+    });
+  });
+
+  describe('AUD-08: Stale consumer and lease fencing token integrity', () => {
+    it('should increment fence_token monotonically on each claim', async () => {
+      const msg = await messagingService.sendDirectMessage(sessionId, {
+        senderBotId: 'B_DISPATCHER',
+        recipient: 'B_WORKER',
+        content: 'Fencing test task',
+      });
+      expect(msg.fence_token).toBe(0);
+
+      // Claim 1
+      const claim1 = await deliveryService.claimNextMessage(
+        sessionId,
+        'B_WORKER',
+        'worker-A',
+        50 // 50ms lease
+      );
+      expect(claim1?.fence_token).toBe(1);
+      expect(claim1?.lease_owner).toBe('worker-A');
+
+      // Wait for lease to expire
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      // Reclaim by worker-B
+      const claim2 = await deliveryService.claimNextMessage(
+        sessionId,
+        'B_WORKER',
+        'worker-B',
+        5000
+      );
+      expect(claim2?.fence_token).toBe(2);
+      expect(claim2?.lease_owner).toBe('worker-B');
+    });
+
+    it('should reject failMessage and completeMessage from stale consumer after reclaim', async () => {
+      const msg = await messagingService.sendDirectMessage(sessionId, {
+        senderBotId: 'B_DISPATCHER',
+        recipient: 'B_WORKER',
+        content: 'Stale consumer test task',
+      });
+
+      // Worker A claims with 50ms lease
+      const claimA = await deliveryService.claimNextMessage(
+        sessionId,
+        'B_WORKER',
+        'worker-A',
+        50
+      );
+      expect(claimA?.fence_token).toBe(1);
+
+      // Wait for lease expiry
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      // Worker B reclaims
+      const claimB = await deliveryService.claimNextMessage(
+        sessionId,
+        'B_WORKER',
+        'worker-B',
+        5000
+      );
+      expect(claimB?.fence_token).toBe(2);
+      expect(claimB?.lease_owner).toBe('worker-B');
+
+      // 1. Worker A attempts to fail the message (stale worker) -> REJECTED
+      await expect(
+        deliveryService.failMessage(
+          sessionId,
+          'B_WORKER',
+          msg.message_id,
+          'Late failure from worker A',
+          'worker-A',
+          1
+        )
+      ).rejects.toThrow(/lease held by another consumer/);
+
+      // Verify message is still PROCESSING under worker B
+      const inboxAfterFail = await storage.getInbox(sessionId, 'B_WORKER');
+      const targetMsg = inboxAfterFail.messages.find((m) => m.message_id === msg.message_id);
+      expect(targetMsg?.delivery_state).toBe('PROCESSING');
+      expect(targetMsg?.lease_owner).toBe('worker-B');
+
+      // 2. Worker A attempts to complete the message (stale worker) -> REJECTED
+      await expect(
+        deliveryService.completeMessage(
+          sessionId,
+          'B_WORKER',
+          msg.message_id,
+          'worker-A',
+          1
+        )
+      ).rejects.toThrow(/lease held by another consumer/);
+
+      // 3. Worker B attempts with stale fencing token (1 vs 2) -> REJECTED
+      await expect(
+        deliveryService.completeMessage(
+          sessionId,
+          'B_WORKER',
+          msg.message_id,
+          'worker-B',
+          1
+        )
+      ).rejects.toThrow(/stale fencing token/);
+
+      // 4. Worker B completes with valid owner and fenceToken -> SUCCESS
+      const completed = await deliveryService.completeMessage(
+        sessionId,
+        'B_WORKER',
+        msg.message_id,
+        'worker-B',
+        2
+      );
+      expect(completed.delivery_state).toBe('COMPLETED');
+      expect(completed.status).toBe('acknowledged');
+    });
+
+    it('should support administrative overrides via forceCompleteMessage and forceFailMessage', async () => {
+      const msg = await messagingService.sendDirectMessage(sessionId, {
+        senderBotId: 'B_DISPATCHER',
+        recipient: 'B_WORKER',
+        content: 'Admin override task',
+      });
+
+      await deliveryService.claimNextMessage(sessionId, 'B_WORKER', 'worker-stuck', 5000);
+
+      // Admin forces failure
+      const forcedFail = await deliveryService.forceFailMessage(
+        sessionId,
+        'B_WORKER',
+        msg.message_id,
+        'Supervisor reset'
+      );
+      expect(forcedFail.delivery_state).toBe('RETRY_PENDING');
+      expect(forcedFail.lease_owner).toBeNull();
+
+      // Claim again
+      await deliveryService.claimNextMessage(sessionId, 'B_WORKER', 'worker-new', 5000);
+
+      // Admin forces completion
+      const forcedComplete = await deliveryService.forceCompleteMessage(
+        sessionId,
+        'B_WORKER',
+        msg.message_id,
+        'Supervisor resolved'
+      );
+      expect(forcedComplete.delivery_state).toBe('COMPLETED');
+      expect(forcedComplete.status).toBe('acknowledged');
     });
   });
 });

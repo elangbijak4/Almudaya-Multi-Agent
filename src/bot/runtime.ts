@@ -146,15 +146,23 @@ export class BotRuntime {
     this.pollInFlight = true;
 
     try {
-      // 1. Read new broadcasts with cursor
+      // 1. Read new broadcasts without premature cursor advancement (AUD-07, REQ-05)
       const broadcasts = await this.messagingService.readBroadcasts(this.sessionId, {
         botId: this.botId,
-        autoAdvanceCursor: true,
+        autoAdvanceCursor: false,
       });
 
-      if (this.onBroadcastCallback && broadcasts.length > 0) {
-        for (const evt of broadcasts) {
-          await this.onBroadcastCallback(evt);
+      if (broadcasts.length > 0) {
+        if (this.onBroadcastCallback) {
+          for (const evt of broadcasts) {
+            await this.onBroadcastCallback(evt);
+            // Advance cursor only AFTER callback completes successfully (AUD-07, REQ-05)
+            await this.messagingService.advanceBroadcastCursor(this.sessionId, this.botId, evt);
+          }
+        } else {
+          for (const evt of broadcasts) {
+            await this.messagingService.advanceBroadcastCursor(this.sessionId, this.botId, evt);
+          }
         }
       }
 
@@ -182,22 +190,24 @@ export class BotRuntime {
             await this.onMessageCallback(msg);
           }
 
-          // Complete message only after consumer callback succeeds
+          // Complete message only after consumer callback succeeds, with lease ownership and fencing token (AUD-08, REQ-04)
           await this.messagingService.delivery.completeMessage(
             this.sessionId,
             this.botId,
             msg.message_id,
-            consumerId
+            consumerId,
+            msg.fence_token
           );
         } catch (err: unknown) {
-          // Transition to RETRY_PENDING or DEAD_LETTER without dropping message
+          // Transition to RETRY_PENDING or DEAD_LETTER without dropping message, with lease ownership and fencing token (AUD-08, REQ-04)
           const errMsg = err instanceof Error ? err.message : String(err);
           await this.messagingService.delivery.failMessage(
             this.sessionId,
             this.botId,
             msg.message_id,
             errMsg,
-            consumerId
+            consumerId,
+            msg.fence_token
           );
         }
       }

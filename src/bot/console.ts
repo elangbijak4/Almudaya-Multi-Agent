@@ -432,6 +432,7 @@ export class BotConsole {
         delivery_state: 'PROCESSING',
         attempt_count: 1,
         max_attempts: 1,
+        fence_token: 1,
         lease_owner: `operator-repl:${this.botId}`,
         lease_expires_at: null,
         last_attempt_at: nowIso,

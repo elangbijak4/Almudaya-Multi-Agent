@@ -6,6 +6,7 @@ import { FilesystemSessionStorage } from '../../src/blackboard/filesystem.js';
 import { SessionService } from '../../src/session/service.js';
 import { BotService } from '../../src/bot/service.js';
 import { MessagingService } from '../../src/messaging/service.js';
+import { BotNotFoundError } from '../../src/core/errors.js';
 
 describe('Broadcast Messaging & Cursor Tracking', () => {
   let tmpWorkspace: string;
@@ -133,5 +134,30 @@ describe('Broadcast Messaging & Cursor Tracking', () => {
     const events = await freshMessaging.readBroadcasts('S001');
     expect(events.length).toBe(1);
     expect(events[0]?.content).toBe('Durable event across restart');
+  });
+
+  describe('AUD-10: Broadcast sender identity verification at service boundary', () => {
+    it('should reject broadcast from unregistered sender bot ID', async () => {
+      await expect(
+        messagingService.publishBroadcast('S001', {
+          senderBotId: 'BOT_NOT_REGISTERED',
+          content: 'Spoofed announcement',
+        })
+      ).rejects.toThrow(BotNotFoundError);
+    });
+
+    it('should accept broadcast from explicit typed principal HUMAN, SYSTEM, or OPERATOR', async () => {
+      const humanEvt = await messagingService.publishBroadcast('S001', {
+        senderBotId: 'HUMAN',
+        content: 'Operator announcement',
+      });
+      expect(humanEvt.sender_bot_id).toBe('HUMAN');
+
+      const systemEvt = await messagingService.publishBroadcast('S001', {
+        senderBotId: 'SYSTEM',
+        content: 'System notification event',
+      });
+      expect(systemEvt.sender_bot_id).toBe('SYSTEM');
+    });
   });
 });

@@ -31,11 +31,11 @@ For each finding record: `Not started`, `In progress`, `Implemented`, `Tested`, 
 ## Closure record
 | ID | Status | Fix commit | Regression test | Evidence path | Reviewer/date |
 |---|---|---|---|---|---|
-| AUD-01 | Implemented | 910db4b | tests/execution/controller.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Pending Gate Approval |
-| AUD-02 | Implemented | 910db4b | tests/execution/controller.test.ts, tests/tools/command-tools.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Pending Gate Approval |
-| AUD-03 | Not started | — | — | — | — |
-| AUD-04 | Implemented | 910db4b | tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Pending Gate Approval |
-| AUD-05 | Not started | — | — | — | — |
+| AUD-01 | Implemented | 910db4b | tests/execution/controller.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Gate Approved (User prompt 10) |
+| AUD-02 | Implemented | 910db4b | tests/execution/controller.test.ts, tests/tools/command-tools.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Gate Approved (User prompt 10) |
+| AUD-03 | Implemented | 95914d6 | tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_2_REPORT.md | Pending Gate Approval |
+| AUD-04 | Implemented | 910db4b | tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Gate Approved (User prompt 10) |
+| AUD-05 | Implemented | 95914d6 | tests/capability/capability.test.ts, tests/tools/sandbox.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_2_REPORT.md | Pending Gate Approval |
 | AUD-06 | Not started | — | — | — | — |
 | AUD-07 | Not started | — | — | — | — |
 | AUD-08 | Not started | — | — | — | — |
@@ -44,10 +44,10 @@ For each finding record: `Not started`, `In progress`, `Implemented`, `Tested`, 
 | AUD-11 | Not started | — | — | — | — |
 | AUD-12 | Not started | — | — | — | — |
 | AUD-13 | Not started | — | — | — | — |
-| AUD-14 | Implemented | 910db4b | tests/execution/controller.test.ts, tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Pending Gate Approval |
+| AUD-14 | Implemented | 910db4b | tests/execution/controller.test.ts, tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Gate Approved (User prompt 10) |
 | AUD-15 | Not started | — | — | — | — |
 | AUD-16 | Not started | — | — | — | — |
-| AUD-17 | Not started | — | — | — | — |
+| AUD-17 | Implemented | 95914d6 | tests/tools/file-tools.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_2_REPORT.md | Pending Gate Approval |
 | AUD-18 | Not started | — | — | — | — |
 | AUD-19 | Not started | — | — | — | — |
 | AUD-20 | Not started | — | — | — | — |

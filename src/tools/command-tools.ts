@@ -6,6 +6,7 @@ export interface RunCommandArgs {
   command: string;
   timeout_ms?: number;
   working_dir?: string;
+  capability?: string;
 }
 
 export interface RunCommandResult {
@@ -41,6 +42,7 @@ export async function executeRunCommand(
     command: args.command,
     workingDir: args.working_dir,
     timeoutMs: args.timeout_ms,
+    capability: args.capability || 'process.execute_external',
   };
 
   return await controller.executeCommand(execContext, execRequest);

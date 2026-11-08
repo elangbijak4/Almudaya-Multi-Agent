@@ -7,6 +7,7 @@ import type {
 import type { IIsolationBackend } from './isolation/interface.js';
 import { getIsolationBackend } from './isolation/factory.js';
 import { CapabilityService } from '../capability/service.js';
+import { CapabilityRegistry } from '../capability/registry.js';
 import { CapabilityApprovalService } from '../capability/approval.js';
 import { ExecutionEnvironmentBuilder, redactSecrets } from './environment.js';
 import { validateSandboxedPath, isPathInsideRoot } from '../tools/sandbox.js';
@@ -33,6 +34,10 @@ export class ExecutionController {
 
   public static resetInstance(): void {
     ExecutionController.instance = null;
+  }
+
+  public static setInstance(instance: ExecutionController | null): void {
+    ExecutionController.instance = instance;
   }
 
   public getIsolationBackend(): IIsolationBackend {
@@ -80,67 +85,107 @@ export class ExecutionController {
     const workingDirArg = request.workingDir || '.';
     const resolvedWorkingDir = validateSandboxedPath(context.projectRoots, workingDirArg);
 
-    // 3. ACG Policy Evaluation (if executed in a session context)
-    if (context.sessionId) {
-      const evalResult = await this.capabilityService.evaluate({
-        capability: 'command.arbitrary',
-        sessionId: context.sessionId,
-        botId: context.botId,
-        targetResource: rawCmd,
-        isTurbo: context.isTurbo,
-        enforcementBackendAvailable: this.backend.isAvailable(),
-      });
+    // 2.5. Validate mandatory authenticated identity (AUD-02, REQ-02, ADR-SRP1-003, Security Invariant 1)
+    if (!context.sessionId || !context.sessionId.trim() || !context.botId || !context.botId.trim()) {
+      return {
+        command: rawCmd,
+        exitCode: 126,
+        stdout: '',
+        stderr: 'Access denied by ACG policy: Command execution requires authenticated session identity and bot principal (sessionId and botId).',
+        durationMs: 0,
+        timedOut: false,
+        deniedByPolicy: true,
+        isolationType: this.backend.isolationType,
+      };
+    }
 
-      if (evalResult.decision === 'DENY') {
+    // 3. Determine capability and perform ACG Policy Evaluation (AUD-01, AUD-13, AUD-14, REQ-01, REQ-09)
+    let targetCap = request.capability;
+    if (!targetCap) {
+      // If not explicitly set, check if session has an active grant for process.execute_external
+      const grants = await this.capabilityService.getGrants(context.sessionId);
+      const hasExecGrant = grants.some(
+        (g) => g.capability === 'process.execute_external' && g.status === 'active'
+      );
+      targetCap = hasExecGrant ? 'process.execute_external' : 'command.arbitrary';
+    }
+
+    const def = CapabilityRegistry.getCapability(targetCap);
+    if (!def) {
+      return {
+        command: rawCmd,
+        exitCode: 126,
+        stdout: '',
+        stderr: `Access denied by ACG policy: Unknown capability identifier: "${targetCap}". Capability must be registered in ACG registry.`,
+        durationMs: 0,
+        timedOut: false,
+        deniedByPolicy: true,
+        isolationType: this.backend.isolationType,
+      };
+    }
+
+    const backendSupportsCapability =
+      this.backend.isAvailable() && this.backend.supportsCapability(def.enforcement);
+
+    const evalResult = await this.capabilityService.evaluate({
+      capability: targetCap,
+      sessionId: context.sessionId,
+      botId: context.botId,
+      targetResource: rawCmd,
+      isTurbo: context.isTurbo,
+      enforcementBackendAvailable: backendSupportsCapability,
+    });
+
+    if (evalResult.decision === 'DENY') {
+      const exitCode = evalResult.reason.includes('Required enforcement backend') ? 127 : 126;
+      return {
+        command: rawCmd,
+        exitCode,
+        stdout: '',
+        stderr: `Access denied by ACG policy: ${evalResult.reason}`,
+        durationMs: 0,
+        timedOut: false,
+        deniedByPolicy: true,
+        isolationType: this.backend.isolationType,
+      };
+    }
+
+    // 4. Request approval if required (e.g. per_action mode or high risk)
+    if (evalResult.decision === 'REQUIRE_APPROVAL') {
+      const approved = await CapabilityApprovalService.promptUser(
+        {
+          sessionId: context.sessionId,
+          botId: context.botId,
+          botDisplayName: context.botDisplayName,
+          capability: targetCap,
+          targetResource: rawCmd,
+          operation: 'shell',
+          reason: evalResult.reason,
+        },
+        promptFn
+      );
+
+      if (!approved) {
         return {
           command: rawCmd,
-          exitCode: 126,
+          exitCode: 125,
           stdout: '',
-          stderr: `Access denied by ACG policy: ${evalResult.reason}`,
+          stderr: 'Execution aborted: operator denied capability approval.',
           durationMs: 0,
           timedOut: false,
           deniedByPolicy: true,
           isolationType: this.backend.isolationType,
         };
       }
-
-      // 4. Request approval if required (e.g. per_action mode or high risk)
-      if (evalResult.decision === 'REQUIRE_APPROVAL') {
-        const approved = await CapabilityApprovalService.promptUser(
-          {
-            sessionId: context.sessionId,
-            botId: context.botId,
-            botDisplayName: context.botDisplayName,
-            capability: 'command.arbitrary',
-            targetResource: rawCmd,
-            operation: 'shell',
-            reason: evalResult.reason,
-          },
-          promptFn
-        );
-
-        if (!approved) {
-          return {
-            command: rawCmd,
-            exitCode: 125,
-            stdout: '',
-            stderr: 'Execution aborted: operator denied capability approval.',
-            durationMs: 0,
-            timedOut: false,
-            deniedByPolicy: true,
-            isolationType: this.backend.isolationType,
-          };
-        }
-      }
     }
 
-    // 5. Confirm enforcement backend availability
-    if (!this.backend.isAvailable()) {
+    // 5. Confirm enforcement backend availability and capability support (AUD-01, AUD-14, REQ-01, ADR-SRP1-002)
+    if (!this.backend.isAvailable() || !this.backend.supportsCapability(def.enforcement)) {
       return {
         command: rawCmd,
         exitCode: 127,
         stdout: '',
-        stderr: 'Execution denied (fail-closed): OS isolation backend is not supported on this platform.',
+        stderr: `Execution denied (fail-closed): Required isolation capability "${def.enforcement}" is not supported by backend "${this.backend.isolationType}" on this platform.`,
         durationMs: 0,
         timedOut: false,
         deniedByPolicy: true,
@@ -181,7 +226,7 @@ export class ExecutionController {
           session_id: context.sessionId,
           bot_id: context.botId,
           type: spawnResult.exitCode === 0 ? 'EXECUTION_COMPLETED' : 'EXECUTION_FAILED',
-          capability: 'command.arbitrary',
+          capability: targetCap,
           details: {
             command: rawCmd,
             exit_code: spawnResult.exitCode,
@@ -230,8 +275,8 @@ export class ExecutionController {
       requiredCap = 'filesystem.delete_external';
     }
 
-    if (!context.sessionId) {
-      throw new Error(`Access denied: external path access to "${request.targetPath}" requires an active session with ACG authorization.`);
+    if (!context.sessionId || !context.sessionId.trim() || !context.botId || !context.botId.trim()) {
+      throw new Error(`Access denied: External filesystem access to "${request.targetPath}" requires authenticated session identity and bot principal (sessionId and botId).`);
     }
 
     const evalResult = await this.capabilityService.evaluate({

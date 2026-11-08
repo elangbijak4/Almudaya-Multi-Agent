@@ -4,16 +4,23 @@ import type { IIsolationBackend, IsolationSpawnOptions, IsolationSpawnResult } f
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 
 /**
- * Linux Process Group Isolation Backend (ADR-003, Section 7.2).
- * Spawns execution in a detached process group and kills the process group on timeout.
+ * Linux Process Group Management Backend (AUD-01, REQ-01, ADR-003, Section 7.2).
+ * Spawns execution in a detached process group and terminates the group on timeout.
+ * 
+ * SECURITY INVARIANT & THREAT MODEL NOTICE (AUD-01, Invariant 2):
+ * This backend provides detached process group signal management and timeout termination.
+ * It does NOT create Linux namespaces (user, pid, mnt, net), chroot, seccomp filters, or cgroups.
+ * It does NOT provide filesystem, network, or OS-level security sandboxing.
+ * Therefore, capabilities requiring OS-level sandboxing ('filesystem_sandbox', 'network_sandbox',
+ * 'os_isolation_required') are truthfully reported as UNSUPPORTED.
  */
-export class LinuxNamespaceIsolationBackend implements IIsolationBackend {
+export class LinuxProcessGroupIsolationBackend implements IIsolationBackend {
   public readonly platform = 'linux';
   public readonly isolationType = 'linux_process_group';
 
   private readonly supportedCapabilities = new Set([
     'process_isolation',
-    'filesystem_sandbox',
+    'process_group_termination',
   ]);
 
   public isAvailable(): boolean {
@@ -94,3 +101,10 @@ export class LinuxNamespaceIsolationBackend implements IIsolationBackend {
     });
   }
 }
+
+/**
+ * Backward compatibility alias for LinuxNamespaceIsolationBackend (AUD-01).
+ * @deprecated Use LinuxProcessGroupIsolationBackend instead.
+ */
+export const LinuxNamespaceIsolationBackend = LinuxProcessGroupIsolationBackend;
+export type LinuxNamespaceIsolationBackend = LinuxProcessGroupIsolationBackend;

@@ -4,19 +4,23 @@ import type { IIsolationBackend, IsolationSpawnOptions, IsolationSpawnResult } f
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024; // 1 MB cap
 
 /**
- * Windows Process Tree & Resource Isolation Backend (ADR-003, Section 7.2).
- * Implements process tree encapsulation and guaranteed resource reclamation via taskkill /T /F.
- * Note: Process tree management isolates execution lifecycles and child processes, but does NOT
- * isolate raw network sockets or unmanaged filesystem access without external VM/container boundaries.
+ * Windows Process Tree Management Backend (AUD-01, REQ-01, ADR-003, Section 7.2).
+ * Implements process tree lifecycle encapsulation and resource reclamation via taskkill /T /F.
+ * 
+ * SECURITY INVARIANT & THREAT MODEL NOTICE (AUD-01, Invariant 2):
+ * This backend provides process lifecycle management, timeouts, and process-tree termination.
+ * It does NOT create Win32 Job Objects, Restricted Tokens, or AppContainers.
+ * It does NOT provide filesystem, network, or OS-level security sandboxing.
+ * Therefore, capabilities requiring OS-level sandboxing ('filesystem_sandbox', 'network_sandbox',
+ * 'os_isolation_required') are truthfully reported as UNSUPPORTED.
  */
-export class WindowsJobIsolationBackend implements IIsolationBackend {
+export class WindowsProcessTreeBackend implements IIsolationBackend {
   public readonly platform = 'win32';
-  public readonly isolationType = 'windows_process_tree_job';
+  public readonly isolationType = 'windows_process_tree';
 
   private readonly supportedCapabilities = new Set([
     'process_isolation',
-    'process_job_object',
-    'filesystem_sandbox',
+    'process_tree_termination',
   ]);
 
   public isAvailable(): boolean {
@@ -103,3 +107,10 @@ export class WindowsJobIsolationBackend implements IIsolationBackend {
     });
   }
 }
+
+/**
+ * Backward compatibility alias for WindowsJobIsolationBackend (AUD-01).
+ * @deprecated Use WindowsProcessTreeBackend instead.
+ */
+export const WindowsJobIsolationBackend = WindowsProcessTreeBackend;
+export type WindowsJobIsolationBackend = WindowsProcessTreeBackend;

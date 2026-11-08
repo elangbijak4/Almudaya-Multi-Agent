@@ -25,6 +25,28 @@ const HARD_DENY_RESOURCE_PATTERNS = [
 ];
 
 /**
+ * Extracts the base command binary from a command string or executable path (AUD-13, REQ-09).
+ * Handles leading quotes, path prefixes, arguments, and Windows extensions (.exe, .cmd, .bat).
+ */
+export function extractCommandBinary(rawCommand: string): string {
+  const trimmed = rawCommand.trim();
+  if (!trimmed) return '';
+
+  let executablePart = '';
+  if (trimmed.startsWith('"')) {
+    const nextQuote = trimmed.indexOf('"', 1);
+    executablePart = nextQuote !== -1 ? trimmed.slice(1, nextQuote) : trimmed.slice(1);
+  } else if (trimmed.startsWith("'")) {
+    const nextQuote = trimmed.indexOf("'", 1);
+    executablePart = nextQuote !== -1 ? trimmed.slice(1, nextQuote) : trimmed.slice(1);
+  } else {
+    executablePart = trimmed.split(/\s+/)[0] ?? '';
+  }
+
+  return path.basename(executablePart).toLowerCase();
+}
+
+/**
  * Central ACG Policy Engine (SEC-03, ADR-001).
  * Enforces strict fail-closed authorization, scope validation, and TURBO isolation.
  */
@@ -50,7 +72,17 @@ export class PolicyEngine {
     const { capability, sessionId, botId, targetResource, operation, isTurbo } = request;
     const def = CapabilityRegistry.getCapability(capability);
 
-    // 1. Validate request: unknown capabilities default to DENY
+    // 1. Validate request: unknown capabilities and missing sessionId default to DENY (AUD-02, REQ-02)
+    if (!sessionId || !sessionId.trim()) {
+      return {
+        decision: 'DENY',
+        capability,
+        reason: 'Policy evaluation rejected: missing mandatory sessionId.',
+        requires_approval: false,
+        risk: def?.risk ?? 'CRITICAL',
+      };
+    }
+
     if (!def) {
       return {
         decision: 'DENY',
@@ -76,25 +108,14 @@ export class PolicyEngine {
       }
     }
 
-    // 3. Enforcement backend availability check
-    if (request.enforcementBackendAvailable === false) {
-      return {
-        decision: 'DENY',
-        capability,
-        reason: `Required enforcement backend (${def.enforcement}) is unavailable on this platform. Failing closed.`,
-        requires_approval: false,
-        risk: def.risk,
-      };
-    }
-
     // 4. Find matching grants bound to this session
     const matchingGrants = activeGrants.filter((g) => {
       if (g.capability !== capability) return false;
       if (g.session_id !== sessionId) return false;
       if (g.status !== 'active') return false;
 
-      // 6. Bot binding: if grant is bound to specific bot, caller must match
-      if (g.bot_id && botId && g.bot_id !== botId) return false;
+      // 6. Bot binding: if grant is bound to specific bot, caller must match exactly (AUD-04, REQ-02, Invariant 5)
+      if (g.bot_id && (!botId || g.bot_id !== botId)) return false;
 
       // 7. Expiry check
       const now = Date.now();
@@ -145,10 +166,20 @@ export class PolicyEngine {
         }
       }
 
-      // Check command scope
+      // Check command scope (AUD-13, REQ-09)
       if (targetResource && grant.scope.commands && grant.scope.commands.length > 0) {
-        const baseCmd = path.basename(targetResource).toLowerCase();
-        const cmdMatches = grant.scope.commands.some((c) => c.toLowerCase() === baseCmd);
+        const baseCmd = extractCommandBinary(targetResource);
+        const baseCmdWithoutExt = baseCmd.replace(/\.(exe|cmd|bat)$/i, '');
+        const cmdMatches = grant.scope.commands.some((c) => {
+          const lowerC = c.toLowerCase().trim();
+          const lowerCWithoutExt = lowerC.replace(/\.(exe|cmd|bat)$/i, '');
+          return (
+            lowerC === baseCmd ||
+            lowerCWithoutExt === baseCmd ||
+            lowerC === baseCmdWithoutExt ||
+            lowerCWithoutExt === baseCmdWithoutExt
+          );
+        });
         if (!cmdMatches) {
           scopeFailureReason = `Command "${baseCmd}" is not in granted command scope: [${grant.scope.commands.join(', ')}].`;
           continue;
@@ -191,7 +222,18 @@ export class PolicyEngine {
       };
     }
 
-    // Grant is active and scope is valid
+    // 9. Confirm enforcement backend support (AUD-01, AUD-14, REQ-01)
+    if (request.enforcementBackendAvailable === false) {
+      return {
+        decision: 'DENY',
+        capability,
+        reason: `Required enforcement backend (${def.enforcement}) is unavailable on this platform. Failing closed.`,
+        requires_approval: false,
+        risk: def.risk,
+      };
+    }
+
+    // 10. Grant is active, scope is valid, and backend is supported: ALLOW
     return {
       decision: 'ALLOW',
       capability,

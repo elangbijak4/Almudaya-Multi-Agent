@@ -11,6 +11,7 @@ export interface CommandExecutionRequest {
   workingDir?: string;
   timeoutMs?: number;
   env?: Record<string, string>;
+  capability?: string;
 }
 
 export interface CommandExecutionResult {

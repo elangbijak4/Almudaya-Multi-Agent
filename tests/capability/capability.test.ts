@@ -207,6 +207,160 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
       expect(result.requires_approval).toBe(false);
       expect(result.matching_grant_id).toBe(validGrant.grant_id);
     });
+
+    it('AUD-04 regression: bot-bound grant must match exact authenticated botId and deny missing or mismatched botId', () => {
+      const botBoundGrant: CapabilityGrant = {
+        grant_id: crypto.randomUUID(),
+        capability: 'process.execute_external',
+        scope: { commands: ['node'] },
+        granted_by: 'OPERATOR',
+        granted_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+        session_id: sessionId,
+        bot_id: 'BOT-A',
+        approval_mode: 'session',
+        status: 'active',
+      };
+
+      // 1. Caller with matching botId -> ALLOW
+      const matchResult = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'node script.js',
+        },
+        [botBoundGrant]
+      );
+      expect(matchResult.decision).toBe('ALLOW');
+
+      // 2. Caller omitting botId -> DENY (AUD-04)
+      const noBotResult = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          targetResource: 'node script.js',
+        },
+        [botBoundGrant]
+      );
+      expect(noBotResult.decision).toBe('DENY');
+      expect(noBotResult.reason).toContain('no active capability grant found');
+
+      // 3. Caller with different botId -> DENY
+      const otherBotResult = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-B',
+          targetResource: 'node script.js',
+        },
+        [botBoundGrant]
+      );
+      expect(otherBotResult.decision).toBe('DENY');
+    });
+
+    it('AUD-02 regression: PolicyEngine must reject requests with missing sessionId', () => {
+      const result = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId: '',
+          targetResource: 'node script.js',
+        },
+        []
+      );
+      expect(result.decision).toBe('DENY');
+      expect(result.reason).toContain('missing mandatory sessionId');
+    });
+
+    it('AUD-14 regression: PolicyEngine must deny when enforcement backend is unsupported', () => {
+      const grant: CapabilityGrant = {
+        grant_id: crypto.randomUUID(),
+        capability: 'command.arbitrary',
+        scope: {},
+        granted_by: 'OPERATOR',
+        granted_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+        session_id: sessionId,
+        approval_mode: 'session',
+        status: 'active',
+      };
+
+      const result = PolicyEngine.evaluate(
+        {
+          capability: 'command.arbitrary',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'echo "test"',
+          enforcementBackendAvailable: false,
+        },
+        [grant]
+      );
+      expect(result.decision).toBe('DENY');
+      expect(result.reason).toContain('Required enforcement backend (os_isolation_required) is unavailable');
+    });
+
+    it('AUD-13 regression: Command scope comparison must extract executable binary and match with or without extensions', () => {
+      const grant: CapabilityGrant = {
+        grant_id: crypto.randomUUID(),
+        capability: 'process.execute_external',
+        scope: { commands: ['npm', 'node'] },
+        granted_by: 'OPERATOR',
+        granted_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+        session_id: sessionId,
+        approval_mode: 'session',
+        status: 'active',
+      };
+
+      // npm with arguments
+      const npmRes = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'npm install --save-dev vitest',
+        },
+        [grant]
+      );
+      expect(npmRes.decision).toBe('ALLOW');
+
+      // npm.cmd on Windows
+      const npmCmdRes = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'npm.cmd test',
+        },
+        [grant]
+      );
+      expect(npmCmdRes.decision).toBe('ALLOW');
+
+      // node with arguments
+      const nodeRes = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'node -e "console.log(1)"',
+        },
+        [grant]
+      );
+      expect(nodeRes.decision).toBe('ALLOW');
+
+      // unauthorized binary
+      const badRes = PolicyEngine.evaluate(
+        {
+          capability: 'process.execute_external',
+          sessionId,
+          botId: 'BOT-A',
+          targetResource: 'curl http://example.com',
+        },
+        [grant]
+      );
+      expect(badRes.decision).toBe('DENY');
+      expect(badRes.reason).toContain('not in granted command scope');
+    });
   });
 
   describe('TURBO Separation (Section 6.6 Mandatory Regressions)', () => {

@@ -8,23 +8,48 @@ import {
   SAFE_ENV_ALLOWLIST
 } from '../../src/tools/sandbox.js';
 import { executeRunCommand } from '../../src/tools/command-tools.js';
+import { CapabilityService } from '../../src/capability/service.js';
+import { CapabilityPersistence } from '../../src/capability/persistence.js';
+import { ExecutionController } from '../../src/execution/controller.js';
 
 describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Invariant 7)', () => {
   let projectRoot: string;
+  let tmpWorkspace: string;
   const originalEnv = { ...process.env };
+  const sessionId = 'S_ENV_TEST';
+  const botId = 'B_ENV_TEST';
+  let context: { sessionId: string; botId: string };
 
   beforeEach(async () => {
+    tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), 'almudaya-env-bb-'));
     projectRoot = path.join(
       os.tmpdir(),
       `almudaya_env_test_${Date.now()}_${Math.random().toString(36).slice(2)}`
     );
     await fs.mkdir(projectRoot, { recursive: true });
+
+    const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+    const capabilityService = new CapabilityService(persistence);
+    const controller = new ExecutionController(capabilityService);
+    ExecutionController.setInstance(controller);
+
+    await capabilityService.grantCapability({
+      sessionId,
+      botId,
+      capability: 'process.execute_external',
+      scope: { commands: ['node'] },
+      grantedBy: 'OPERATOR',
+    });
+
+    context = { sessionId, botId };
   });
 
   afterEach(async () => {
+    ExecutionController.resetInstance();
     process.env = { ...originalEnv };
     try {
       await fs.rm(projectRoot, { recursive: true, force: true });
+      await fs.rm(tmpWorkspace, { recursive: true, force: true });
     } catch {
       // Ignore cleanup error
     }
@@ -119,9 +144,13 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
       process.env.GEMINI_API_KEY = 'SENTINEL_LEAK_TEST_KEY_AIzaSy123456789';
       process.env.GITHUB_TOKEN = 'ghp_sentineltoken12345678901234567890';
 
-      const res = await executeRunCommand([projectRoot], {
-        command: 'node -e "console.log(\'GEMINI:\' + (process.env.GEMINI_API_KEY || \'NOT_SET\')); console.log(\'GITHUB:\' + (process.env.GITHUB_TOKEN || \'NOT_SET\'));"'
-      });
+      const res = await executeRunCommand(
+        [projectRoot],
+        {
+          command: 'node -e "console.log(\'GEMINI:\' + (process.env.GEMINI_API_KEY || \'NOT_SET\')); console.log(\'GITHUB:\' + (process.env.GITHUB_TOKEN || \'NOT_SET\'));"'
+        },
+        context
+      );
 
       expect(res.exitCode).toBe(0);
       expect(res.stdout).toContain('GEMINI:NOT_SET');
@@ -130,9 +159,13 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
     });
 
     it('should redact any sensitive key accidentally printed by command output', async () => {
-      const res = await executeRunCommand([projectRoot], {
-        command: 'node -e "console.log(\'Key leaked: AIzaSyBBBBBBBBBBBBBBBBBBBBBBBBBBBB123\')"'
-      });
+      const res = await executeRunCommand(
+        [projectRoot],
+        {
+          command: 'node -e "console.log(\'Key leaked: AIzaSyBBBBBBBBBBBBBBBBBBBBBBBBBBBB123\')"'
+        },
+        context
+      );
 
       expect(res.exitCode).toBe(0);
       expect(res.stdout).not.toContain('AIzaSyBBBB');

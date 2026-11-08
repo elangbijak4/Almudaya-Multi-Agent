@@ -105,6 +105,26 @@ describe('Path Sandboxing & Security (Invariant 5 & FR-210)', () => {
     );
   });
 
+  describe('AUD-05: Platform-aware case-sensitive containment checks', () => {
+    it('should enforce case-sensitivity on linux platform', () => {
+      expect(isPathInsideRoot('/app/Project', '/app/Project/file.txt', 'linux')).toBe(true);
+      expect(isPathInsideRoot('/app/Project', '/app/project/file.txt', 'linux')).toBe(false);
+      expect(isPathInsideRoot('/tmp/Secret', '/tmp/secret/keys.json', 'linux')).toBe(false);
+      expect(isPathInsideRoot('/tmp/Secret', '/tmp/Secret/keys.json', 'linux')).toBe(true);
+    });
+
+    it('should be case-insensitive on win32 platform', () => {
+      expect(isPathInsideRoot('C:\\Project', 'c:\\project\\file.txt', 'win32')).toBe(true);
+      expect(isPathInsideRoot('C:\\Secret', 'c:\\secret\\keys.json', 'win32')).toBe(true);
+      expect(isPathInsideRoot('C:\\Project', 'C:\\Project\\sub\\file.txt', 'win32')).toBe(true);
+    });
+
+    it('should prevent prefix collisions on both linux and win32', () => {
+      expect(isPathInsideRoot('/app/project', '/app/project-fake/file.txt', 'linux')).toBe(false);
+      expect(isPathInsideRoot('C:\\app\\project', 'c:\\app\\project-fake\\file.txt', 'win32')).toBe(false);
+    });
+  });
+
   it('should compute clean relative paths using getRelativeSandboxedPath', () => {
     const target = path.join(testRoot1, 'src/modules/auth.ts');
     const rel = getRelativeSandboxedPath([testRoot1], target);

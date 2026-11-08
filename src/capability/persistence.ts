@@ -11,6 +11,8 @@ import { readJsonlFile, appendJsonlRecord } from '../core/jsonl.js';
 import { ensureDir, pathExists } from '../core/fs-utils.js';
 import { withLock } from '../core/lock.js';
 import { redactSecrets } from '../execution/environment.js';
+import { validateSessionId } from '../session/schema.js';
+import { isPathInsideRoot, PathTraversalSecurityError } from '../tools/sandbox.js';
 
 export interface CapabilityStorageOptions {
   workspaceRoot?: string;
@@ -24,7 +26,16 @@ export class CapabilityPersistence {
   }
 
   public getCapabilitiesDir(sessionId: string): string {
-    return path.join(this.workspaceRoot, 'sessions', sessionId, 'capabilities');
+    const validId = validateSessionId(sessionId);
+    const targetDir = path.resolve(this.workspaceRoot, 'sessions', validId, 'capabilities');
+    if (!isPathInsideRoot(this.workspaceRoot, targetDir)) {
+      throw new PathTraversalSecurityError(
+        `Path traversal detected: target capabilities directory "${targetDir}" is outside workspace root "${this.workspaceRoot}".`,
+        targetDir,
+        [this.workspaceRoot]
+      );
+    }
+    return targetDir;
   }
 
   public getGrantsFilePath(sessionId: string): string {
@@ -36,7 +47,15 @@ export class CapabilityPersistence {
   }
 
   private async withSessionLock<T>(sessionId: string, action: () => Promise<T>): Promise<T> {
-    const sessionDir = path.join(this.workspaceRoot, 'sessions', sessionId);
+    const validId = validateSessionId(sessionId);
+    const sessionDir = path.resolve(this.workspaceRoot, 'sessions', validId);
+    if (!isPathInsideRoot(this.workspaceRoot, sessionDir)) {
+      throw new PathTraversalSecurityError(
+        `Path traversal detected: session directory "${sessionDir}" is outside workspace root "${this.workspaceRoot}".`,
+        sessionDir,
+        [this.workspaceRoot]
+      );
+    }
     await ensureDir(sessionDir);
     return await withLock(sessionDir, action);
   }

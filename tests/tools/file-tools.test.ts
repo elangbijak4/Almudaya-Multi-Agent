@@ -275,4 +275,87 @@ describe('Project Root File Tools (FR-206..210)', () => {
       }
     });
   });
+
+  describe('AUD-17: Hardlink & TOCTOU Defense (FR-206..208)', () => {
+    let outsideDir: string;
+
+    beforeEach(async () => {
+      outsideDir = path.join(
+        os.tmpdir(),
+        `almudaya_outside_test_${Date.now()}_${Math.random().toString(36).slice(2)}`
+      );
+      await fs.mkdir(outsideDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      try {
+        await fs.rm(outsideDir, { recursive: true, force: true });
+      } catch {
+        // Ignore
+      }
+    });
+
+    it('should break hard links on write_file, preserving external file content', async () => {
+      const outsideFile = path.join(outsideDir, 'sensitive_external.txt');
+      await fs.writeFile(outsideFile, 'CRITICAL_OUTSIDE_SECRET', 'utf8');
+
+      const insideFile = path.join(projectRoot, 'linked_target.txt');
+      await fs.link(outsideFile, insideFile);
+
+      const beforeStat = await fs.stat(insideFile);
+      expect(beforeStat.nlink).toBeGreaterThan(1);
+
+      // Overwrite the linked file inside the sandbox
+      const res = await executeWriteFile([projectRoot], {
+        path: 'linked_target.txt',
+        content: 'COMPLETELY_NEW_SANDBOX_CONTENT',
+        overwrite: true
+      });
+      expect(res.bytesWritten).toBeGreaterThan(0);
+
+      // Verify sandbox file has the new content
+      const insideContent = await fs.readFile(insideFile, 'utf8');
+      expect(insideContent).toBe('COMPLETELY_NEW_SANDBOX_CONTENT');
+
+      // Verify outside file was NOT modified (hard link broken)
+      const outsideContent = await fs.readFile(outsideFile, 'utf8');
+      expect(outsideContent).toBe('CRITICAL_OUTSIDE_SECRET');
+
+      const afterStat = await fs.stat(insideFile);
+      expect(afterStat.nlink).toBe(1);
+    });
+
+    it('should break hard links on edit_file, preserving external file content', async () => {
+      const outsideFile = path.join(outsideDir, 'shared_external.txt');
+      await fs.writeFile(outsideFile, 'const DB_PASS = "supersecret";', 'utf8');
+
+      const insideFile = path.join(projectRoot, 'shared_link.txt');
+      await fs.link(outsideFile, insideFile);
+
+      // Edit the linked file inside the sandbox
+      const res = await executeEditFile([projectRoot], {
+        path: 'shared_link.txt',
+        target: '"supersecret"',
+        replacement: '"hacked_replacement"'
+      });
+      expect(res.occurrencesReplaced).toBe(1);
+
+      // Verify sandbox file has the edited content
+      const insideContent = await fs.readFile(insideFile, 'utf8');
+      expect(insideContent).toBe('const DB_PASS = "hacked_replacement";');
+
+      // Verify outside file was NOT modified
+      const outsideContent = await fs.readFile(outsideFile, 'utf8');
+      expect(outsideContent).toBe('const DB_PASS = "supersecret";');
+    });
+
+    it('should read file via file descriptor successfully', async () => {
+      const filePath = path.join(projectRoot, 'descriptor_read.txt');
+      await fs.writeFile(filePath, 'Descriptor content\nLine 2', 'utf8');
+
+      const res = await executeReadFile([projectRoot], { path: 'descriptor_read.txt' });
+      expect(res.content).toBe('Descriptor content\nLine 2');
+      expect(res.totalLines).toBe(2);
+    });
+  });
 });

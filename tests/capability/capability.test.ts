@@ -259,6 +259,74 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
       expect(otherBotResult.decision).toBe('DENY');
     });
 
+    it('AUD-05 regression: path scope comparison must be platform-aware and case-sensitive on linux', () => {
+      const scopedGrant: CapabilityGrant = {
+        grant_id: crypto.randomUUID(),
+        capability: 'filesystem.read_external',
+        scope: { paths: ['/var/log/Audit'] },
+        granted_by: 'OPERATOR',
+        granted_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+        session_id: sessionId,
+        approval_mode: 'session',
+        status: 'active',
+      };
+
+      // 1. On linux: exact case matches -> ALLOW
+      const linuxMatch = PolicyEngine.evaluate(
+        {
+          capability: 'filesystem.read_external',
+          sessionId,
+          targetResource: '/var/log/Audit/report.log',
+          platform: 'linux',
+        },
+        [scopedGrant]
+      );
+      expect(linuxMatch.decision).toBe('ALLOW');
+
+      // 2. On linux: different case -> DENY (AUD-05)
+      const linuxMismatch = PolicyEngine.evaluate(
+        {
+          capability: 'filesystem.read_external',
+          sessionId,
+          targetResource: '/var/log/audit/report.log',
+          platform: 'linux',
+        },
+        [scopedGrant]
+      );
+      expect(linuxMismatch.decision).toBe('DENY');
+      expect(linuxMismatch.reason).toContain('is not inside granted path scopes');
+
+      // 3. On win32: case-insensitive -> ALLOW
+      const winGrant: CapabilityGrant = {
+        ...scopedGrant,
+        grant_id: crypto.randomUUID(),
+        scope: { paths: ['C:\\Secure\\Audit'] },
+      };
+      const winMatch = PolicyEngine.evaluate(
+        {
+          capability: 'filesystem.read_external',
+          sessionId,
+          targetResource: 'c:\\secure\\audit\\report.log',
+          platform: 'win32',
+        },
+        [winGrant]
+      );
+      expect(winMatch.decision).toBe('ALLOW');
+
+      // 4. Prefix collision protection: /var/log/Audit vs /var/log/Audit-fake -> DENY
+      const prefixCollision = PolicyEngine.evaluate(
+        {
+          capability: 'filesystem.read_external',
+          sessionId,
+          targetResource: '/var/log/Audit-fake/report.log',
+          platform: 'linux',
+        },
+        [scopedGrant]
+      );
+      expect(prefixCollision.decision).toBe('DENY');
+    });
+
     it('AUD-02 regression: PolicyEngine must reject requests with missing sessionId', () => {
       const result = PolicyEngine.evaluate(
         {
@@ -530,6 +598,37 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
       expect(detailsStr).not.toContain('AIzaSyFakeKey');
       expect(detailsStr).toContain('[REDACTED_API_KEY]');
     });
+
+    it('AUD-03 regression: sessionId traversal attempts must be strictly rejected', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+      const service = new CapabilityService(persistence);
+
+      // 1. Path traversal in getCapabilitiesDir
+      expect(() => (persistence as any).getCapabilitiesDir('../../outside')).toThrow();
+
+      // 2. Traversal attempt in grantCapability
+      await expect(
+        service.grantCapability({
+          sessionId: '../../escape-session',
+          capability: 'network.outbound',
+          grantedBy: 'OPERATOR',
+        })
+      ).rejects.toThrow();
+
+      // 3. Traversal attempt in getGrants
+      await expect(service.getGrants('../../../root')).rejects.toThrow();
+
+      // 4. Verify no directories or files were created outside tmpWorkspace
+      const outsidePath = path.resolve(tmpWorkspace, '..', 'escape-session');
+      let outsideExists = false;
+      try {
+        await fs.access(outsidePath);
+        outsideExists = true;
+      } catch {
+        outsideExists = false;
+      }
+      expect(outsideExists).toBe(false);
+    });
   });
 
   describe('Capability Presets (Section 6.7)', () => {
@@ -623,6 +722,34 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
 
       expect(output).toContain('Capability granted successfully!');
       expect(output).toContain('filesystem.read_external');
+    });
+
+    it('AUD-03 regression: CLI commands must reject invalid or traversing sessionId', async () => {
+      const program = createProgram();
+      program.exitOverride();
+
+      let errOutput = '';
+      const origErr = console.error;
+      console.error = (msg: string) => { errOutput += msg + '\n'; };
+
+      try {
+        await program.parseAsync([
+          'node',
+          'almudaya',
+          'capability',
+          'grant',
+          'filesystem.read_external',
+          '-s',
+          '../../escape-session',
+          '-w',
+          tmpWorkspace,
+        ]);
+      } finally {
+        console.error = origErr;
+      }
+
+      expect(errOutput).toContain('Invalid session ID');
+      expect(process.exitCode).toBe(1);
     });
   });
 });

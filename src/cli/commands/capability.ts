@@ -5,6 +5,7 @@ import { CapabilityPersistence } from '../../capability/persistence.js';
 import { CapabilityRegistry } from '../../capability/registry.js';
 import { CapabilityPresets } from '../../capability/presets.js';
 import type { ApprovalMode } from '../../capability/schema.js';
+import { validateSessionId } from '../../session/schema.js';
 
 export function registerCapabilityCommands(program: Command): void {
   const capability = program
@@ -24,7 +25,8 @@ export function registerCapabilityCommands(program: Command): void {
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
         if (options.session) {
-          const grants = await service.getGrants(options.session);
+          const validatedSession = validateSessionId(options.session);
+          const grants = await service.getGrants(validatedSession);
           if (options.json) {
             console.log(JSON.stringify(grants, null, 2));
             return;
@@ -88,7 +90,8 @@ export function registerCapabilityCommands(program: Command): void {
         }
 
         if (options.session) {
-          const grant = await service.getGrant(options.session, id);
+          const validatedSession = validateSessionId(options.session);
+          const grant = await service.getGrant(validatedSession, id);
           if (grant) {
             console.log(`Capability Grant: ${grant.grant_id}`);
             console.log(`  Capability:    ${grant.capability}`);
@@ -140,8 +143,9 @@ export function registerCapabilityCommands(program: Command): void {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
+        const validatedSession = validateSessionId(options.session);
         const grant = await service.grantCapability({
-          sessionId: options.session,
+          sessionId: validatedSession,
           capability: capId,
           botId: options.bot,
           scope: {
@@ -184,8 +188,9 @@ export function registerCapabilityCommands(program: Command): void {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
+        const validatedSession = validateSessionId(options.session);
         const revoked = await service.revokeGrant(
-          options.session,
+          validatedSession,
           grantId,
           options.revokedBy,
           options.reason
@@ -216,7 +221,8 @@ export function registerCapabilityCommands(program: Command): void {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
-        const events = await service.getAuditHistory(options.session, {
+        const validatedSession = validateSessionId(options.session);
+        const events = await service.getAuditHistory(validatedSession, {
           limit: options.limit,
           type: options.type,
         });
@@ -252,7 +258,8 @@ export function registerCapabilityCommands(program: Command): void {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
-        await service.resetSession(options.session);
+        const validatedSession = validateSessionId(options.session);
+        await service.resetSession(validatedSession);
         console.log(`All capability grants in session [${options.session}] have been revoked.`);
       } catch (err: unknown) {
         console.error(`Error: ${(err as Error).message}`);
@@ -316,7 +323,8 @@ export function registerCapabilityCommands(program: Command): void {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
         const service = new CapabilityService(new CapabilityPersistence({ workspaceRoot }));
 
-        const grants = await service.applyPreset(options.session, presetName, options.grantedBy, {
+        const validatedSession = validateSessionId(options.session);
+        const grants = await service.applyPreset(validatedSession, presetName, options.grantedBy, {
           paths: options.paths,
           durationHours: options.duration,
         });

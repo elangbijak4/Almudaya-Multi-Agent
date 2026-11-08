@@ -163,7 +163,7 @@ function getSafeDisplayPath(projectRoots: string[], fullPath: string): string {
 
 /**
  * Reads the content of a text file within project roots (or authorized external path).
- * Supports line slicing (1-indexed).
+ * Supports line slicing (1-indexed). Uses descriptor-based operations to prevent TOCTOU (AUD-17).
  */
 export async function executeReadFile(
   projectRoots: string[],
@@ -173,43 +173,50 @@ export async function executeReadFile(
   const fullPath = await resolvePathWithAuthorization(projectRoots, args.path, 'read', context);
   const relPath = getSafeDisplayPath(projectRoots, fullPath);
 
-  const stat = await fs.stat(fullPath);
-  if (stat.isDirectory()) {
-    throw new Error(`Path '${args.path}' is a directory, not a file.`);
+  // Descriptor-based open and read to prevent TOCTOU race condition (AUD-17, REQ-03)
+  const handle = await fs.open(fullPath, 'r');
+  try {
+    const stat = await handle.stat();
+    if (stat.isDirectory()) {
+      throw new Error(`Path '${args.path}' is a directory, not a file.`);
+    }
+
+    if (stat.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
+      throw new FileSizeLimitExceededError(
+        args.path,
+        stat.size,
+        DEFAULT_MAX_FILE_SIZE_BYTES
+      );
+    }
+
+    const rawContent = await handle.readFile({ encoding: 'utf8' });
+    const lines = rawContent.split(/\r?\n/);
+    const totalLines = lines.length;
+
+    const startLine = Math.max(1, args.start_line ?? 1);
+    const endLine = Math.min(totalLines, args.end_line ?? totalLines);
+
+    const selectedLines =
+      startLine > totalLines
+        ? []
+        : lines.slice(startLine - 1, endLine);
+
+    return {
+      path: relPath,
+      content: selectedLines.join('\n'),
+      totalLines,
+      startLine,
+      endLine
+    };
+  } finally {
+    await handle.close();
   }
-
-  if (stat.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
-    throw new FileSizeLimitExceededError(
-      args.path,
-      stat.size,
-      DEFAULT_MAX_FILE_SIZE_BYTES
-    );
-  }
-
-  const rawContent = await fs.readFile(fullPath, 'utf8');
-  const lines = rawContent.split(/\r?\n/);
-  const totalLines = lines.length;
-
-  const startLine = Math.max(1, args.start_line ?? 1);
-  const endLine = Math.min(totalLines, args.end_line ?? totalLines);
-
-  const selectedLines =
-    startLine > totalLines
-      ? []
-      : lines.slice(startLine - 1, endLine);
-
-  return {
-    path: relPath,
-    content: selectedLines.join('\n'),
-    totalLines,
-    startLine,
-    endLine
-  };
 }
 
 /**
  * Atomically writes content to a file inside project roots (or authorized external path).
  * Creates parent directories if they do not exist.
+ * Protects against hardlink boundary escapes by unlinking destination before replacement (AUD-17).
  */
 export async function executeWriteFile(
   projectRoots: string[],
@@ -227,6 +234,19 @@ export async function executeWriteFile(
     throw new FileAlreadyExistsError(relPath);
   }
 
+  // Hardlink defense (AUD-17, REQ-03): if target has nlink > 1, unlink destination first
+  // so that writes break the link rather than mutating external files sharing the same inode.
+  if (exists) {
+    try {
+      const destStat = await fs.stat(fullPath);
+      if (destStat.nlink > 1) {
+        await fs.unlink(fullPath);
+      }
+    } catch {
+      // Ignore stat error if destination disappeared
+    }
+  }
+
   // Atomic write via temporary file
   const tmpPath = path.join(parentDir, `.tmp_${randomUUID()}`);
   await fs.writeFile(tmpPath, args.content, 'utf8');
@@ -234,8 +254,13 @@ export async function executeWriteFile(
   try {
     await fs.rename(tmpPath, fullPath);
   } catch (err: unknown) {
-    // On Windows, rename may fail if target file is locked or exists; fallback to replace
+    // On Windows or cross-link boundaries, rename may fail; safely unlink and copy
     try {
+      try {
+        await fs.unlink(fullPath);
+      } catch {
+        // Destination may not exist
+      }
       await fs.copyFile(tmpPath, fullPath);
       await fs.unlink(tmpPath);
     } catch {
@@ -255,6 +280,7 @@ export async function executeWriteFile(
 
 /**
  * Performs exact string replacement in a sandboxed file atomically.
+ * Uses descriptor-based reading and hardlink-breaking replacement (AUD-17).
  */
 export async function executeEditFile(
   projectRoots: string[],
@@ -264,12 +290,18 @@ export async function executeEditFile(
   const fullPath = await resolvePathWithAuthorization(projectRoots, args.path, 'write', context);
   const relPath = getSafeDisplayPath(projectRoots, fullPath);
 
-  const stat = await fs.stat(fullPath);
-  if (stat.isDirectory()) {
-    throw new Error(`Path '${args.path}' is a directory, not a file.`);
+  // Descriptor-based open and read to prevent TOCTOU (AUD-17, REQ-03)
+  const handle = await fs.open(fullPath, 'r');
+  let originalContent: string;
+  try {
+    const stat = await handle.stat();
+    if (stat.isDirectory()) {
+      throw new Error(`Path '${args.path}' is a directory, not a file.`);
+    }
+    originalContent = await handle.readFile({ encoding: 'utf8' });
+  } finally {
+    await handle.close();
   }
-
-  const originalContent = await fs.readFile(fullPath, 'utf8');
 
   if (!originalContent.includes(args.target)) {
     throw new TargetNotFoundError(args.target, relPath);
@@ -278,6 +310,16 @@ export async function executeEditFile(
   // Count occurrences
   const occurrencesReplaced = originalContent.split(args.target).length - 1;
   const newContent = originalContent.split(args.target).join(args.replacement);
+
+  // Hardlink defense (AUD-17, REQ-03)
+  try {
+    const destStat = await fs.stat(fullPath);
+    if (destStat.nlink > 1) {
+      await fs.unlink(fullPath);
+    }
+  } catch {
+    // ignore
+  }
 
   // Write atomically
   const parentDir = path.dirname(fullPath);
@@ -288,6 +330,11 @@ export async function executeEditFile(
     await fs.rename(tmpPath, fullPath);
   } catch (err: unknown) {
     try {
+      try {
+        await fs.unlink(fullPath);
+      } catch {
+        // Destination may not exist
+      }
       await fs.copyFile(tmpPath, fullPath);
       await fs.unlink(tmpPath);
     } catch {

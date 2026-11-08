@@ -76,31 +76,36 @@ export function getCanonicalPath(rawPath: string): string {
 
 /**
  * Checks whether targetPath is strictly inside (or equal to) rootDirectory.
- * Handles Windows case-insensitivity and prevents root prefix collisions
- * (e.g. /app/project vs /app/project-sibling).
+ * Handles Windows case-insensitivity, preserves POSIX case-sensitivity (AUD-05, REQ-03),
+ * and prevents root prefix collisions (e.g. /app/project vs /app/project-sibling).
  */
-export function isPathInsideRoot(rootDirectory: string, targetPath: string): boolean {
-  const normRoot = normalizeFsPath(rootDirectory);
-  const normTarget = normalizeFsPath(targetPath);
+export function isPathInsideRoot(
+  rootDirectory: string,
+  targetPath: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform === 'win32') {
+    const normRoot = normalizeFsPath(rootDirectory).toLowerCase();
+    const normTarget = normalizeFsPath(targetPath).toLowerCase();
 
-  if (process.platform === 'win32') {
-    const rootLower = normRoot.toLowerCase();
-    const targetLower = normTarget.toLowerCase();
-
-    if (rootLower === targetLower) {
+    if (normRoot === normTarget) {
       return true;
     }
 
-    const rel = path.relative(rootLower, targetLower);
-    return !rel.startsWith('..') && !path.isAbsolute(rel);
+    const rel = path.win32.relative(normRoot, normTarget);
+    return !rel.startsWith('..') && !path.win32.isAbsolute(rel);
   }
+
+  // Case-sensitive platforms (Linux, POSIX) (AUD-05, REQ-03)
+  const normRoot = path.posix.normalize(rootDirectory.replace(/\\/g, '/'));
+  const normTarget = path.posix.normalize(targetPath.replace(/\\/g, '/'));
 
   if (normRoot === normTarget) {
     return true;
   }
 
-  const rel = path.relative(normRoot, normTarget);
-  return !rel.startsWith('..') && !path.isAbsolute(rel);
+  const rel = path.posix.relative(normRoot, normTarget);
+  return !rel.startsWith('..') && !path.posix.isAbsolute(rel);
 }
 
 /**

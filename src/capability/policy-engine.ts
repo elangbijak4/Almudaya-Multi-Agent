@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { CapabilityRegistry } from './registry.js';
 import type { CapabilityGrant, PolicyEvaluationResult } from './schema.js';
+import { isPathInsideRoot } from '../tools/sandbox.js';
 
 export interface PolicyEvaluationRequest {
   capability: string;
@@ -11,6 +12,7 @@ export interface PolicyEvaluationRequest {
   envVars?: string[];
   isTurbo?: boolean;
   enforcementBackendAvailable?: boolean;
+  platform?: NodeJS.Platform;
 }
 
 /**
@@ -153,13 +155,11 @@ export class PolicyEngine {
         }
       }
 
-      // Check path scope
+      // Check path scope (AUD-05, REQ-03)
       if (targetResource && grant.scope.paths && grant.scope.paths.length > 0) {
-        const normTarget = path.resolve(targetResource).toLowerCase();
-        const pathMatches = grant.scope.paths.some((p) => {
-          const normScope = path.resolve(p).toLowerCase();
-          return normTarget === normScope || normTarget.startsWith(normScope + path.sep);
-        });
+        const pathMatches = grant.scope.paths.some((p) =>
+          isPathInsideRoot(p, targetResource, request.platform ?? process.platform)
+        );
         if (!pathMatches) {
           scopeFailureReason = `Path "${targetResource}" is not inside granted path scopes: [${grant.scope.paths.join(', ')}].`;
           continue;

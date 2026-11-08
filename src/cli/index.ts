@@ -5,6 +5,7 @@ import { registerSessionCommands } from './commands/session.js';
 import { registerBotCommands } from './commands/bot.js';
 import { registerMessagingCommands } from './commands/messaging.js';
 import { registerContextCommands } from './commands/context.js';
+import { registerCapabilityCommands } from './commands/capability.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -18,6 +19,7 @@ export function createProgram(): Command {
   registerBotCommands(program);
   registerMessagingCommands(program);
   registerContextCommands(program);
+  registerCapabilityCommands(program);
 
   return program;
 }

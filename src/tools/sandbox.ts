@@ -18,103 +18,19 @@ export class PathTraversalSecurityError extends Error {
   }
 }
 
-/**
- * Allowlist of standard OS environment variables safe to inherit by child processes.
- * Prevents credential exfiltration (Invariant 7, SEC-01, FR-319).
- */
-export const SAFE_ENV_ALLOWLIST = new Set([
-  'PATH',
-  'PATHEXT',
-  'SYSTEMROOT',
-  'WINDIR',
-  'COMSPEC',
-  'TEMP',
-  'TMP',
-  'HOME',
-  'HOMEPATH',
-  'HOMEDRIVE',
-  'USERPROFILE',
-  'APPDATA',
-  'LOCALAPPDATA',
-  'PROGRAMDATA',
-  'PROGRAMFILES',
-  'PROGRAMFILES(X86)',
-  'COMMONPROGRAMFILES',
-  'COMMONPROGRAMFILES(X86)',
-  'ALLUSERSPROFILE',
-  'PUBLIC',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'TERM',
-  'SHELL',
-  'NODE_ENV',
-  'PYTHONPATH',
-  'PYTHONHOME',
-  'PROMPT',
-  'PSMODULEPATH',
-  'NUMBER_OF_PROCESSORS',
-  'PROCESSOR_ARCHITECTURE',
-  'PROCESSOR_IDENTIFIER',
-  'PROCESSOR_LEVEL',
-  'PROCESSOR_REVISION',
-  'OS',
-  'CI',
-  'FORCE_COLOR',
-]);
+import {
+  SAFE_ENV_ALLOWLIST,
+  SENSITIVE_KEY_PATTERNS,
+  sanitizeChildEnv,
+  redactSecrets as redactSensitiveOutput,
+} from '../execution/environment.js';
 
-const SENSITIVE_KEY_PATTERNS = [
-  /KEY/i,
-  /SECRET/i,
-  /TOKEN/i,
-  /AUTH/i,
-  /PASSWORD/i,
-  /PASSWD/i,
-  /CREDENTIAL/i,
-  /PRIVATE/i,
-];
-
-/**
- * Sanitizes the environment for child processes spawned by run_command.
- * Enforces Invariant 7 (Zero credential leakage, FR-319).
- */
-export function sanitizeChildEnv(rawEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const cleanEnv: NodeJS.ProcessEnv = {};
-
-  for (const [key, value] of Object.entries(rawEnv)) {
-    if (value === undefined) continue;
-
-    const upperKey = key.toUpperCase();
-
-    // 1. Must be in the safe allowlist
-    const isAllowlisted = SAFE_ENV_ALLOWLIST.has(upperKey);
-
-    // 2. Must NOT match any sensitive substring pattern
-    const isSensitive = SENSITIVE_KEY_PATTERNS.some((pattern) => pattern.test(key));
-
-    if (isAllowlisted && !isSensitive) {
-      cleanEnv[key] = value;
-    }
-  }
-
-  // Ensure standard execution defaults
-  cleanEnv.FORCE_COLOR = '0';
-  cleanEnv.CI = 'true';
-
-  return cleanEnv;
-}
-
-/**
- * Redacts any detected secrets (e.g. Gemini API keys, GitHub tokens) from command output.
- */
-export function redactSensitiveOutput(text: string): string {
-  if (!text) return text;
-  return text
-    .replace(/AIzaSy[a-zA-Z0-9_\-]{25,}/g, '[REDACTED_API_KEY]')
-    .replace(/AQ\.[a-zA-Z0-9_\-]{25,}/g, '[REDACTED_API_KEY]')
-    .replace(/ghp_[a-zA-Z0-9]{30,}/g, '[REDACTED_TOKEN]')
-    .replace(/github_pat_[a-zA-Z0-9_]{30,}/g, '[REDACTED_TOKEN]');
-}
+export {
+  SAFE_ENV_ALLOWLIST,
+  SENSITIVE_KEY_PATTERNS,
+  sanitizeChildEnv,
+  redactSensitiveOutput,
+};
 
 /**
  * Normalizes an absolute filesystem path for deterministic comparison.

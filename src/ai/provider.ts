@@ -66,6 +66,7 @@ export interface AIRequest {
   tools?: ToolDefinition[];
   temperature?: number;
   maxTokens?: number;
+  signal?: AbortSignal;
 }
 
 export interface AIResponse {

@@ -151,7 +151,7 @@ export class BotService {
   }
 
   /**
-   * Updates a bot's status (active, idle, stopped, failed, stale).
+   * Updates a bot's status (active, idle, stopped, failed, stale) and optional process PID.
    */
   public async updateStatus(
     sessionId: string,
@@ -171,11 +171,30 @@ export class BotService {
 
       const existing = registry.bots[targetIndex]!;
       const now = new Date().toISOString();
+
+      let newPid = existing.pid;
+      let newMetadata = existing.metadata;
+
+      if (metadata) {
+        if ('pid' in metadata && typeof metadata['pid'] === 'number') {
+          newPid = metadata['pid'];
+        }
+        if (metadata['clearPid'] === true) {
+          newPid = undefined;
+        }
+        newMetadata = { ...existing.metadata, ...metadata };
+      }
+
+      if (status === 'stopped' || status === 'failed') {
+        newPid = undefined;
+      }
+
       const updated: BotRecord = {
         ...existing,
         status,
+        pid: newPid,
         last_seen_at: now,
-        metadata: metadata ? { ...existing.metadata, ...metadata } : existing.metadata,
+        metadata: newMetadata,
       };
 
       registry.bots[targetIndex] = updated;

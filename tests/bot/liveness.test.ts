@@ -72,4 +72,25 @@ describe('Bot Liveness & Stale Status Detection (OI-005)', () => {
     const bot = reconciled.find((b) => b.bot_id === 'TIMED_OUT_BOT');
     expect(bot?.status).toBe('stale');
   });
+
+  it('should update PID consistently upon status changes and clear PID when stopped (§19, BP §5.21)', async () => {
+    // 1. Initial registration with PID 11111
+    const registered = await botService.registerBot('S001', {
+      botId: 'LIFECYCLE_BOT',
+      status: 'active',
+      pid: 11111,
+    });
+    expect(registered.pid).toBe(11111);
+
+    // 2. Reactivate with new process PID 22222
+    const reactivated = await botService.updateStatus('S001', 'LIFECYCLE_BOT', 'active', {
+      pid: 22222,
+    });
+    expect(reactivated.pid).toBe(22222);
+
+    // 3. Stop bot -> pid should be cleared
+    const stopped = await botService.updateStatus('S001', 'LIFECYCLE_BOT', 'stopped');
+    expect(stopped.status).toBe('stopped');
+    expect(stopped.pid).toBeUndefined();
+  });
 });

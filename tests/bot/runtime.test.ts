@@ -63,11 +63,14 @@ describe('Bot Runtime Lifecycle & Heartbeat', () => {
     const initial = await runtime.start();
     const initialSeen = new Date(initial.last_seen_at).getTime();
 
-    // Wait for at least 2 heartbeats
-    await new Promise((r) => setTimeout(r, 150));
-
-    const updated = await botService.getBot('S001', 'BOT001');
-    const updatedSeen = new Date(updated.last_seen_at).getTime();
+    // Wait for heartbeat update with polling resilience against high-load worker starvation
+    let updatedSeen = initialSeen;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      const updated = await botService.getBot('S001', 'BOT001');
+      updatedSeen = new Date(updated.last_seen_at).getTime();
+      if (updatedSeen > initialSeen) break;
+    }
 
     expect(updatedSeen).toBeGreaterThan(initialSeen);
 

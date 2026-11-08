@@ -10,6 +10,7 @@ import { BotConsole } from '../../bot/console.js';
 import { GeminiProvider } from '../../ai/gemini.js';
 import { MockAIProvider } from '../../ai/mock-provider.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
+import { ValidationError } from '../../core/errors.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -105,12 +106,34 @@ export function registerBotCommands(program: Command): void {
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const botDisplayName = options.displayName ?? options.name;
         const botDescription = options.role ?? options.description;
+
+        // Numeric argument validation (§19, BP §5.21)
         const heartbeatIntervalMs = options.interval ? parseInt(options.interval, 10) : 2000;
+        if (options.interval && (isNaN(heartbeatIntervalMs) || heartbeatIntervalMs <= 0)) {
+          throw new ValidationError(`Invalid heartbeat interval "${options.interval}". Must be a positive integer.`);
+        }
+
         const maxIter = options.maxIterations ? parseInt(options.maxIterations, 10) : 10;
+        if (options.maxIterations && (isNaN(maxIter) || maxIter <= 0)) {
+          throw new ValidationError(`Invalid max-iterations "${options.maxIterations}". Must be a positive integer.`);
+        }
+
+        // Secret sanitization audit warning (NT-02, REQ-CLI-SECRET-01)
+        if (options.apiKey) {
+          console.warn(
+            '[SECURITY WARNING] Passing secrets via CLI arguments (--api-key) is insecure as it exposes credentials to process listings and shell history. Use the GEMINI_API_KEY environment variable instead (NT-02).'
+          );
+        }
 
         // Configure AI Model Provider (FR-201, FR-202, FR-218)
         let aiProvider: IAIModelProvider | undefined;
         const providerName = options.provider?.toLowerCase();
+
+        if (providerName) {
+          if (!['gemini', 'mock'].includes(providerName)) {
+            throw new ValidationError(`Unknown provider "${options.provider}". Valid providers: "gemini", "mock".`);
+          }
+        }
 
         if (providerName === 'gemini') {
           aiProvider = new GeminiProvider({
@@ -130,6 +153,13 @@ export function registerBotCommands(program: Command): void {
         }
 
         // Configure Safety Execution Mode (FR-213, FR-214, FR-215)
+        if (options.mode) {
+          const modeLower = options.mode.toLowerCase();
+          if (!['review', 'turbo'].includes(modeLower)) {
+            throw new ValidationError(`Unknown execution mode "${options.mode}". Valid modes: "review", "turbo".`);
+          }
+        }
+
         const executionMode: ExecutionMode =
           options.mode?.toLowerCase() === 'turbo' ? 'TURBO' : 'REQUEST_REVIEW';
         const executionModeController = new ExecutionModeController(executionMode);

@@ -15,10 +15,11 @@ import type {
   ToolDefinition,
 } from '../ai/provider.js';
 import { RateLimitPauseError } from '../ai/provider.js';
-import { buildDynamicSystemPrompt } from '../ai/prompts.js';
+import { buildDynamicSystemPrompt, formatUntrustedDirectMessage } from '../ai/prompts.js';
 import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
 import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js';
+import { SEND_MESSAGE_TOOL, executeSendMessage } from '../tools/messaging-tools.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
 import { ExecutionModeController } from './execution-mode.js';
@@ -110,20 +111,34 @@ export class AutonomousAgentLoop {
       recentWorkLogsMarkdown,
     });
 
-    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool)
+    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool + Native Send Message Tool)
     const availableTools: ToolDefinition[] = [
       ...FILE_TOOLS,
       RUN_COMMAND_TOOL,
       GET_WORK_LOG_TOOL,
+      SEND_MESSAGE_TOOL,
     ];
 
-    // 3. Initialize conversation messages
-    const senderName = message.sender_bot_id;
+    // 3. Sender Identity Verification (IDV-01, §18, §5.20)
+    let senderDisplayName = message.sender_bot_id;
+    try {
+      const senderBot = await this.botService.getBot(this.sessionId, message.sender_bot_id);
+      senderDisplayName = senderBot.display_name;
+    } catch {
+      // Retain raw ID if sender bot is not in active registry
+    }
+
+    // Initialize conversation messages with untrusted boundary delimiter (SEC-02, §18, §5.20)
     const conversation: AIMessage[] = [
       {
         role: 'user',
-        content: `[Pesan Masuk dari rekan bot "${senderName}"]: ${message.content}`
-      }
+        content: formatUntrustedDirectMessage(
+          senderDisplayName,
+          message.sender_bot_id,
+          message.timestamp,
+          message.content
+        ),
+      },
     ];
 
     let finalResponseText = '';
@@ -215,7 +230,14 @@ export class AutonomousAgentLoop {
           try {
             let result: unknown;
 
-            if (toolCall.name === 'get_work_log') {
+            if (toolCall.name === 'send_message') {
+              result = await executeSendMessage(
+                this.messagingService,
+                this.sessionId,
+                this.botId,
+                toolCall.arguments
+              );
+            } else if (toolCall.name === 'get_work_log') {
               result = await executeGetWorkLog(
                 this.storage,
                 this.sessionId,
@@ -233,7 +255,12 @@ export class AutonomousAgentLoop {
                     ? toolCall.arguments['working_dir']
                     : undefined
               };
-              const cmdResult = await executeRunCommand(projectRootPaths, cmdArgs);
+              const cmdResult = await executeRunCommand(projectRootPaths, cmdArgs, {
+                sessionId: this.sessionId,
+                botId: this.botId,
+                botDisplayName: currentBot.display_name,
+                isTurbo: this.executionModeController.getMode() === 'TURBO',
+              });
               result = cmdResult;
 
               // Automatic Work Log Recording (FR-313, ADR-302)
@@ -253,7 +280,13 @@ export class AutonomousAgentLoop {
               result = await executeFileTool(
                 projectRootPaths,
                 toolCall.name,
-                toolCall.arguments
+                toolCall.arguments,
+                {
+                  sessionId: this.sessionId,
+                  botId: this.botId,
+                  botDisplayName: currentBot.display_name,
+                  isTurbo: this.executionModeController.getMode() === 'TURBO',
+                }
               );
 
               // Automatic Work Log Recording for file mutations (FR-313, ADR-302)
@@ -367,7 +400,7 @@ export class AutonomousAgentLoop {
           category: 'DECISION',
           content: message.sender_bot_id === 'OPERATOR'
             ? `Bot "${currentBot.display_name}" menyelesaikan instruksi operator.`
-            : `Bot "${currentBot.display_name}" menyelesaikan tugas dari "${senderName}".`,
+            : `Bot "${currentBot.display_name}" menyelesaikan tugas dari "${senderDisplayName}".`,
           metadata: {
             replyToMessageId: message.message_id,
             iterations: iteration

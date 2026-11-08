@@ -1,10 +1,6 @@
-import { spawn } from 'node:child_process';
 import type { ToolDefinition } from '../ai/provider.js';
-import {
-  validateSandboxedPath,
-  sanitizeChildEnv,
-  redactSensitiveOutput
-} from './sandbox.js';
+import { ExecutionController } from '../execution/controller.js';
+import type { ExecutionContext, CommandExecutionRequest } from '../execution/types.js';
 
 export interface RunCommandArgs {
   command: string;
@@ -19,107 +15,35 @@ export interface RunCommandResult {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  isolationType?: string;
+  deniedByPolicy?: boolean;
 }
 
-const DEFAULT_TIMEOUT_MS = 30000;
-const MAX_OUTPUT_BYTES = 1024 * 1024; // 1 MB cap to prevent buffer explosion
-
 /**
- * Executes a shell command inside the sandboxed project root.
- * Captures stdout, stderr, exit code, and enforces execution timeout.
+ * Executes a shell command inside the sandboxed project root via central ExecutionController.
+ * Enforces ACG authorization, environment sanitization, OS isolation, timeout, and output redaction.
  */
 export async function executeRunCommand(
   projectRoots: string[],
-  args: RunCommandArgs
+  args: RunCommandArgs,
+  context?: Partial<ExecutionContext>
 ): Promise<RunCommandResult> {
-  const workingDirArg = args.working_dir || '.';
-  const resolvedWorkingDir = validateSandboxedPath(projectRoots, workingDirArg);
+  const controller = ExecutionController.getInstance();
+  const execContext: ExecutionContext = {
+    projectRoots,
+    sessionId: context?.sessionId,
+    botId: context?.botId,
+    botDisplayName: context?.botDisplayName,
+    isTurbo: context?.isTurbo,
+  };
 
-  const timeoutMs = Math.max(1000, args.timeout_ms ?? DEFAULT_TIMEOUT_MS);
-  const startTime = Date.now();
+  const execRequest: CommandExecutionRequest = {
+    command: args.command,
+    workingDir: args.working_dir,
+    timeoutMs: args.timeout_ms,
+  };
 
-  return new Promise<RunCommandResult>((resolve, reject) => {
-    let stdoutBuffer = '';
-    let stderrBuffer = '';
-    let timedOut = false;
-    let timer: NodeJS.Timeout | null = null;
-
-    // Use platform-appropriate shell execution
-    const isWin = process.platform === 'win32';
-    const shellExecutable = isWin
-      ? process.env.COMSPEC || 'cmd.exe'
-      : '/bin/sh';
-
-    const shellArgs = isWin
-      ? ['/d', '/s', '/c', args.command]
-      : ['-c', args.command];
-
-    let child;
-    try {
-      child = spawn(shellExecutable, shellArgs, {
-        cwd: resolvedWorkingDir,
-        env: sanitizeChildEnv(process.env),
-        windowsVerbatimArguments: isWin,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-    } catch (err) {
-      return reject(err);
-    }
-
-    timer = setTimeout(() => {
-      timedOut = true;
-      if (child.pid) {
-        if (isWin) {
-          // On Windows, use taskkill to terminate process tree cleanly
-          try {
-            spawn('taskkill', ['/pid', child.pid.toString(), '/T', '/F'], {
-              windowsHide: true,
-              stdio: 'ignore'
-            });
-          } catch {
-            child.kill('SIGKILL');
-          }
-        } else {
-          try {
-            child.kill('SIGKILL');
-          } catch {
-            // Process might already be dead
-          }
-        }
-      }
-    }, timeoutMs);
-
-    child.stdout.on('data', (data: Buffer) => {
-      if (stdoutBuffer.length < MAX_OUTPUT_BYTES) {
-        stdoutBuffer += data.toString('utf8');
-      }
-    });
-
-    child.stderr.on('data', (data: Buffer) => {
-      if (stderrBuffer.length < MAX_OUTPUT_BYTES) {
-        stderrBuffer += data.toString('utf8');
-      }
-    });
-
-    child.on('error', (err) => {
-      if (timer) clearTimeout(timer);
-      reject(err);
-    });
-
-    child.on('close', (exitCode) => {
-      if (timer) clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-
-      resolve({
-        command: args.command,
-        exitCode: timedOut ? null : exitCode,
-        stdout: redactSensitiveOutput(stdoutBuffer.trim()),
-        stderr: redactSensitiveOutput(stderrBuffer.trim()),
-        durationMs,
-        timedOut
-      });
-    });
-  });
+  return await controller.executeCommand(execContext, execRequest);
 }
 
 // ============================================================================

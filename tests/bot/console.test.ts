@@ -382,4 +382,45 @@ describe('Interactive Bot Console REPL (FR-301..310, FR-317, FR-318, ADR-301)', 
       await botConsole.stop();
     });
   });
+
+  describe('REPL Non-Reentrancy and FIFO Input Ordering (PERF-01, §19, BP §5.21)', () => {
+    it('should process multiple consecutive input lines sequentially in FIFO order without reentrancy', async () => {
+      const processed: string[] = [];
+      const botConsole = new BotConsole({
+        runtime,
+        storage,
+        inputStream,
+        outputStream,
+      });
+
+      // Spy on dispatchSlashCommand to simulate async processing delay
+      const originalDispatch = botConsole.dispatchSlashCommand.bind(botConsole);
+      vi.spyOn(botConsole, 'dispatchSlashCommand').mockImplementation(async (line: string) => {
+        processed.push(`start:${line}`);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        processed.push(`end:${line}`);
+        return originalDispatch(line);
+      });
+
+      await botConsole.start();
+
+      // Feed multiple lines rapidly into input stream
+      inputStream.write('/mode\n/status\n/mode\n');
+
+      // Wait for all lines to be processed
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      // Each command must start and end before the next command starts (strict serial execution)
+      expect(processed).toEqual([
+        'start:/mode',
+        'end:/mode',
+        'start:/status',
+        'end:/status',
+        'start:/mode',
+        'end:/mode',
+      ]);
+
+      await botConsole.stop();
+    });
+  });
 });

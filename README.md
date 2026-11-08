@@ -1,14 +1,53 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.1)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.2)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 201 Passed](https://img.shields.io/badge/Tests-201%20Passed-brightgreen.svg)](./docs/docs_v0.3.1/10_PHASE_GATES/PHASE_6_VERIFICATION_GATE.md)
+[![Tests: 295 Passed](https://img.shields.io/badge/Tests-295%20Passed-brightgreen.svg)](./docs/docs_v0.3.2/docs/remediation/v0.3.2/FINAL_VERIFICATION_REPORT.md)
 [![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Interactive All-in-One Bot Console REPL**, **Cross-Root Location-Aware Session Work Memory**, and **Hardened Security & Reliability Isolation**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, and **Cross-Root Location-Aware Session Work Memory**.
 
-Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases.
+Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.2 (Security & Concurrency Hardening)
+
+1. **Agent Capability Governance (ACG) (`SEC-03`, `ADR-001`):**
+   - Central default-deny authorization engine governing all sensitive operations (filesystem, process execution, environment, process control, and network).
+   - Scoped, expiring, and auditable capability grants (`almudaya capability grant / revoke / list / inspect`).
+   - Four pre-packaged security presets: `restricted`, `controlled`, `extended`, and `unrestricted`.
+   - Explicit operator approval workflows (`PER_ACTION`, `SESSION`, `TIMED`).
+   - **TURBO is an execution mode, not a security privilege:** TURBO skips manual confirmations for already-granted capabilities, but strictly cannot bypass missing or denied capabilities.
+
+2. **Execution Enforcement & OS Isolation (`SEC-03`, `ADR-002`, `ADR-003`):**
+   - Central 9-step `ExecutionController` pipeline mediating all sensitive execution requests.
+   - OS-level process boundary enforcement via Windows Job Objects (process tree containment) and Linux namespaces, with fail-closed denial for unsupported environments.
+   - Refactored command tools (`run_command`) and file tools (`write_file`, `edit_file`) ensuring zero direct shell bypasses.
+
+3. **Distributed Locking Hardening (`CONC-01`):**
+   - Cryptographically random ownership tokens (`owner_id`), monotonic fencing tokens, and process-aware lease renewal preventing stale lock hijack and split-brain states.
+
+4. **Transactional Inbox Delivery State Machine (`RELIA-01`, `ADR-004`):**
+   - Multi-state lifecycle (`RECEIVED -> PROCESSING -> COMPLETED | RETRY_PENDING | DEAD_LETTER`).
+   - Atomic storage leases, attempt counters, poison-pill dead-letter queue, and automatic recovery of expired leases from crashed workers.
+   - Publisher idempotency keys preventing duplicate message submission upon retries.
+
+5. **Native Typed Messaging Tool (`NT-03`, `IDV-01`):**
+   - Autonomous agent reasoning loop includes native `send_message` tool communicating directly via Blackboard without shell or CLI workarounds.
+   - Sender identity derived exclusively from trusted runtime execution context, preventing model-supplied sender forgery.
+
+6. **Prompt Injection & Trust Boundary Defense (`SEC-02`):**
+   - Peer messages, work logs, and external documents are enclosed within explicit delimiter tags (`<<<UNTRUSTED_*>>>`).
+   - Active sender authentication verified against the session bot registry.
+
+7. **AI Provider Reliability & Retry Hardening (`NT-01`):**
+   - Error classification distinguishing retryable transient errors (`RATE_LIMIT`, `TRANSIENT`) from permanent fail-fast errors (`AUTH`, `CLIENT`).
+   - Strictly respects server `RetryInfo` delays (e.g. 39 seconds preserved in `RateLimitPauseError`, never truncated).
+   - Bounded exponential backoff with randomized jitter, overall total retry deadlines, and cancellation via `AbortSignal`.
+   - Non-reentrant REPL line processing queue ensuring strict FIFO command execution (`PERF-01`).
+   - CLI security warning on `--api-key` recommending secure `GEMINI_API_KEY` environment injection (`NT-02`).
 
 ---
 
@@ -187,6 +226,12 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 | `almudaya context root add\|list` | Manage shared project directory roots |
 | `almudaya context env set\|list` | Store environment configuration with secret redaction |
 | `almudaya context doc add\|list` | Catalog SDLC document references |
+| `almudaya capability list --session <id>` | List all active, expired, and revoked capability grants |
+| `almudaya capability inspect <grantId>` | Inspect granular capability grant details |
+| `almudaya capability grant <capability>` | Issue a scoped capability grant (`--session`, `--bot`, `--scope`) |
+| `almudaya capability revoke <grantId>` | Revoke an active capability grant |
+| `almudaya capability history --session <id>` | View structured append-only capability audit events |
+| `almudaya capability preset list\|show\|apply` | Inspect and apply pre-packaged capability security presets |
 
 All commands accept `--json` for machine readability and `--workspace <path>` to override the storage root.
 
@@ -207,7 +252,7 @@ npm run build
 npm pack --dry-run
 ```
 
-- **18 Test Suites / 77 Tests:** 100% passing across all modules.
+- **44 Test Suites / 295 Tests:** 100% passing across all modules (201 baseline + 94 v0.3.2 hardening tests).
 - **Independent Multi-Process Testing:** Validated with real spawned Node.js child processes for concurrent joins, message appends, and process crash recovery.
 - **Two-Terminal E2E Acceptance:** Validates the complete 12-step Proof of Concept specified in `MASTER_PROMPT.md` Section 10.
 

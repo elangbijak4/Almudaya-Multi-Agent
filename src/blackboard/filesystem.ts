@@ -39,7 +39,6 @@ import {
   SessionAlreadyExistsError,
   SessionNotFoundError,
   BotNotFoundError,
-  CorruptedDataError,
 } from '../core/errors.js';
 import {
   ensureDir,
@@ -48,6 +47,7 @@ import {
   readJsonValidated,
 } from '../core/fs-utils.js';
 import { withLock } from '../core/lock.js';
+import { readJsonlFile } from '../core/jsonl.js';
 import { getSessionDir, getSessionsBaseDir } from '../core/config.js';
 
 export class FilesystemSessionStorage implements IBlackboardStorage {
@@ -294,28 +294,12 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     }
 
     const broadcastFile = this.getBroadcastFilePath(validId);
-    if (!(await pathExists(broadcastFile))) {
-      return [];
-    }
-
-    const content = await fs.readFile(broadcastFile, 'utf-8');
-    const lines = content.split('\n').filter((l) => l.trim().length > 0);
-    const events: BroadcastEvent[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      try {
-        const parsed = JSON.parse(line);
-        events.push(BroadcastEventSchema.parse(parsed));
-      } catch (err: unknown) {
-        throw new CorruptedDataError(
-          broadcastFile,
-          `Invalid JSONL record at line ${i + 1}: ${(err as Error).message}`
-        );
-      }
-    }
-
-    return events;
+    const quarantineFile = path.join(this.getSessionDir(validId), 'broadcast', 'events.corrupt.jsonl');
+    const result = await readJsonlFile(broadcastFile, BroadcastEventSchema, {
+      strict: false,
+      quarantineFilePath: quarantineFile,
+    });
+    return result.records;
   }
 
   public async getBroadcastCursor(sessionId: string, botId: string): Promise<BroadcastCursor> {
@@ -494,27 +478,11 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     }
 
     const workLogFile = this.getWorkLogFilePath(validId);
-    if (!(await pathExists(workLogFile))) {
-      return [];
-    }
-
-    const content = await fs.readFile(workLogFile, 'utf-8');
-    const lines = content.split('\n').filter((l) => l.trim().length > 0);
-    const entries: WorkLogEntry[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      try {
-        const parsed = JSON.parse(line);
-        entries.push(WorkLogEntrySchema.parse(parsed));
-      } catch (err: unknown) {
-        throw new CorruptedDataError(
-          workLogFile,
-          `Invalid JSONL record at line ${i + 1}: ${(err as Error).message}`
-        );
-      }
-    }
-
-    return entries;
+    const quarantineFile = path.join(this.getSessionDir(validId), 'work_log.corrupt.jsonl');
+    const result = await readJsonlFile(workLogFile, WorkLogEntrySchema, {
+      strict: true,
+      quarantineFilePath: quarantineFile,
+    });
+    return result.records;
   }
 }

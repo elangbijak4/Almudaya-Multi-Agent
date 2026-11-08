@@ -3,9 +3,14 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '../ai/provider.js';
+import { ExecutionController } from '../execution/controller.js';
+import type { ExecutionContext } from '../execution/types.js';
 import {
   validateSandboxedPath,
-  getRelativeSandboxedPath
+  getRelativeSandboxedPath,
+  getCanonicalPath,
+  isPathInsideRoot,
+  PathTraversalSecurityError,
 } from './sandbox.js';
 
 export class FileAlreadyExistsError extends Error {
@@ -112,15 +117,61 @@ export interface SearchFilesResult {
 }
 
 /**
- * Reads the content of a text file within project roots.
+ * Authorizes path access: if inside projectRoots, uses sandbox validation.
+ * If outside projectRoots, evaluates against ACG external filesystem capabilities.
+ */
+async function resolvePathWithAuthorization(
+  projectRoots: string[],
+  requestedPath: string,
+  operation: 'read' | 'write' | 'delete',
+  context?: Partial<ExecutionContext>
+): Promise<string> {
+  try {
+    return validateSandboxedPath(projectRoots, requestedPath);
+  } catch (err: unknown) {
+    if (err instanceof PathTraversalSecurityError) {
+      // If outside project roots, evaluate against ACG policy if session context exists
+      if (!context || !context.sessionId) {
+        throw err;
+      }
+
+      const normPath = getCanonicalPath(requestedPath);
+      const controller = ExecutionController.getInstance();
+      await controller.authorizeFileAccess(
+        {
+          projectRoots,
+          sessionId: context.sessionId,
+          botId: context.botId,
+          botDisplayName: context.botDisplayName,
+          isTurbo: context.isTurbo,
+        },
+        {
+          targetPath: normPath,
+          operation,
+        }
+      );
+      return normPath;
+    }
+    throw err;
+  }
+}
+
+function getSafeDisplayPath(projectRoots: string[], fullPath: string): string {
+  const isInside = projectRoots.some((root) => isPathInsideRoot(root, fullPath));
+  return isInside ? getRelativeSandboxedPath(projectRoots, fullPath) : fullPath;
+}
+
+/**
+ * Reads the content of a text file within project roots (or authorized external path).
  * Supports line slicing (1-indexed).
  */
 export async function executeReadFile(
   projectRoots: string[],
-  args: ReadFileArgs
+  args: ReadFileArgs,
+  context?: Partial<ExecutionContext>
 ): Promise<ReadFileResult> {
-  const fullPath = validateSandboxedPath(projectRoots, args.path);
-  const relPath = getRelativeSandboxedPath(projectRoots, fullPath);
+  const fullPath = await resolvePathWithAuthorization(projectRoots, args.path, 'read', context);
+  const relPath = getSafeDisplayPath(projectRoots, fullPath);
 
   const stat = await fs.stat(fullPath);
   if (stat.isDirectory()) {
@@ -157,15 +208,16 @@ export async function executeReadFile(
 }
 
 /**
- * Atomically writes content to a file inside project roots.
+ * Atomically writes content to a file inside project roots (or authorized external path).
  * Creates parent directories if they do not exist.
  */
 export async function executeWriteFile(
   projectRoots: string[],
-  args: WriteFileArgs
+  args: WriteFileArgs,
+  context?: Partial<ExecutionContext>
 ): Promise<WriteFileResult> {
-  const fullPath = validateSandboxedPath(projectRoots, args.path);
-  const relPath = getRelativeSandboxedPath(projectRoots, fullPath);
+  const fullPath = await resolvePathWithAuthorization(projectRoots, args.path, 'write', context);
+  const relPath = getSafeDisplayPath(projectRoots, fullPath);
 
   const parentDir = path.dirname(fullPath);
   await fs.mkdir(parentDir, { recursive: true });
@@ -206,10 +258,11 @@ export async function executeWriteFile(
  */
 export async function executeEditFile(
   projectRoots: string[],
-  args: EditFileArgs
+  args: EditFileArgs,
+  context?: Partial<ExecutionContext>
 ): Promise<EditFileResult> {
-  const fullPath = validateSandboxedPath(projectRoots, args.path);
-  const relPath = getRelativeSandboxedPath(projectRoots, fullPath);
+  const fullPath = await resolvePathWithAuthorization(projectRoots, args.path, 'write', context);
+  const relPath = getSafeDisplayPath(projectRoots, fullPath);
 
   const stat = await fs.stat(fullPath);
   if (stat.isDirectory()) {
@@ -253,11 +306,12 @@ export async function executeEditFile(
  */
 export async function executeListDir(
   projectRoots: string[],
-  args: ListDirArgs = {}
+  args: ListDirArgs = {},
+  context?: Partial<ExecutionContext>
 ): Promise<ListDirResult> {
   const requested = args.path || '.';
-  const fullPath = validateSandboxedPath(projectRoots, requested);
-  const relRoot = getRelativeSandboxedPath(projectRoots, fullPath);
+  const fullPath = await resolvePathWithAuthorization(projectRoots, requested, 'read', context);
+  const relRoot = getSafeDisplayPath(projectRoots, fullPath);
 
   const maxDepth = args.max_depth ?? 5;
   const entries: DirEntry[] = [];
@@ -314,10 +368,11 @@ export async function executeListDir(
  */
 export async function executeSearchFiles(
   projectRoots: string[],
-  args: SearchFilesArgs
+  args: SearchFilesArgs,
+  context?: Partial<ExecutionContext>
 ): Promise<SearchFilesResult> {
   const requested = args.path || '.';
-  const fullPath = validateSandboxedPath(projectRoots, requested);
+  const fullPath = await resolvePathWithAuthorization(projectRoots, requested, 'read', context);
   const matches: SearchMatch[] = [];
   const patternLower = args.pattern.toLowerCase();
 
@@ -520,7 +575,8 @@ export const FILE_TOOLS: ToolDefinition[] = [
 export async function executeFileTool(
   projectRoots: string[],
   toolName: string,
-  rawArgs: Record<string, unknown>
+  rawArgs: Record<string, unknown>,
+  context?: Partial<ExecutionContext>
 ): Promise<unknown> {
   switch (toolName) {
     case 'read_file': {
@@ -535,7 +591,7 @@ export async function executeFileTool(
             ? rawArgs['end_line']
             : undefined
       };
-      return await executeReadFile(projectRoots, args);
+      return await executeReadFile(projectRoots, args, context);
     }
 
     case 'write_file': {
@@ -544,7 +600,7 @@ export async function executeFileTool(
         content: String(rawArgs['content'] ?? ''),
         overwrite: Boolean(rawArgs['overwrite'])
       };
-      return await executeWriteFile(projectRoots, args);
+      return await executeWriteFile(projectRoots, args, context);
     }
 
     case 'edit_file': {
@@ -553,7 +609,7 @@ export async function executeFileTool(
         target: String(rawArgs['target'] ?? ''),
         replacement: String(rawArgs['replacement'] ?? '')
       };
-      return await executeEditFile(projectRoots, args);
+      return await executeEditFile(projectRoots, args, context);
     }
 
     case 'list_dir': {
@@ -561,7 +617,7 @@ export async function executeFileTool(
         path: rawArgs['path'] ? String(rawArgs['path']) : undefined,
         recursive: Boolean(rawArgs['recursive'])
       };
-      return await executeListDir(projectRoots, args);
+      return await executeListDir(projectRoots, args, context);
     }
 
     case 'search_files': {
@@ -569,7 +625,7 @@ export async function executeFileTool(
         pattern: String(rawArgs['pattern'] ?? ''),
         path: rawArgs['path'] ? String(rawArgs['path']) : undefined
       };
-      return await executeSearchFiles(projectRoots, args);
+      return await executeSearchFiles(projectRoots, args, context);
     }
 
     default:

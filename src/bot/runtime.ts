@@ -30,6 +30,7 @@ export class BotRuntime {
   private readonly messagingService: MessagingService;
 
   private isRunning: boolean = false;
+  private pollInFlight: boolean = false;
   private heartbeatTimer?: NodeJS.Timeout;
   private pollTimer?: NodeJS.Timeout;
   private signalCleanup?: () => void;
@@ -137,12 +138,15 @@ export class BotRuntime {
 
   /**
    * Internal poll cycle for consuming broadcasts and direct messages.
+   * Single-flight execution prevents intra-process reentrancy (PERF-01).
+   * Storage-level leases prevent inter-process duplicate claims (RELIA-01, ADR-004).
    */
   public async pollCycle(): Promise<void> {
-    if (!this.isRunning) return;
+    if (!this.isRunning || this.pollInFlight) return;
+    this.pollInFlight = true;
 
     try {
-      // Read new broadcasts with cursor
+      // 1. Read new broadcasts with cursor
       const broadcasts = await this.messagingService.readBroadcasts(this.sessionId, {
         botId: this.botId,
         autoAdvanceCursor: true,
@@ -154,28 +158,53 @@ export class BotRuntime {
         }
       }
 
-      // Read unread messages in inbox without marking them as read upfront (RELIA-01, FR-321)
-      const unreadMessages = await this.messagingService.readInbox(this.sessionId, this.botId, {
-        status: 'unread',
-        markAsRead: false,
-      });
+      // 2. Recover any expired leases from crashed workers
+      await this.messagingService.delivery.recoverExpiredLeases(this.sessionId, this.botId);
 
-      for (const msg of unreadMessages) {
-        if (this.onMessageCallback) {
-          await this.onMessageCallback(msg);
-        }
-        // ONLY mark as read and acknowledge after processing finishes with success (At-Least-Once Delivery)
-        await this.messagingService.markMessagesAsRead(this.sessionId, this.botId, [msg.message_id]);
-        if (this.autoAcknowledge) {
-          await this.messagingService.acknowledgeMessage(
+      // 3. Atomically claim and process messages via delivery state machine
+      const consumerId = `${this.botId}:pid-${process.pid}`;
+      const processedInThisCycle: string[] = [];
+      let msg: DirectMessage | null = null;
+
+      while (this.isRunning) {
+        msg = await this.messagingService.delivery.claimNextMessage(
+          this.sessionId,
+          this.botId,
+          consumerId,
+          undefined,
+          processedInThisCycle
+        );
+        if (!msg) break;
+        processedInThisCycle.push(msg.message_id);
+
+        try {
+          if (this.onMessageCallback) {
+            await this.onMessageCallback(msg);
+          }
+
+          // Complete message only after consumer callback succeeds
+          await this.messagingService.delivery.completeMessage(
             this.sessionId,
             this.botId,
-            msg.message_id
+            msg.message_id,
+            consumerId
+          );
+        } catch (err: unknown) {
+          // Transition to RETRY_PENDING or DEAD_LETTER without dropping message
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await this.messagingService.delivery.failMessage(
+            this.sessionId,
+            this.botId,
+            msg.message_id,
+            errMsg,
+            consumerId
           );
         }
       }
     } catch {
       // Polling errors are absorbed to keep runtime alive
+    } finally {
+      this.pollInFlight = false;
     }
   }
 

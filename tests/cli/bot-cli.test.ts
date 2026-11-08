@@ -5,6 +5,7 @@ import os from 'node:os';
 import { createProgram } from '../../src/cli/index.js';
 import { FilesystemSessionStorage } from '../../src/blackboard/filesystem.js';
 import { SessionService } from '../../src/session/service.js';
+import { BotConsole } from '../../src/bot/console.js';
 
 describe('CLI Bot Commands', () => {
   let tmpWorkspace: string;
@@ -214,5 +215,113 @@ describe('CLI Bot Commands', () => {
     expect(optionNames).toContain('model');
     expect(optionNames).toContain('mode');
     expect(optionNames).toContain('max-iterations');
+  });
+
+  it('should emit a security warning when --api-key is passed via CLI argv (NT-02, REQ-CLI-SECRET-01)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(BotConsole.prototype, 'start').mockImplementation(async function (this: BotConsole) {
+      await this.stop();
+    });
+
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'bot',
+      'run',
+      '--session',
+      'S001',
+      '--bot',
+      'BOT_SEC_01',
+      '-w',
+      tmpWorkspace,
+      '--provider',
+      'mock',
+      '--api-key',
+      'AIzaSyTestExposedKey123',
+    ]);
+
+    const warnings = warnSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(warnings).toContain('[SECURITY WARNING]');
+    expect(warnings).toContain('--api-key');
+    expect(warnings).toContain('GEMINI_API_KEY');
+
+    warnSpy.mockRestore();
+    consoleSpy.mockRestore();
+  });
+
+  it('should reject invalid provider enum with error (CLI validation, §19)', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'bot',
+      'run',
+      '--session',
+      'S001',
+      '--bot',
+      'BOT_INVALID_PROV',
+      '-w',
+      tmpWorkspace,
+      '--provider',
+      'unknown-provider-xyz',
+    ]);
+
+    const errors = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toContain('Unknown provider "unknown-provider-xyz"');
+  });
+
+  it('should reject invalid execution mode with error (CLI validation, §19)', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'bot',
+      'run',
+      '--session',
+      'S001',
+      '--bot',
+      'BOT_INVALID_MODE',
+      '-w',
+      tmpWorkspace,
+      '--provider',
+      'mock',
+      '--mode',
+      'unrestricted_invalid',
+    ]);
+
+    const errors = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toContain('Unknown execution mode "unrestricted_invalid"');
+  });
+
+  it('should reject non-positive numeric interval with error (CLI validation, §19)', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'almudaya',
+      'bot',
+      'run',
+      '--session',
+      'S001',
+      '--bot',
+      'BOT_INVALID_INT',
+      '-w',
+      tmpWorkspace,
+      '--provider',
+      'mock',
+      '--interval',
+      '-500',
+    ]);
+
+    const errors = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(errors).toContain('Invalid heartbeat interval "-500"');
   });
 });

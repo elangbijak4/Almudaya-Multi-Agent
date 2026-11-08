@@ -47,6 +47,8 @@ export class BotConsole {
   private rl?: readline.Interface;
   private closed: boolean = false;
   private isAskingQuestion: boolean = false;
+  private isProcessingInput: boolean = false;
+  private readonly inputQueue: string[] = [];
 
   private readonly onExitCallback?: () => Promise<void>;
   private readonly botService: BotService;
@@ -104,9 +106,20 @@ export class BotConsole {
 
     this.rl.on('line', async (line: string) => {
       if (this.isAskingQuestion || this.closed) return;
-      await this.handleInput(line);
-      if (!this.closed && !this.isAskingQuestion && this.rl) {
-        this.rl.prompt();
+      this.inputQueue.push(line);
+      if (this.isProcessingInput) return;
+
+      this.isProcessingInput = true;
+      try {
+        while (this.inputQueue.length > 0 && !this.closed && !this.isAskingQuestion) {
+          const nextLine = this.inputQueue.shift()!;
+          await this.handleInput(nextLine);
+        }
+      } finally {
+        this.isProcessingInput = false;
+        if (!this.closed && !this.isAskingQuestion && this.rl) {
+          this.rl.prompt();
+        }
       }
     });
 
@@ -405,16 +418,24 @@ export class BotConsole {
 
     this.writeLine(`🤖 [${this.botDisplayName}] Memproses instruksi operator: "${line}"...`);
     try {
+      const nowIso = new Date().toISOString();
       const syntheticMsg: DirectMessage = {
         message_id: generateMessageId(),
         session_id: this.sessionId,
         sender_bot_id: 'OPERATOR',
         recipient_bot_id: this.botId,
-        timestamp: new Date().toISOString(),
+        timestamp: nowIso,
         message_type: 'DIRECT',
         content: line,
         status: 'read',
         metadata: { source: 'console_repl' },
+        delivery_state: 'PROCESSING',
+        attempt_count: 1,
+        max_attempts: 1,
+        lease_owner: `operator-repl:${this.botId}`,
+        lease_expires_at: null,
+        last_attempt_at: nowIso,
+        last_error: null,
       };
 
       const reply = await this.agentLoop.handleMessage(syntheticMsg);

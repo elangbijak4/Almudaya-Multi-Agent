@@ -40,7 +40,25 @@ export const DirectMessageTypeSchema = z.enum([
 ]);
 export type DirectMessageType = z.infer<typeof DirectMessageTypeSchema>;
 
-export const MessageStatusSchema = z.enum(['unread', 'read', 'acknowledged']);
+export const InboxDeliveryStateSchema = z.enum([
+  'RECEIVED',
+  'PROCESSING',
+  'COMPLETED',
+  'RETRY_PENDING',
+  'DEAD_LETTER',
+]);
+export type InboxDeliveryState = z.infer<typeof InboxDeliveryStateSchema>;
+
+export const MessageStatusSchema = z.enum([
+  'unread',
+  'read',
+  'acknowledged',
+  'RECEIVED',
+  'PROCESSING',
+  'COMPLETED',
+  'RETRY_PENDING',
+  'DEAD_LETTER',
+]);
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
 export const DirectMessageSchema = z.object({
@@ -55,6 +73,16 @@ export const DirectMessageSchema = z.object({
   read_at: z.string().datetime().optional(),
   acknowledged_at: z.string().datetime().optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
+
+  // Phase 4 Inbox Delivery State Machine (RELIA-01, ADR-004, §13.1, §5.14)
+  delivery_state: InboxDeliveryStateSchema.default('RECEIVED'),
+  attempt_count: z.number().int().nonnegative().default(0),
+  max_attempts: z.number().int().positive().default(3),
+  lease_owner: z.string().nullable().optional().default(null),
+  lease_expires_at: z.string().datetime().nullable().optional().default(null),
+  last_attempt_at: z.string().datetime().nullable().optional().default(null),
+  last_error: z.string().nullable().optional().default(null),
+  idempotency_key: z.string().optional(),
 });
 export type DirectMessage = z.infer<typeof DirectMessageSchema>;
 
@@ -89,11 +117,14 @@ export interface SendDirectMessageInput {
   messageType?: DirectMessageType;
   content: string;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string;
+  maxAttempts?: number;
 }
 
 export interface ReadInboxOptions {
   markAsRead?: boolean;
   status?: MessageStatus;
+  deliveryState?: InboxDeliveryState;
   limit?: number;
 }
 

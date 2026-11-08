@@ -13,14 +13,18 @@ import {
   generateMessageId,
 } from './schema.js';
 import { MessageNotFoundError } from '../core/errors.js';
+import { InboxDeliveryService } from './delivery.js';
+import { DEFAULT_MAX_ATTEMPTS } from './inbox-state.js';
 
 export class MessagingService {
   private readonly storage: IBlackboardStorage;
   private readonly botService: BotService;
+  public readonly delivery: InboxDeliveryService;
 
   constructor(storage: IBlackboardStorage, botService?: BotService) {
     this.storage = storage;
     this.botService = botService ?? new BotService(storage);
+    this.delivery = new InboxDeliveryService(storage, this.botService);
   }
 
   /**
@@ -120,6 +124,7 @@ export class MessagingService {
   /**
    * Sends a direct message to a recipient bot.
    * Resolves recipient display name to stable Bot ID before storage.
+   * Supports publisher idempotency keys (§13.3, §5.14).
    */
   public async sendDirectMessage(
     sessionId: string,
@@ -128,20 +133,44 @@ export class MessagingService {
     // Resolve recipient (display name or Bot ID) to canonical stable Bot ID
     const recipientBotId = await this.botService.resolveBotId(sessionId, input.recipient);
 
-    const message: DirectMessage = {
-      message_id: generateMessageId(),
-      session_id: sessionId,
-      sender_bot_id: input.senderBotId.trim(),
-      recipient_bot_id: recipientBotId,
-      timestamp: new Date().toISOString(),
-      message_type: input.messageType ?? 'DIRECT',
-      content: input.content.trim(),
-      status: 'unread',
-      metadata: input.metadata ?? {},
-    };
+    return await this.storage.withSessionLock(sessionId, async () => {
+      const inbox = await this.storage.getInbox(sessionId, recipientBotId);
 
-    await this.storage.appendMessageToInbox(sessionId, recipientBotId, message);
-    return message;
+      // Publisher Idempotency Check (§13.3, §5.14)
+      if (input.idempotencyKey) {
+        const existing = inbox.messages.find(
+          (m) => m.idempotency_key === input.idempotencyKey
+        );
+        if (existing) {
+          return existing;
+        }
+      }
+
+      const message: DirectMessage = {
+        message_id: generateMessageId(),
+        session_id: sessionId,
+        sender_bot_id: input.senderBotId.trim(),
+        recipient_bot_id: recipientBotId,
+        timestamp: new Date().toISOString(),
+        message_type: input.messageType ?? 'DIRECT',
+        content: input.content.trim(),
+        status: 'unread',
+        metadata: input.metadata ?? {},
+        delivery_state: 'RECEIVED',
+        attempt_count: 0,
+        max_attempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+        lease_owner: null,
+        lease_expires_at: null,
+        last_attempt_at: null,
+        last_error: null,
+        idempotency_key: input.idempotencyKey,
+      };
+
+      inbox.messages.push(message);
+      inbox.updated_at = message.timestamp;
+      await this.storage.saveInbox(sessionId, recipientBotId, inbox);
+      return message;
+    });
   }
 
   /**
@@ -160,8 +189,19 @@ export class MessagingService {
 
       // Determine matching messages before mutating status
       let matched = inbox.messages;
-      if (options.status) {
-        matched = matched.filter((m) => m.status === options.status);
+      if (options.deliveryState) {
+        matched = matched.filter((m) => m.delivery_state === options.deliveryState);
+      } else if (options.status) {
+        if (options.status === 'unread') {
+          matched = matched.filter(
+            (m) =>
+              m.status === 'unread' ||
+              m.delivery_state === 'RECEIVED' ||
+              m.delivery_state === 'RETRY_PENDING'
+          );
+        } else {
+          matched = matched.filter((m) => m.status === options.status);
+        }
       }
 
       if (options.markAsRead) {
@@ -245,7 +285,10 @@ export class MessagingService {
 
       const now = new Date().toISOString();
       target.status = 'acknowledged';
+      target.delivery_state = 'COMPLETED';
       target.acknowledged_at = now;
+      target.lease_owner = null;
+      target.lease_expires_at = null;
       if (!target.read_at) {
         target.read_at = now;
       }

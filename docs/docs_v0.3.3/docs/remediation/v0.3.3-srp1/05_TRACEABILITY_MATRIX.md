@@ -7,11 +7,11 @@
 | AUD-03 | REQ-03 | Traversal cannot escape workspace (`tests/capability/capability.test.ts`) | 2 | Implemented (95914d6) |
 | AUD-04 | REQ-02 | Bot-bound grant rejects absent/mismatched bot ID (`tests/capability/capability.test.ts`) | 1 | Implemented (910db4b) |
 | AUD-05 | REQ-03 | Case-sensitive path scope test (`tests/capability/capability.test.ts`, `tests/tools/sandbox.test.ts`) | 2 | Implemented (95914d6) |
-| AUD-06 | REQ-04 | limit=1 mutates only returned/acked message | 3 | Not started |
-| AUD-07 | REQ-05 | Mixed-category, callback-failure, restart redelivery | 3 | Not started |
-| AUD-08 | REQ-04 | Stale lease owner/fencing token rejected | 3 | Not started |
+| AUD-06 | REQ-04 | limit=1 mutates only returned/acked message (`tests/messaging/direct-message.test.ts`) | 3 | Implemented (00b10ff) |
+| AUD-07 | REQ-05 | Mixed-category, callback-failure, restart redelivery (`tests/messaging/broadcast-cursor-atomic.test.ts`) | 3 | Implemented (00b10ff) |
+| AUD-08 | REQ-04 | Stale lease owner/fencing token rejected (`tests/messaging/inbox-state.test.ts`) | 3 | Implemented (00b10ff) |
 | AUD-09 | REQ-06 | Stale lock holder cannot write after reacquire | 4 | Not started |
-| AUD-10 | REQ-02 | Unknown sender rejected by service | 3 | Not started |
+| AUD-10 | REQ-02 | Unknown sender rejected by service (`tests/messaging/direct-message.test.ts`, `tests/messaging/broadcast.test.ts`, `tests/cli/messaging-cli.test.ts`) | 3 | Implemented (00b10ff) |
 | AUD-11 | REQ-07 | Canary secret absent from argv and all sinks | 5 | Not started |
 | AUD-12 | REQ-08 | Per-action approval invokes trusted approver or grant rejected | 4 | Not started |
 | AUD-13 | REQ-09 | Table-driven end-to-end preset tests | 5 | Not started |

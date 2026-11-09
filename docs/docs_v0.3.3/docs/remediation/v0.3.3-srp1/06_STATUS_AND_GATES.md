@@ -12,8 +12,8 @@
 | 1 | Fail-closed execution and identity | No identity/isolation bypass | Completed | Approved (User prompt 10) |
 | 2 | Scope and persistence integrity | Traversal/path-scope/TOCTOU tests | Completed | Approved (User prompt 11) |
 | 3 | Messaging delivery correctness | No event loss or stale lease mutation | Completed | Approved (User prompt 12) |
-| 4 | Lock/audit/approval integrity | Fencing, durable audit, working approval | Completed | Pending Approval |
-| 5 | Secret/prompt/preset/cancellation | Redaction, adversarial, preset, abort tests | Not started | — |
+| 4 | Lock/audit/approval integrity | Fencing, durable audit, working approval | Completed | Approved (Prompt 13) |
+| 5 | Secret/prompt/preset/cancellation | Redaction, adversarial, preset, abort tests | Completed | Pending Approval |
 | 6 | Docs and release verification | Full matrix, supported OS verification, GO/NO-GO | Not started | — |
 
 ## Gate policy

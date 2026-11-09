@@ -8,9 +8,10 @@ import type { IIsolationBackend } from './isolation/interface.js';
 import { getIsolationBackend } from './isolation/factory.js';
 import { CapabilityService } from '../capability/service.js';
 import { CapabilityRegistry } from '../capability/registry.js';
-import { CapabilityApprovalService } from '../capability/approval.js';
+import { CapabilityApprovalService, type CapabilityApprovalRequest } from '../capability/approval.js';
 import { ExecutionEnvironmentBuilder, redactSecrets } from './environment.js';
 import { validateSandboxedPath, isPathInsideRoot } from '../tools/sandbox.js';
+import { AuditPersistenceError } from '../core/errors.js';
 
 export class ExecutionController {
   private static instance: ExecutionController | null = null;
@@ -46,6 +47,23 @@ export class ExecutionController {
 
   public getCapabilityService(): CapabilityService {
     return this.capabilityService;
+  }
+
+  private approvalCallback?: (promptText: string) => Promise<boolean>;
+
+  public setApprovalCallback(cb?: (promptText: string) => Promise<boolean>): void {
+    this.approvalCallback = cb;
+    if (cb) {
+      this.capabilityService.setApprovalPromptCallback(async (req) => {
+        return await CapabilityApprovalService.promptUser(req, cb);
+      });
+    } else {
+      this.capabilityService.setApprovalPromptCallback(undefined);
+    }
+  }
+
+  public getApprovalCallback(): ((promptText: string) => Promise<boolean>) | undefined {
+    return this.approvalCallback;
   }
 
   /**
@@ -235,8 +253,12 @@ export class ExecutionController {
             isolation_type: spawnResult.isolationType,
           },
         });
-      } catch {
-        // Best-effort audit logging
+      } catch (err: unknown) {
+        // AUD-16 / REQ-11: Sensitive execution requires durable audit; fail-closed if audit write cannot be persisted
+        throw new AuditPersistenceError(
+          `Mandatory security audit logging failed for execution of "${targetCap}". Execution output suppressed.`,
+          err
+        );
       }
     }
 
@@ -293,7 +315,94 @@ export class ExecutionController {
     }
 
     if (evalResult.decision === 'REQUIRE_APPROVAL') {
-      throw new Error(`Operation requires human approval for external path "${request.targetPath}".`);
+      const persistence = this.capabilityService.getPersistence();
+
+      if (!this.approvalCallback) {
+        try {
+          await persistence.recordAuditEvent(context.sessionId, {
+            event_id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            session_id: context.sessionId,
+            bot_id: context.botId,
+            type: 'CAPABILITY_DENIED',
+            capability: requiredCap,
+            details: {
+              decision: 'DENIED',
+              reason: 'No interactive human approval interface registered in this environment',
+              target_resource: request.targetPath,
+              operation: request.operation,
+            },
+          });
+        } catch {
+          // best-effort on denied
+        }
+        throw new Error(
+          `Access denied: Operation requires human approval for external path "${request.targetPath}", but no approval interface is available.`
+        );
+      }
+
+      const promptReq: CapabilityApprovalRequest = {
+        sessionId: context.sessionId,
+        botId: context.botId,
+        capability: requiredCap,
+        operation: request.operation,
+        targetResource: request.targetPath,
+        reason: `External filesystem ${request.operation} requested by bot "${context.botId}"`,
+      };
+
+      const approved = await CapabilityApprovalService.promptUser(
+        promptReq,
+        this.approvalCallback
+      );
+
+      if (approved) {
+        try {
+          await persistence.recordAuditEvent(context.sessionId, {
+            event_id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            session_id: context.sessionId,
+            bot_id: context.botId,
+            type: 'CAPABILITY_APPROVED',
+            capability: requiredCap,
+            details: {
+              decision: 'APPROVED',
+              approver: 'HUMAN_OPERATOR',
+              target_resource: request.targetPath,
+              operation: request.operation,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (auditErr: unknown) {
+          throw new AuditPersistenceError(
+            `Mandatory security audit logging failed for approved external filesystem operation on "${request.targetPath}". Action cancelled.`,
+            auditErr
+          );
+        }
+        return; // Authorized!
+      } else {
+        try {
+          await persistence.recordAuditEvent(context.sessionId, {
+            event_id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            session_id: context.sessionId,
+            bot_id: context.botId,
+            type: 'CAPABILITY_DENIED',
+            capability: requiredCap,
+            details: {
+              decision: 'REJECTED',
+              approver: 'HUMAN_OPERATOR',
+              target_resource: request.targetPath,
+              operation: request.operation,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch {
+          // best-effort
+        }
+        throw new Error(
+          `Access denied: External filesystem operation rejected by human operator for path "${request.targetPath}".`
+        );
+      }
     }
   }
 }

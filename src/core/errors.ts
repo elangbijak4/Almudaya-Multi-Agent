@@ -95,3 +95,22 @@ export class LockAcquisitionError extends AlmudayaError {
     super(`Failed to acquire lock at "${lockPath}": ${reason}`, 'LOCK_ACQUISITION_ERROR');
   }
 }
+
+export class StaleLockFencingError extends AlmudayaError {
+  constructor(
+    public readonly sessionId: string,
+    public readonly callerToken: number,
+    public readonly diskToken: number
+  ) {
+    super(
+      `Fencing violation in session "${sessionId}": caller fencing token ${callerToken} is stale (active disk epoch: ${diskToken}). Write rejected.`,
+      'STALE_LOCK_FENCING_ERROR'
+    );
+  }
+}
+
+export class AuditPersistenceError extends AlmudayaError {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(`Mandatory security audit persistence failure: ${message}`, 'AUDIT_PERSISTENCE_ERROR');
+  }
+}

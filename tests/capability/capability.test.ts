@@ -13,6 +13,7 @@ import {
   type CapabilityGrant,
 } from '../../src/capability/index.js';
 import { createProgram } from '../../src/cli/index.js';
+import { AuditPersistenceError } from '../../src/core/errors.js';
 
 describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)', () => {
   let tmpWorkspace: string;
@@ -750,6 +751,121 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
 
       expect(errOutput).toContain('Invalid session ID');
       expect(process.exitCode).toBe(1);
+    });
+  });
+
+  describe('AUD-12 & AUD-16: Approval Workflow & Mandatory Security Audit Durability (REQ-08, REQ-11)', () => {
+    it('AUD-12: should reject per_action grant for external filesystem without registered approval interface', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+      const service = new CapabilityService(persistence);
+
+      await expect(
+        service.grantCapability({
+          sessionId,
+          botId: 'BOT1',
+          capability: 'filesystem.read_external',
+          approvalMode: 'per_action',
+          grantedBy: 'OPERATOR',
+        })
+      ).rejects.toThrow(
+        /No trusted human approval interface is available in this environment/i
+      );
+    });
+
+    it('AUD-12: should allow per_action grant when approval interface is registered', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+      const service = new CapabilityService(persistence);
+
+      service.setApprovalPromptCallback(async () => true);
+
+      const grant = await service.grantCapability({
+        sessionId,
+        botId: 'BOT1',
+        capability: 'filesystem.read_external',
+        approvalMode: 'per_action',
+        grantedBy: 'OPERATOR',
+      });
+
+      expect(grant.grant_id).toBeDefined();
+      expect(grant.approval_mode).toBe('per_action');
+    });
+
+    it('AUD-16: should rollback grant and fail closed when mandatory audit persistence fails', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+      const service = new CapabilityService(persistence);
+
+      // Sabotage recordAuditEvent to simulate durable write failure
+      persistence.recordAuditEvent = async () => {
+        throw new Error('EIO: write error simulating disk failure');
+      };
+
+      await expect(
+        service.grantCapability({
+          sessionId,
+          botId: 'BOT1',
+          capability: 'process.execute_external',
+          grantedBy: 'OPERATOR',
+        })
+      ).rejects.toThrow(AuditPersistenceError);
+
+      // Verify that the grant was NOT persisted (rolled back)
+      const grants = await persistence.getGrants(sessionId);
+      expect(grants).toHaveLength(0);
+    });
+
+    it('AUD-16: should fail closed when mandatory audit persistence fails on revoke', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+      const service = new CapabilityService(persistence);
+
+      const grant = await service.grantCapability({
+        sessionId,
+        botId: 'BOT1',
+        capability: 'process.execute_external',
+        grantedBy: 'OPERATOR',
+      });
+
+      // Sabotage recordAuditEvent
+      persistence.recordAuditEvent = async () => {
+        throw new Error('EIO: write error simulating disk failure');
+      };
+
+      await expect(
+        service.revokeGrant(sessionId, grant.grant_id, 'SECURITY_ADMIN')
+      ).rejects.toThrow(AuditPersistenceError);
+    });
+
+    it('AUD-16 / REQ-07: should recursively redact secrets from audit event details', async () => {
+      const persistence = new CapabilityPersistence({ workspaceRoot: tmpWorkspace });
+
+      await persistence.recordAuditEvent(sessionId, {
+        event_id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        session_id: sessionId,
+        type: 'CAPABILITY_GRANTED',
+        capability: 'process.execute_external',
+        details: {
+          key1: 'AIzaSyDemoKey1234567890abcdefghijklmn',
+          nested: {
+            token: 'Bearer token_secret_1234567890_abcdefghij',
+            list: ['ghp_1234567890abcdefghijklmnopqrstuvwxyz12', 'safe_data'],
+          },
+        },
+      });
+
+      const events = await persistence.getAuditEvents(sessionId);
+      expect(events).toHaveLength(1);
+      const details = events[0].details as {
+        key1: string;
+        nested: { token: string; list: string[] };
+      };
+
+      expect(details.key1).not.toContain('AIzaSyDemoKey1234567890abcdefghijklmn');
+      expect(details.key1).toContain('REDACTED');
+      expect(details.nested.token).not.toContain('token_secret_1234567890_abcdefghij');
+      expect(details.nested.token).toContain('REDACTED');
+      expect(details.nested.list[0]).not.toContain('ghp_1234567890abcdefghijklmnopqrstuvwxyz12');
+      expect(details.nested.list[0]).toContain('REDACTED');
+      expect(details.nested.list[1]).toBe('safe_data');
     });
   });
 });

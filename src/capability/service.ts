@@ -3,6 +3,8 @@ import { CapabilityPersistence } from './persistence.js';
 import { PolicyEngine, type PolicyEvaluationRequest } from './policy-engine.js';
 import { CapabilityRegistry } from './registry.js';
 import { CapabilityPresets, type PresetOptions } from './presets.js';
+import type { CapabilityApprovalRequest } from './approval.js';
+import { AuditPersistenceError } from '../core/errors.js';
 import {
   type CapabilityGrant,
   type PolicyEvaluationResult,
@@ -24,6 +26,7 @@ export interface GrantCapabilityInput {
 
 export class CapabilityService {
   private persistence: CapabilityPersistence;
+  private approvalPromptCallback?: (prompt: CapabilityApprovalRequest) => Promise<boolean>;
 
   constructor(persistence?: CapabilityPersistence) {
     this.persistence = persistence ?? new CapabilityPersistence();
@@ -31,6 +34,18 @@ export class CapabilityService {
 
   public getPersistence(): CapabilityPersistence {
     return this.persistence;
+  }
+
+  public setApprovalPromptCallback(cb?: (prompt: CapabilityApprovalRequest) => Promise<boolean>): void {
+    this.approvalPromptCallback = cb;
+  }
+
+  public getApprovalPromptCallback(): ((prompt: CapabilityApprovalRequest) => Promise<boolean>) | undefined {
+    return this.approvalPromptCallback;
+  }
+
+  public hasApprovalInterface(): boolean {
+    return !!this.approvalPromptCallback;
   }
 
   /**
@@ -41,6 +56,14 @@ export class CapabilityService {
 
     if (!CapabilityRegistry.isKnownCapability(capability)) {
       throw new Error(`Cannot grant unknown capability: "${capability}". Must be defined in ACG registry.`);
+    }
+
+    if (input.approvalMode === 'per_action') {
+      if (capability.startsWith('filesystem.') && !this.hasApprovalInterface()) {
+        throw new Error(
+          `Cannot grant capability "${capability}" with approval_mode "per_action": No trusted human approval interface is available in this environment for external filesystem operations. Grant rejected at creation time.`
+        );
+      }
     }
 
     const durationHours = input.durationHours ?? 24;
@@ -65,19 +88,31 @@ export class CapabilityService {
 
     await this.persistence.saveGrant(sessionId, grant);
 
-    await this.recordAudit(sessionId, {
-      type: 'CAPABILITY_GRANTED',
-      capability,
-      grant_id: grantId,
-      bot_id: botId,
-      details: {
-        granted_by: grantedBy,
-        scope: grant.scope,
-        approval_mode: grant.approval_mode,
-        expires_at: expiresAt,
-        reason: grant.reason,
-      },
-    });
+    try {
+      await this.recordAuditMandatory(sessionId, {
+        type: 'CAPABILITY_GRANTED',
+        capability,
+        grant_id: grantId,
+        bot_id: botId,
+        details: {
+          granted_by: grantedBy,
+          scope: grant.scope,
+          approval_mode: grant.approval_mode,
+          expires_at: expiresAt,
+          reason: grant.reason,
+        },
+      });
+    } catch (auditErr: unknown) {
+      try {
+        await this.persistence.deleteGrant(sessionId, grantId);
+      } catch {
+        // Rollback attempt
+      }
+      throw new AuditPersistenceError(
+        `Failed to persist mandatory security audit log for capability "${capability}" grant to bot "${botId ?? 'ALL'}". Grant rolled back.`,
+        auditErr
+      );
+    }
 
     return grant;
   }
@@ -96,15 +131,22 @@ export class CapabilityService {
       reason,
     });
 
-    await this.recordAudit(sessionId, {
-      type: 'CAPABILITY_REVOKED',
-      capability: updated.capability,
-      grant_id: grantId,
-      details: {
-        revoked_by: revokedBy,
-        reason,
-      },
-    });
+    try {
+      await this.recordAuditMandatory(sessionId, {
+        type: 'CAPABILITY_REVOKED',
+        capability: updated.capability,
+        grant_id: grantId,
+        details: {
+          revoked_by: revokedBy,
+          reason,
+        },
+      });
+    } catch (auditErr: unknown) {
+      throw new AuditPersistenceError(
+        `Failed to persist mandatory security audit log for capability "${updated.capability}" revocation.`,
+        auditErr
+      );
+    }
 
     return updated;
   }
@@ -167,18 +209,25 @@ export class CapabilityService {
 
     for (const grant of grants) {
       await this.persistence.saveGrant(sessionId, grant);
-      await this.recordAudit(sessionId, {
-        type: 'CAPABILITY_GRANTED',
-        capability: grant.capability,
-        grant_id: grant.grant_id,
-        bot_id: grant.bot_id,
-        details: {
-          preset: presetName,
-          granted_by: grantedBy,
-          scope: grant.scope,
-          approval_mode: grant.approval_mode,
-        },
-      });
+      try {
+        await this.recordAuditMandatory(sessionId, {
+          type: 'CAPABILITY_GRANTED',
+          capability: grant.capability,
+          grant_id: grant.grant_id,
+          bot_id: grant.bot_id,
+          details: {
+            preset: presetName,
+            granted_by: grantedBy,
+            scope: grant.scope,
+            approval_mode: grant.approval_mode,
+          },
+        });
+      } catch (auditErr: unknown) {
+        throw new AuditPersistenceError(
+          `Failed to persist mandatory security audit log for preset "${presetName}" grant "${grant.capability}".`,
+          auditErr
+        );
+      }
     }
 
     return grants;
@@ -197,6 +246,23 @@ export class CapabilityService {
       type: 'CAPABILITY_REVOKED',
       details: { action: 'session_capabilities_reset' },
     });
+  }
+
+  private async recordAuditMandatory(
+    sessionId: string,
+    event: Omit<SecurityAuditEvent, 'event_id' | 'timestamp' | 'session_id'>
+  ): Promise<void> {
+    const fullEvent: SecurityAuditEvent = {
+      event_id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      session_id: sessionId,
+      type: event.type,
+      capability: event.capability,
+      grant_id: event.grant_id,
+      bot_id: event.bot_id,
+      details: event.details ?? {},
+    };
+    await this.persistence.recordAuditEvent(sessionId, fullEvent);
   }
 
   private async recordAudit(

@@ -21,12 +21,13 @@ export interface ISessionStorage {
   getSession(sessionId: string): Promise<SessionMetadata>;
   updateSession(
     sessionId: string,
-    updater: (current: SessionMetadata) => SessionMetadata
+    updater: (current: SessionMetadata) => SessionMetadata,
+    fencingToken?: number
   ): Promise<SessionMetadata>;
   sessionExists(sessionId: string): Promise<boolean>;
   listSessions(): Promise<SessionMetadata[]>;
   getSessionDir(sessionId: string): string;
-  withSessionLock<T>(sessionId: string, action: () => Promise<T>): Promise<T>;
+  withSessionLock<T>(sessionId: string, action: (fencingToken?: number) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -34,7 +35,7 @@ export interface ISessionStorage {
  */
 export interface IBotRegistryStorage {
   getBotRegistry(sessionId: string): Promise<BotRegistry>;
-  saveBotRegistry(sessionId: string, registry: BotRegistry): Promise<void>;
+  saveBotRegistry(sessionId: string, registry: BotRegistry, fencingToken?: number): Promise<void>;
   getBot(sessionId: string, botIdOrDisplayName: string): Promise<BotRecord>;
   listBots(sessionId: string): Promise<BotRecord[]>;
 }
@@ -43,12 +44,12 @@ export interface IBotRegistryStorage {
  * Persistence abstraction for Messaging (Broadcast log and per-bot inboxes).
  */
 export interface IMessagingStorage {
-  appendBroadcast(sessionId: string, event: BroadcastEvent): Promise<void>;
+  appendBroadcast(sessionId: string, event: BroadcastEvent, fencingToken?: number): Promise<void>;
   readBroadcasts(sessionId: string): Promise<BroadcastEvent[]>;
   getBroadcastCursor(sessionId: string, botId: string): Promise<BroadcastCursor>;
-  saveBroadcastCursor(sessionId: string, botId: string, cursor: BroadcastCursor): Promise<void>;
+  saveBroadcastCursor(sessionId: string, botId: string, cursor: BroadcastCursor, fencingToken?: number): Promise<void>;
   getInbox(sessionId: string, botId: string): Promise<InboxStore>;
-  saveInbox(sessionId: string, botId: string, store: InboxStore): Promise<void>;
+  saveInbox(sessionId: string, botId: string, store: InboxStore, fencingToken?: number): Promise<void>;
   appendMessageToInbox(
     sessionId: string,
     recipientBotId: string,
@@ -61,18 +62,18 @@ export interface IMessagingStorage {
  */
 export interface ISharedContextStorage {
   getProjectRootsRegistry(sessionId: string): Promise<ProjectRootsRegistry>;
-  saveProjectRootsRegistry(sessionId: string, registry: ProjectRootsRegistry): Promise<void>;
+  saveProjectRootsRegistry(sessionId: string, registry: ProjectRootsRegistry, fencingToken?: number): Promise<void>;
   getEnvironmentMetadata(sessionId: string): Promise<EnvironmentMetadata | null>;
-  saveEnvironmentMetadata(sessionId: string, metadata: EnvironmentMetadata): Promise<void>;
+  saveEnvironmentMetadata(sessionId: string, metadata: EnvironmentMetadata, fencingToken?: number): Promise<void>;
   getDocumentsRegistry(sessionId: string): Promise<SdlcDocumentsRegistry>;
-  saveDocumentsRegistry(sessionId: string, registry: SdlcDocumentsRegistry): Promise<void>;
+  saveDocumentsRegistry(sessionId: string, registry: SdlcDocumentsRegistry, fencingToken?: number): Promise<void>;
 }
 
 /**
  * Persistence abstraction for Shared Work Log (location-aware session work memory).
  */
 export interface IWorkLogStorage {
-  appendWorkLog(sessionId: string, entry: WorkLogEntry): Promise<void>;
+  appendWorkLog(sessionId: string, entry: WorkLogEntry, fencingToken?: number): Promise<void>;
   readWorkLogs(sessionId: string): Promise<WorkLogEntry[]>;
 }
 

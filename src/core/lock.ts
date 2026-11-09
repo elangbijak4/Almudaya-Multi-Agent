@@ -72,6 +72,47 @@ async function getNextFencingToken(targetDir: string): Promise<number> {
 }
 
 /**
+ * Internal mutual exclusion barrier using filesystem directory primitives.
+ * Coordinates stale recovery, lease renewal, and release operations to prevent TOCTOU races.
+ */
+async function withBarrier<T>(targetDir: string, fn: () => Promise<T>): Promise<T> {
+  const barrierPath = path.join(targetDir, '.lock_barrier');
+  const timeoutMs = 3000;
+  const pollIntervalMs = 15;
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await fs.mkdir(barrierPath);
+      break;
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'EEXIST') {
+        try {
+          const stats = await fs.stat(barrierPath);
+          if (Date.now() - stats.mtimeMs > 2000) {
+            // Barrier directory is stale (e.g. process crashed), recover it
+            await fs.rmdir(barrierPath).catch(() => {});
+            continue;
+          }
+        } catch {
+          // stats failed, retry
+        }
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    await fs.rmdir(barrierPath).catch(() => {});
+  }
+}
+
+/**
  * Acquires a cooperative lock on a target directory.
  * Returns a callable LockHandle that releases the lock and exposes ownership/fencing tokens.
  *
@@ -128,24 +169,26 @@ export async function acquireLock(
         if (released) return;
         released = true;
         try {
-          if (await pathExists(lockFilePath)) {
-            try {
-              const content = await fs.readFile(lockFilePath, 'utf-8');
-              const data = JSON.parse(content) as Partial<LockRecord>;
+          await withBarrier(targetDir, async () => {
+            if (await pathExists(lockFilePath)) {
+              try {
+                const content = await fs.readFile(lockFilePath, 'utf-8');
+                const data = JSON.parse(content) as Partial<LockRecord>;
 
-              // Strict ownership verification:
-              // Only release if the lock on disk matches our exact owner_token and lock_id
-              if (data.owner_token && data.owner_token === ownerToken && data.lock_id === lockId) {
-                await fs.unlink(lockFilePath);
-              } else if (!data.owner_token && data.pid === process.pid) {
-                // Backward compatibility for legacy lock without owner_token
-                await fs.unlink(lockFilePath);
+                // Strict ownership verification:
+                // Only release if the lock on disk matches our exact owner_token and lock_id
+                if (data.owner_token && data.owner_token === ownerToken && data.lock_id === lockId) {
+                  await fs.unlink(lockFilePath);
+                } else if (!data.owner_token && data.pid === process.pid) {
+                  // Backward compatibility for legacy lock without owner_token
+                  await fs.unlink(lockFilePath);
+                }
+                // If owner_token does NOT match, do NOT delete; lock was acquired by another owner.
+              } catch {
+                // If lock is unreadable during our release attempt, do not blindly unlink.
               }
-              // If owner_token does NOT match, do NOT delete; lock was acquired by another owner.
-            } catch {
-              // If lock is unreadable during our release attempt, do not blindly unlink.
             }
-          }
+          });
         } catch {
           // Ignore release errors on shutdown
         }
@@ -156,16 +199,18 @@ export async function acquireLock(
           throw new Error('Cannot renew lease: lock has already been released.');
         }
         const duration = additionalDurationMs ?? leaseDurationMs;
-        if (!(await pathExists(lockFilePath))) {
-          throw new Error('Cannot renew lease: lock file does not exist.');
-        }
-        const content = await fs.readFile(lockFilePath, 'utf-8');
-        const currentRecord = JSON.parse(content) as LockRecord;
-        if (currentRecord.owner_token !== ownerToken || currentRecord.lock_id !== lockId) {
-          throw new Error('Cannot renew lease: lock ownership was lost or acquired by another process.');
-        }
-        currentRecord.lease_expires_at = new Date(Date.now() + duration).toISOString();
-        await fs.writeFile(lockFilePath, JSON.stringify(currentRecord, null, 2), 'utf-8');
+        await withBarrier(targetDir, async () => {
+          if (!(await pathExists(lockFilePath))) {
+            throw new Error('Cannot renew lease: lock file does not exist.');
+          }
+          const content = await fs.readFile(lockFilePath, 'utf-8');
+          const currentRecord = JSON.parse(content) as LockRecord;
+          if (currentRecord.owner_token !== ownerToken || currentRecord.lock_id !== lockId) {
+            throw new Error('Cannot renew lease: lock ownership was lost or acquired by another process.');
+          }
+          currentRecord.lease_expires_at = new Date(Date.now() + duration).toISOString();
+          await fs.writeFile(lockFilePath, JSON.stringify(currentRecord, null, 2), 'utf-8');
+        });
       };
 
       const lockHandle = Object.assign(releaseFn, {
@@ -195,12 +240,33 @@ export async function acquireLock(
           const isStale = ageMs > staleThresholdMs || isExpired || isProcessDead;
 
           if (isStale) {
-            // Safe to break stale lock
+            // Safe to break stale lock: must verify and unlink under barrier
+            let brokeLock = false;
             try {
-              await fs.unlink(lockFilePath);
-              continue; // Immediate retry
+              await withBarrier(targetDir, async () => {
+                if (await pathExists(lockFilePath)) {
+                  try {
+                    const currentContent = await fs.readFile(lockFilePath, 'utf-8');
+                    const currentRecord = JSON.parse(currentContent) as Partial<LockRecord>;
+
+                    const isSameStaleRecord = record.owner_token
+                      ? (currentRecord.owner_token === record.owner_token && currentRecord.lock_id === record.lock_id)
+                      : (currentRecord.pid === record.pid && currentRecord.locked_at === record.locked_at);
+
+                    if (isSameStaleRecord) {
+                      await fs.unlink(lockFilePath);
+                      brokeLock = true;
+                    }
+                  } catch {
+                    // Lock unreadable or missing
+                  }
+                }
+              });
+              if (brokeLock) {
+                continue; // Immediate retry
+              }
             } catch {
-              // Unlink conflict, proceed to sleep
+              // Barrier conflict or unlink conflict, proceed to sleep
             }
           }
         } catch {
@@ -209,13 +275,22 @@ export async function acquireLock(
             const stats = await fs.stat(lockFilePath);
             const fileAgeMs = Date.now() - stats.mtimeMs;
             if (fileAgeMs > staleThresholdMs) {
-              // Preserve corrupt evidence before recovery
-              const corruptBackup = path.join(targetDir, `.lock.corrupt.${Date.now()}`);
-              try {
-                await fs.rename(lockFilePath, corruptBackup);
-              } catch {
-                await fs.unlink(lockFilePath).catch(() => {});
-              }
+              await withBarrier(targetDir, async () => {
+                try {
+                  const currentStats = await fs.stat(lockFilePath);
+                  if (Date.now() - currentStats.mtimeMs > staleThresholdMs) {
+                    // Preserve corrupt evidence before recovery
+                    const corruptBackup = path.join(targetDir, `.lock.corrupt.${Date.now()}`);
+                    try {
+                      await fs.rename(lockFilePath, corruptBackup);
+                    } catch {
+                      await fs.unlink(lockFilePath).catch(() => {});
+                    }
+                  }
+                } catch {
+                  // File disappeared
+                }
+              });
               continue;
             }
           } catch {

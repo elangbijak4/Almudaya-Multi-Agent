@@ -16,6 +16,7 @@ import { UnsupportedIsolationBackend } from '../../src/execution/isolation/unsup
 import { CapabilityService } from '../../src/capability/service.js';
 import { CapabilityPersistence } from '../../src/capability/persistence.js';
 import { PathTraversalSecurityError } from '../../src/tools/sandbox.js';
+import { AuditPersistenceError } from '../../src/core/errors.js';
 
 describe('ExecutionController & Enforcement Boundary (Phase 3, SEC-03, ADR-002, ADR-003)', () => {
   let tmpWorkspace: string;
@@ -412,6 +413,157 @@ describe('ExecutionController & Enforcement Boundary (Phase 3, SEC-03, ADR-002, 
           targetPath: externalFile,
         })
       ).resolves.toBeUndefined();
+    });
+
+    it('AUD-12: should prompt approval callback on external file access and allow on approve', async () => {
+      const externalDir = path.join(tmpWorkspace, 'approved_dir');
+      const externalFile = path.join(externalDir, 'approved.txt');
+
+      // Register approval callback first so per_action grant is allowed
+      let promptReceived = '';
+      controller.setApprovalCallback(async (promptText) => {
+        promptReceived = promptText;
+        return true; // APPROVE
+      });
+
+      await capabilityService.grantCapability({
+        sessionId,
+        botId: 'B001',
+        capability: 'filesystem.read_external',
+        scope: { paths: [externalDir] },
+        approvalMode: 'per_action',
+        grantedBy: 'OPERATOR',
+      });
+
+      const context: ExecutionContext = {
+        sessionId,
+        botId: 'B001',
+        projectRoots: [projectRoot],
+      };
+
+      await expect(
+        controller.authorizeFileAccess(context, {
+          operation: 'read',
+          targetPath: externalFile,
+        })
+      ).resolves.toBeUndefined();
+
+      expect(promptReceived).toContain('[CAPABILITY APPROVAL REQUIRED');
+      expect(promptReceived).toContain('filesystem.read_external');
+
+      // Verify CAPABILITY_APPROVED audit event was durably recorded
+      const history = await persistence.getAuditEvents(sessionId);
+      const approvedEvent = history.find((e) => e.type === 'CAPABILITY_APPROVED');
+      expect(approvedEvent).toBeDefined();
+      expect(approvedEvent?.details.approver).toBe('HUMAN_OPERATOR');
+      expect(approvedEvent?.details.decision).toBe('APPROVED');
+    });
+
+    it('AUD-12: should deny access and record CAPABILITY_DENIED when operator rejects', async () => {
+      const externalDir = path.join(tmpWorkspace, 'rejected_dir');
+      const externalFile = path.join(externalDir, 'rejected.txt');
+
+      controller.setApprovalCallback(async () => {
+        return false; // REJECT
+      });
+
+      await capabilityService.grantCapability({
+        sessionId,
+        botId: 'B001',
+        capability: 'filesystem.read_external',
+        scope: { paths: [externalDir] },
+        approvalMode: 'per_action',
+        grantedBy: 'OPERATOR',
+      });
+
+      const context: ExecutionContext = {
+        sessionId,
+        botId: 'B001',
+        projectRoots: [projectRoot],
+      };
+
+      await expect(
+        controller.authorizeFileAccess(context, {
+          operation: 'read',
+          targetPath: externalFile,
+        })
+      ).rejects.toThrow('External filesystem operation rejected by human operator');
+
+      const history = await persistence.getAuditEvents(sessionId);
+      const rejectedEvent = history.find(
+        (e) => e.type === 'CAPABILITY_DENIED' && e.details.decision === 'REJECTED'
+      );
+      expect(rejectedEvent).toBeDefined();
+    });
+
+    it('AUD-12: should fail closed and record CAPABILITY_DENIED when no approval callback registered', async () => {
+      const externalDir = path.join(tmpWorkspace, 'no_approver_dir');
+      const externalFile = path.join(externalDir, 'file.txt');
+
+      // Temporarily enable callback to create the per_action grant, then unset callback
+      controller.setApprovalCallback(async () => true);
+      await capabilityService.grantCapability({
+        sessionId,
+        botId: 'B001',
+        capability: 'filesystem.read_external',
+        scope: { paths: [externalDir] },
+        approvalMode: 'per_action',
+        grantedBy: 'OPERATOR',
+      });
+      controller.setApprovalCallback(undefined);
+
+      const context: ExecutionContext = {
+        sessionId,
+        botId: 'B001',
+        projectRoots: [projectRoot],
+      };
+
+      await expect(
+        controller.authorizeFileAccess(context, {
+          operation: 'read',
+          targetPath: externalFile,
+        })
+      ).rejects.toThrow('no approval interface is available');
+
+      const history = await persistence.getAuditEvents(sessionId);
+      const deniedEvent = history.find(
+        (e) => e.type === 'CAPABILITY_DENIED' && e.details.reason?.toString().includes('No interactive human approval interface')
+      );
+      expect(deniedEvent).toBeDefined();
+    });
+
+    it('AUD-16: should fail closed with AuditPersistenceError when command audit fails', async () => {
+      await capabilityService.grantCapability({
+        sessionId,
+        botId: 'B001',
+        capability: 'process.execute_external',
+        scope: { commands: ['echo'] },
+        grantedBy: 'OPERATOR',
+      });
+
+      // Mock audit persistence failure
+      const originalRecordAudit = persistence.recordAuditEvent.bind(persistence);
+      persistence.recordAuditEvent = async () => {
+        throw new Error('Disk full / write failure during audit');
+      };
+
+      const context: ExecutionContext = {
+        sessionId,
+        botId: 'B001',
+        projectRoots: [projectRoot],
+      };
+      const req: CommandExecutionRequest = {
+        command: 'echo "fail audit"',
+        capability: 'process.execute_external',
+      };
+
+      try {
+        await expect(controller.executeCommand(context, req)).rejects.toThrow(
+          AuditPersistenceError
+        );
+      } finally {
+        persistence.recordAuditEvent = originalRecordAudit;
+      }
     });
   });
 });

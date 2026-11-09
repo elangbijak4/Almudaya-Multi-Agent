@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { IBlackboardStorage } from './interface.js';
 import type { SessionMetadata } from '../session/schema.js';
 import { SessionMetadataSchema, validateSessionId } from '../session/schema.js';
@@ -39,6 +40,7 @@ import {
   SessionAlreadyExistsError,
   SessionNotFoundError,
   BotNotFoundError,
+  StaleLockFencingError,
 } from '../core/errors.js';
 import {
   ensureDir,
@@ -153,12 +155,14 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   public async updateSession(
     sessionId: string,
-    updater: (current: SessionMetadata) => SessionMetadata
+    updater: (current: SessionMetadata) => SessionMetadata,
+    fencingToken?: number
   ): Promise<SessionMetadata> {
     const validId = validateSessionId(sessionId);
     const sessionFile = this.getSessionFilePath(validId);
 
-    return await this.withSessionLock(validId, async () => {
+    return await this.withSessionLock(validId, async (activeToken) => {
+      await this.verifyStorageFencing(validId, fencingToken ?? activeToken);
       if (!(await pathExists(sessionFile))) {
         throw new SessionNotFoundError(validId);
       }
@@ -208,11 +212,45 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     return sessions;
   }
 
-  public async withSessionLock<T>(sessionId: string, action: () => Promise<T>): Promise<T> {
+  private activeFencingContext = new AsyncLocalStorage<Map<string, number>>();
+
+  public async withSessionLock<T>(sessionId: string, action: (fencingToken?: number) => Promise<T>): Promise<T> {
     const validId = validateSessionId(sessionId);
     const sessionDir = this.getSessionDir(validId);
     await ensureDir(sessionDir);
-    return await withLock(sessionDir, action);
+    return await withLock(sessionDir, async (handle) => {
+      const currentStore = this.activeFencingContext.getStore();
+      const nextMap = new Map(currentStore);
+      nextMap.set(validId, handle.fencingToken);
+      return await this.activeFencingContext.run(nextMap, () => action(handle.fencingToken));
+    });
+  }
+
+  /**
+   * Verifies that the caller's fencing token matches the active fencing epoch on disk.
+   * If a newer lease has incremented the fencing token on disk, the caller is stale and write is rejected.
+   */
+  public async verifyStorageFencing(sessionId: string, explicitToken?: number): Promise<void> {
+    const validId = validateSessionId(sessionId);
+    const token = explicitToken ?? this.activeFencingContext.getStore()?.get(validId);
+    if (token === undefined) {
+      return;
+    }
+
+    const sessionDir = this.getSessionDir(validId);
+    const fencingFile = path.join(sessionDir, '.fencing_token');
+    try {
+      const raw = await fs.readFile(fencingFile, 'utf-8');
+      const diskToken = parseInt(raw.trim(), 10);
+      if (!isNaN(diskToken) && token < diskToken) {
+        throw new StaleLockFencingError(validId, token, diskToken);
+      }
+    } catch (err: unknown) {
+      if (err instanceof StaleLockFencingError) {
+        throw err;
+      }
+      // If fencing file doesn't exist yet, it's not fenced
+    }
   }
 
   // --- Bot Registry Operations ---
@@ -236,8 +274,9 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     return await readJsonValidated(registryFile, BotRegistrySchema);
   }
 
-  public async saveBotRegistry(sessionId: string, registry: BotRegistry): Promise<void> {
+  public async saveBotRegistry(sessionId: string, registry: BotRegistry, fencingToken?: number): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     if (!(await this.sessionExists(validId))) {
       throw new SessionNotFoundError(validId);
     }
@@ -269,8 +308,13 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   // --- Messaging Operations ---
 
-  public async appendBroadcast(sessionId: string, event: BroadcastEvent): Promise<void> {
+  public async appendBroadcast(
+    sessionId: string,
+    event: BroadcastEvent,
+    fencingToken?: number
+  ): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     if (!(await this.sessionExists(validId))) {
       throw new SessionNotFoundError(validId);
     }
@@ -282,7 +326,8 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     const validated = BroadcastEventSchema.parse(event);
     const line = JSON.stringify(validated) + '\n';
 
-    await this.withSessionLock(validId, async () => {
+    await this.withSessionLock(validId, async (activeToken) => {
+      await this.verifyStorageFencing(validId, fencingToken ?? activeToken);
       await fs.appendFile(broadcastFile, line, 'utf-8');
     });
   }
@@ -318,9 +363,12 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
   public async saveBroadcastCursor(
     sessionId: string,
     botId: string,
-    cursor: BroadcastCursor
+    cursor: BroadcastCursor,
+    fencingToken?: number
   ): Promise<void> {
-    const cursorFile = this.getCursorFilePath(sessionId, botId);
+    const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
+    const cursorFile = this.getCursorFilePath(validId, botId);
     const validated = BroadcastCursorSchema.parse(cursor);
     await atomicWriteJson(cursorFile, validated);
   }
@@ -347,9 +395,15 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     return await readJsonValidated(inboxFile, InboxStoreSchema);
   }
 
-  public async saveInbox(sessionId: string, botId: string, store: InboxStore): Promise<void> {
+  public async saveInbox(
+    sessionId: string,
+    botId: string,
+    store: InboxStore,
+    fencingToken?: number
+  ): Promise<void> {
     const validSession = validateSessionId(sessionId);
     const validBot = validateBotId(botId);
+    await this.verifyStorageFencing(validSession, fencingToken);
 
     const inboxFile = this.getInboxFilePath(validSession, validBot);
     const validated = InboxStoreSchema.parse(store);
@@ -398,9 +452,11 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   public async saveProjectRootsRegistry(
     sessionId: string,
-    registry: ProjectRootsRegistry
+    registry: ProjectRootsRegistry,
+    fencingToken?: number
   ): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     const file = this.getProjectRootsFilePath(validId);
     const validated = ProjectRootsRegistrySchema.parse(registry);
     await atomicWriteJson(file, validated);
@@ -422,9 +478,11 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   public async saveEnvironmentMetadata(
     sessionId: string,
-    metadata: EnvironmentMetadata
+    metadata: EnvironmentMetadata,
+    fencingToken?: number
   ): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     const file = this.getEnvironmentFilePath(validId);
     const validated = EnvironmentMetadataSchema.parse(metadata);
     await atomicWriteJson(file, validated);
@@ -451,9 +509,11 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   public async saveDocumentsRegistry(
     sessionId: string,
-    registry: SdlcDocumentsRegistry
+    registry: SdlcDocumentsRegistry,
+    fencingToken?: number
   ): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     const file = this.getDocumentsFilePath(validId);
     const validated = SdlcDocumentsRegistrySchema.parse(registry);
     await atomicWriteJson(file, validated);
@@ -461,8 +521,13 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
 
   // --- Work Log Operations ---
 
-  public async appendWorkLog(sessionId: string, entry: WorkLogEntry): Promise<void> {
+  public async appendWorkLog(
+    sessionId: string,
+    entry: WorkLogEntry,
+    fencingToken?: number
+  ): Promise<void> {
     const validId = validateSessionId(sessionId);
+    await this.verifyStorageFencing(validId, fencingToken);
     if (!(await this.sessionExists(validId))) {
       throw new SessionNotFoundError(validId);
     }
@@ -471,7 +536,8 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     const validated = WorkLogEntrySchema.parse(entry);
     const line = JSON.stringify(validated) + '\n';
 
-    await this.withSessionLock(validId, async () => {
+    await this.withSessionLock(validId, async (activeToken) => {
+      await this.verifyStorageFencing(validId, fencingToken ?? activeToken);
       await fs.appendFile(workLogFile, line, 'utf-8');
     });
   }

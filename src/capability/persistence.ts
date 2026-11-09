@@ -139,25 +139,47 @@ export class CapabilityPersistence {
     });
   }
 
+  public async deleteGrant(sessionId: string, grantId: string): Promise<boolean> {
+    return await this.withSessionLock(sessionId, async () => {
+      const grants = await this.getGrantsRaw(sessionId);
+      const filtered = grants.filter((g) => g.grant_id !== grantId);
+      if (filtered.length === grants.length) {
+        return false;
+      }
+      const grantsFile = this.getGrantsFilePath(sessionId);
+      const lines = filtered.map((g) => JSON.stringify(g)).join('\n');
+      await fs.writeFile(grantsFile, lines ? lines + '\n' : '', 'utf-8');
+      return true;
+    });
+  }
+
   public async recordAuditEvent(sessionId: string, event: SecurityAuditEvent): Promise<void> {
     const validated = SecurityAuditEventSchema.parse(event);
     const dir = this.getCapabilitiesDir(sessionId);
     await ensureDir(dir);
     const auditFile = this.getAuditFilePath(sessionId);
 
-    // Redact all sensitive fields in details
-    const sanitizedDetails: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(validated.details)) {
-      if (typeof value === 'string') {
-        sanitizedDetails[key] = redactSecrets(value);
-      } else {
-        sanitizedDetails[key] = value;
+    // Deeply redact all sensitive fields in details
+    const redactRecursively = (data: unknown): unknown => {
+      if (typeof data === 'string') {
+        return redactSecrets(data);
       }
-    }
+      if (Array.isArray(data)) {
+        return data.map(redactRecursively);
+      }
+      if (data !== null && typeof data === 'object') {
+        const res: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+          res[k] = redactRecursively(v);
+        }
+        return res;
+      }
+      return data;
+    };
 
     const cleanEvent: SecurityAuditEvent = {
       ...validated,
-      details: sanitizedDetails,
+      details: redactRecursively(validated.details) as Record<string, unknown>,
     };
 
     await appendJsonlRecord(auditFile, cleanEvent, SecurityAuditEventSchema);

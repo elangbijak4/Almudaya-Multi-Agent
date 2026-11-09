@@ -51,6 +51,7 @@ import {
 import { withLock } from '../core/lock.js';
 import { readJsonlFile } from '../core/jsonl.js';
 import { getSessionDir, getSessionsBaseDir } from '../core/config.js';
+import { redactRecursively } from '../execution/environment.js';
 
 export class FilesystemSessionStorage implements IBlackboardStorage {
   public readonly workspaceRoot: string;
@@ -323,7 +324,7 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     await ensureDir(broadcastDir);
     const broadcastFile = this.getBroadcastFilePath(validId);
 
-    const validated = BroadcastEventSchema.parse(event);
+    const validated = BroadcastEventSchema.parse(redactRecursively(event));
     const line = JSON.stringify(validated) + '\n';
 
     await this.withSessionLock(validId, async (activeToken) => {
@@ -406,7 +407,7 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     await this.verifyStorageFencing(validSession, fencingToken);
 
     const inboxFile = this.getInboxFilePath(validSession, validBot);
-    const validated = InboxStoreSchema.parse(store);
+    const validated = InboxStoreSchema.parse(redactRecursively(store));
     await atomicWriteJson(inboxFile, validated);
   }
 
@@ -533,7 +534,7 @@ export class FilesystemSessionStorage implements IBlackboardStorage {
     }
 
     const workLogFile = this.getWorkLogFilePath(validId);
-    const validated = WorkLogEntrySchema.parse(entry);
+    const validated = WorkLogEntrySchema.parse(redactRecursively(entry));
     const line = JSON.stringify(validated) + '\n';
 
     await this.withSessionLock(validId, async (activeToken) => {

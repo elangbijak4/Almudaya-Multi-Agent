@@ -3,6 +3,7 @@ import type { IAIModelProvider, AIRequest, AIResponse, ToolCallRequest } from '.
 import { RateLimitPauseError } from './provider.js';
 import { resolveApiKey } from './credentials.js';
 import { AlmudayaError } from '../core/errors.js';
+import { registerSecret, unregisterSecret } from '../execution/environment.js';
 
 export { RateLimitPauseError };
 
@@ -244,12 +245,18 @@ export class GeminiProvider implements IAIModelProvider {
   public readonly signal?: AbortSignal;
 
   private readonly client: GoogleGenAI;
+  private readonly apiKey?: string;
 
   constructor(options: GeminiProviderOptions = {}) {
     const key = options.apiKey ?? resolveApiKey({
       providerId: 'gemini',
       customEnvVar: options.customEnvVar,
     });
+
+    this.apiKey = key;
+    if (this.apiKey) {
+      registerSecret(this.apiKey);
+    }
 
     this.modelName = options.modelName ?? 'gemini-2.5-flash';
     this.maxRetries = options.maxRetries ?? 3;
@@ -259,6 +266,12 @@ export class GeminiProvider implements IAIModelProvider {
     this.signal = options.signal;
 
     this.client = new GoogleGenAI({ apiKey: key });
+  }
+
+  public dispose(): void {
+    if (this.apiKey) {
+      unregisterSecret(this.apiKey);
+    }
   }
 
   public async generateResponse(request: AIRequest): Promise<AIResponse> {

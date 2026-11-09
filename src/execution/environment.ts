@@ -127,7 +127,7 @@ export function sanitizeComspec(rawComspec?: string): string {
 }
 
 /**
- * Redacts any detected secrets (Gemini keys, GitHub tokens, JWTs, Bearer tokens, URLs with credentials,
+ * Redacts any detected secrets (Gemini keys, GitHub tokens, Anthropic/OpenAI keys, Bearer tokens, URLs with credentials,
  * and dynamically registered secrets) from logs, exceptions, outputs, and persisted records.
  */
 export function redactSecrets(text: string, customSecrets: string[] = []): string {
@@ -137,10 +137,18 @@ export function redactSecrets(text: string, customSecrets: string[] = []): strin
     // Google / Gemini API keys
     .replace(/AIzaSy[a-zA-Z0-9_\-]{25,}/g, '[REDACTED_API_KEY]')
     .replace(/AQ\.[a-zA-Z0-9_\-]{25,}/g, '[REDACTED_API_KEY]')
+    // Anthropic API keys
+    .replace(/sk-ant-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_API_KEY]')
+    // OpenAI API keys
+    .replace(/sk-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_API_KEY]')
     // GitHub Personal Access Tokens and OAuth
     .replace(/ghp_[a-zA-Z0-9]{30,}/g, '[REDACTED_TOKEN]')
     .replace(/github_pat_[a-zA-Z0-9_]{30,}/g, '[REDACTED_TOKEN]')
     .replace(/gho_[a-zA-Z0-9]{30,}/g, '[REDACTED_TOKEN]')
+    // GitLab tokens
+    .replace(/glpat-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_TOKEN]')
+    // Slack tokens
+    .replace(/xox[baprs]-[a-zA-Z0-9_\-]{10,}/g, '[REDACTED_TOKEN]')
     // Bearer tokens
     .replace(/(Bearer\s+)[a-zA-Z0-9\-_\.]{20,}/gi, '$1[REDACTED_BEARER_TOKEN]')
     // Basic Auth embedded in URLs
@@ -155,6 +163,27 @@ export function redactSecrets(text: string, customSecrets: string[] = []): strin
   }
 
   return redacted;
+}
+
+/**
+ * Recursively redacts secrets from any data structure (strings, arrays, nested objects).
+ * Central recursive redaction boundary enforcing REQ-07.
+ */
+export function redactRecursively<T>(value: T, customSecrets: string[] = []): T {
+  if (typeof value === 'string') {
+    return redactSecrets(value, customSecrets) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactRecursively(item, customSecrets)) as unknown as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    const sanitized: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      sanitized[k] = redactRecursively(v, customSecrets);
+    }
+    return sanitized as unknown as T;
+  }
+  return value;
 }
 
 export interface EnvironmentBuilderOptions {

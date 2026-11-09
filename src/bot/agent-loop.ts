@@ -15,6 +15,7 @@ import type {
   ToolDefinition,
 } from '../ai/provider.js';
 import { RateLimitPauseError } from '../ai/provider.js';
+import { sleepWithSignal } from '../ai/gemini.js';
 import { buildDynamicSystemPrompt, formatUntrustedDirectMessage } from '../ai/prompts.js';
 import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
@@ -65,6 +66,7 @@ export class AutonomousAgentLoop {
   private readonly workLogService: WorkLogService;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
+  private abortController: AbortController = new AbortController();
 
   constructor(options: AgentLoopOptions) {
     this.sessionId = options.sessionId;
@@ -85,10 +87,20 @@ export class AutonomousAgentLoop {
     this.onStatusCallback = options.onStatus;
   }
 
+  public stop(): void {
+    this.abortController.abort();
+    this.provider.dispose?.();
+  }
+
   /**
    * Processes an incoming direct message through the iterative ReAct loop.
    */
-  public async handleMessage(message: DirectMessage): Promise<string> {
+  public async handleMessage(message: DirectMessage, signal?: AbortSignal): Promise<string> {
+    const isAborted = () => this.abortController.signal.aborted || signal?.aborted;
+    if (isAborted()) {
+      throw new Error('Operation aborted');
+    }
+
     // 1. Gather dynamic session context
     const currentBot = await this.botService.getBot(this.sessionId, this.botId);
     const peerBots = await this.botService.listBots(this.sessionId);
@@ -144,8 +156,13 @@ export class AutonomousAgentLoop {
     let finalResponseText = '';
     let iteration = 0;
 
-    // 4. Bounded ReAct Iteration Loop (Max 10 steps per ADR-204)
+    // 4. Bounded ReAct Iteration Loop (Max 10 steps per ADR-204, AUD-20, REQ-12)
+    const effectiveSignal = signal ?? this.abortController.signal;
+
     while (iteration < this.maxIterations) {
+      if (isAborted()) {
+        throw new Error('Operation aborted');
+      }
       iteration++;
 
       let aiResponse: AIResponse;
@@ -153,16 +170,23 @@ export class AutonomousAgentLoop {
         aiResponse = await this.provider.generateResponse({
           systemPrompt,
           messages: conversation,
-          tools: availableTools
+          tools: availableTools,
+          signal: effectiveSignal,
         });
       } catch (err: unknown) {
         if (err instanceof RateLimitPauseError) {
+          if (isAborted()) {
+            throw new Error('Operation aborted');
+          }
           const delaySec = Math.ceil(err.retryDelaySeconds);
           const notifyMsg = `⏳ Kuota Gemini tercapai (429 RESOURCE_EXHAUSTED). Menunggu jeda ${delaySec} detik sebelum mencoba kembali...`;
           if (this.onStatusCallback) {
             await this.onStatusCallback(notifyMsg);
           }
-          await new Promise((resolve) => setTimeout(resolve, (delaySec + 1) * 1000));
+          await sleepWithSignal((delaySec + 1) * 1000, effectiveSignal);
+          if (isAborted()) {
+            throw new Error('Operation aborted');
+          }
           iteration--; // Retry this turn without incrementing bounded counter
           continue;
         }

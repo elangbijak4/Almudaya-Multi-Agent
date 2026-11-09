@@ -11,6 +11,7 @@ import { GeminiProvider } from '../../ai/gemini.js';
 import { MockAIProvider } from '../../ai/mock-provider.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
 import { ValidationError } from '../../core/errors.js';
+import { registerSecret } from '../../execution/environment.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -81,7 +82,7 @@ export function registerBotCommands(program: Command): void {
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
     .option('--provider <provider>', 'AI model provider ("gemini" | "mock")')
     .option('--model <model>', 'AI model name (defaults to "gemini-2.5-flash")')
-    .option('--api-key <key>', 'Explicit AI model API key (memory-only, Invariant 7)')
+    .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY env var)')
     .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
     .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
     .option('-w, --workspace <path>', 'Workspace directory path')
@@ -118,8 +119,9 @@ export function registerBotCommands(program: Command): void {
           throw new ValidationError(`Invalid max-iterations "${options.maxIterations}". Must be a positive integer.`);
         }
 
-        // Secret sanitization audit warning (NT-02, REQ-CLI-SECRET-01)
+        // Secret sanitization audit warning (NT-02, REQ-CLI-SECRET-01, REQ-07)
         if (options.apiKey) {
+          registerSecret(options.apiKey);
           console.warn(
             '[SECURITY WARNING] Passing secrets via CLI arguments (--api-key) is insecure as it exposes credentials to process listings and shell history. Use the GEMINI_API_KEY environment variable instead (NT-02).'
           );
@@ -174,7 +176,7 @@ export function registerBotCommands(program: Command): void {
           description: botDescription,
           heartbeatIntervalMs,
           autoAcknowledge: options.autoAck ?? true,
-          onMessage: async (msg) => {
+          onMessage: async (msg, signal) => {
             const notif = `📨 [BOT ${runtime.botId}] Pesan masuk dari ${msg.sender_bot_id}: "${msg.content}"`;
             if (consoleInstance) {
               consoleInstance.printNotification(notif);
@@ -191,7 +193,7 @@ export function registerBotCommands(program: Command): void {
               }
 
               try {
-                const reply = await agentLoop.handleMessage(msg);
+                const reply = await agentLoop.handleMessage(msg, signal);
                 const replyMsg = `✅ [BOT ${runtime.botId}] Balasan otonom terkirim:\n   "${reply.slice(0, 160)}${reply.length > 160 ? '...' : ''}"`;
                 if (consoleInstance) {
                   consoleInstance.printNotification(replyMsg);

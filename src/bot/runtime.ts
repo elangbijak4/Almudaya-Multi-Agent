@@ -13,7 +13,7 @@ export interface BotRuntimeOptions {
   heartbeatIntervalMs?: number;
   pollIntervalMs?: number;
   autoAcknowledge?: boolean;
-  onMessage?: (message: DirectMessage) => Promise<void>;
+  onMessage?: (message: DirectMessage, signal?: AbortSignal) => Promise<void>;
   onBroadcast?: (event: BroadcastEvent) => Promise<void>;
 }
 
@@ -34,8 +34,9 @@ export class BotRuntime {
   private heartbeatTimer?: NodeJS.Timeout;
   private pollTimer?: NodeJS.Timeout;
   private signalCleanup?: () => void;
+  private abortController: AbortController = new AbortController();
 
-  private readonly onMessageCallback?: (message: DirectMessage) => Promise<void>;
+  private readonly onMessageCallback?: (message: DirectMessage, signal?: AbortSignal) => Promise<void>;
   private readonly onBroadcastCallback?: (event: BroadcastEvent) => Promise<void>;
 
   constructor(storage: IBlackboardStorage, options: BotRuntimeOptions) {
@@ -58,6 +59,10 @@ export class BotRuntime {
     return this.isRunning;
   }
 
+  public get signal(): AbortSignal {
+    return this.abortController.signal;
+  }
+
   /**
    * Starts the bot runtime: registers/activates the bot, starts heartbeating and message polling.
    */
@@ -65,6 +70,8 @@ export class BotRuntime {
     if (this.isRunning) {
       throw new Error(`Bot runtime is already running for bot "${this.botId}"`);
     }
+
+    this.abortController = new AbortController();
 
     let record: BotRecord;
 
@@ -142,7 +149,7 @@ export class BotRuntime {
    * Storage-level leases prevent inter-process duplicate claims (RELIA-01, ADR-004).
    */
   public async pollCycle(): Promise<void> {
-    if (!this.isRunning || this.pollInFlight) return;
+    if (!this.isRunning || this.pollInFlight || this.abortController.signal.aborted) return;
     this.pollInFlight = true;
 
     try {
@@ -155,16 +162,20 @@ export class BotRuntime {
       if (broadcasts.length > 0) {
         if (this.onBroadcastCallback) {
           for (const evt of broadcasts) {
+            if (this.abortController.signal.aborted) break;
             await this.onBroadcastCallback(evt);
             // Advance cursor only AFTER callback completes successfully (AUD-07, REQ-05)
             await this.messagingService.advanceBroadcastCursor(this.sessionId, this.botId, evt);
           }
         } else {
           for (const evt of broadcasts) {
+            if (this.abortController.signal.aborted) break;
             await this.messagingService.advanceBroadcastCursor(this.sessionId, this.botId, evt);
           }
         }
       }
+
+      if (this.abortController.signal.aborted) return;
 
       // 2. Recover any expired leases from crashed workers
       await this.messagingService.delivery.recoverExpiredLeases(this.sessionId, this.botId);
@@ -174,7 +185,7 @@ export class BotRuntime {
       const processedInThisCycle: string[] = [];
       let msg: DirectMessage | null = null;
 
-      while (this.isRunning) {
+      while (this.isRunning && !this.abortController.signal.aborted) {
         msg = await this.messagingService.delivery.claimNextMessage(
           this.sessionId,
           this.botId,
@@ -187,7 +198,7 @@ export class BotRuntime {
 
         try {
           if (this.onMessageCallback) {
-            await this.onMessageCallback(msg);
+            await this.onMessageCallback(msg, this.abortController.signal);
           }
 
           // Complete message only after consumer callback succeeds, with lease ownership and fencing token (AUD-08, REQ-04)
@@ -224,6 +235,7 @@ export class BotRuntime {
   public async stop(): Promise<void> {
     if (!this.isRunning) return;
     this.isRunning = false;
+    this.abortController.abort();
 
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);

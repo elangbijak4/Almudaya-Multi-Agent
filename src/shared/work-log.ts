@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import type { IBlackboardStorage } from '../blackboard/interface.js';
+import { redactRecursively } from '../execution/environment.js';
 
 export const WorkActionTypeSchema = z.enum([
   'WRITE',
@@ -79,8 +80,8 @@ export class WorkLogService {
       target_root_path: input.targetRootPath.trim(),
       relative_path: input.relativePath?.trim(),
       full_path: input.fullPath?.trim(),
-      summary: input.summary.trim(),
-      details: input.details ?? {},
+      summary: redactRecursively(input.summary.trim()),
+      details: redactRecursively(input.details ?? {}),
     };
 
     const validated = WorkLogEntrySchema.parse(entry);

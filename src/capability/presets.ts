@@ -27,13 +27,13 @@ export const CAPABILITY_PRESETS: Record<string, CapabilityPresetDefinition> = {
     templates: [
       {
         capability: 'filesystem.read_external',
-        scope: { operations: ['read', 'list'] },
+        scope: { paths: ['*'], operations: ['read', 'list'] },
         approval_mode: 'session',
         reason: 'Preset controlled: read access to shared reference documents',
       },
       {
         capability: 'filesystem.write_external',
-        scope: { operations: ['write', 'edit'] },
+        scope: { paths: ['*'], operations: ['write', 'edit'] },
         approval_mode: 'per_action',
         reason: 'Preset controlled: write requires human confirmation per action',
       },
@@ -45,13 +45,13 @@ export const CAPABILITY_PRESETS: Record<string, CapabilityPresetDefinition> = {
     templates: [
       {
         capability: 'filesystem.read_external',
-        scope: { operations: ['read', 'list', 'stat'] },
+        scope: { paths: ['*'], operations: ['read', 'list', 'stat'] },
         approval_mode: 'session',
         reason: 'Preset extended: external workspace read access',
       },
       {
         capability: 'filesystem.write_external',
-        scope: { operations: ['write', 'edit'] },
+        scope: { paths: ['*'], operations: ['write', 'edit'] },
         approval_mode: 'session',
         reason: 'Preset extended: external workspace write access',
       },
@@ -69,19 +69,19 @@ export const CAPABILITY_PRESETS: Record<string, CapabilityPresetDefinition> = {
     templates: [
       {
         capability: 'filesystem.read_external',
-        scope: {},
+        scope: { paths: ['*'] },
         approval_mode: 'session',
         reason: 'Preset unrestricted: full read access',
       },
       {
         capability: 'filesystem.write_external',
-        scope: {},
+        scope: { paths: ['*'] },
         approval_mode: 'session',
         reason: 'Preset unrestricted: full write access',
       },
       {
         capability: 'command.arbitrary',
-        scope: {},
+        scope: { commands: ['*'] },
         approval_mode: 'session',
         reason: 'Preset unrestricted: arbitrary command execution',
       },

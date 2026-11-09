@@ -155,10 +155,10 @@ export class PolicyEngine {
         }
       }
 
-      // Check path scope (AUD-05, REQ-03)
+      // Check path scope (AUD-05, REQ-03, AUD-13, REQ-09)
       if (targetResource && grant.scope.paths && grant.scope.paths.length > 0) {
         const pathMatches = grant.scope.paths.some((p) =>
-          isPathInsideRoot(p, targetResource, request.platform ?? process.platform)
+          p === '*' || isPathInsideRoot(p, targetResource, request.platform ?? process.platform)
         );
         if (!pathMatches) {
           scopeFailureReason = `Path "${targetResource}" is not inside granted path scopes: [${grant.scope.paths.join(', ')}].`;
@@ -171,6 +171,7 @@ export class PolicyEngine {
         const baseCmd = extractCommandBinary(targetResource);
         const baseCmdWithoutExt = baseCmd.replace(/\.(exe|cmd|bat)$/i, '');
         const cmdMatches = grant.scope.commands.some((c) => {
+          if (c === '*') return true;
           const lowerC = c.toLowerCase().trim();
           const lowerCWithoutExt = lowerC.replace(/\.(exe|cmd|bat)$/i, '');
           return (
@@ -222,7 +223,23 @@ export class PolicyEngine {
       };
     }
 
-    // 9. Confirm enforcement backend support (AUD-01, AUD-14, REQ-01)
+    // 9. Confirm enforcement backend support (AUD-01, AUD-13, AUD-14, REQ-01, REQ-09)
+    const UNENFORCED_CAPABILITIES = new Set([
+      'system.config_access',
+      'network.outbound',
+      'system.environment_access',
+      'system.process_control',
+    ]);
+    if (UNENFORCED_CAPABILITIES.has(capability) && request.enforcementBackendAvailable !== true) {
+      return {
+        decision: 'DENY',
+        capability,
+        reason: `Capability "${capability}" is not currently supported: required enforcement backend (${def.enforcement}) is not implemented. Failing closed.`,
+        requires_approval: false,
+        risk: def.risk,
+      };
+    }
+
     if (request.enforcementBackendAvailable === false) {
       return {
         decision: 'DENY',

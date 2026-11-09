@@ -83,4 +83,5 @@ export interface IAIModelProvider {
   readonly providerId: string;
   readonly modelName: string;
   generateResponse(request: AIRequest): Promise<AIResponse>;
+  dispose?(): void;
 }

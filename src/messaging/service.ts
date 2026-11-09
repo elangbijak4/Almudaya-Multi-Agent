@@ -15,6 +15,7 @@ import {
 import { MessageNotFoundError, ValidationError } from '../core/errors.js';
 import { InboxDeliveryService } from './delivery.js';
 import { DEFAULT_MAX_ATTEMPTS } from './inbox-state.js';
+import { redactSecrets, redactRecursively } from '../execution/environment.js';
 
 export class MessagingService {
   private readonly storage: IBlackboardStorage;
@@ -68,8 +69,8 @@ export class MessagingService {
       sender_bot_id: senderId,
       timestamp: new Date().toISOString(),
       category: input.category ?? 'ACTIVITY',
-      content: input.content.trim(),
-      metadata: input.metadata ?? {},
+      content: redactSecrets(input.content.trim()),
+      metadata: redactRecursively(input.metadata ?? {}),
     };
 
     await this.storage.appendBroadcast(sessionId, event);
@@ -310,9 +311,9 @@ export class MessagingService {
         recipient_bot_id: recipientBotId,
         timestamp: new Date().toISOString(),
         message_type: input.messageType ?? 'DIRECT',
-        content: input.content.trim(),
+        content: redactSecrets(input.content.trim()),
         status: 'unread',
-        metadata: input.metadata ?? {},
+        metadata: redactRecursively(input.metadata ?? {}),
         delivery_state: 'RECEIVED',
         attempt_count: 0,
         max_attempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,

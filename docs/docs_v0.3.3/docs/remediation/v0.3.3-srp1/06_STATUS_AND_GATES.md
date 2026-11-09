@@ -4,7 +4,7 @@
 - Proposed target package: 0.3.3
 - Baseline commit: `23bc928e3a7309c69cad1f0e5023d03a81b86bf1`
 - Working branch: `security/srp-1-v0.3.3`
-- Overall status: PHASE 4 COMPLETE (AWAITING GATE APPROVAL)
+- Overall status: ALL PHASES COMPLETE (v0.3.3 RELEASE READY)
 
 | Phase | Description | Exit gate | Status | Approval |
 |---|---|---|---|---|
@@ -13,8 +13,8 @@
 | 2 | Scope and persistence integrity | Traversal/path-scope/TOCTOU tests | Completed | Approved (User prompt 11) |
 | 3 | Messaging delivery correctness | No event loss or stale lease mutation | Completed | Approved (User prompt 12) |
 | 4 | Lock/audit/approval integrity | Fencing, durable audit, working approval | Completed | Approved (Prompt 13) |
-| 5 | Secret/prompt/preset/cancellation | Redaction, adversarial, preset, abort tests | Completed | Pending Approval |
-| 6 | Docs and release verification | Full matrix, supported OS verification, GO/NO-GO | Not started | — |
+| 5 | Secret/prompt/preset/cancellation | Redaction, adversarial, preset, abort tests | Completed | Approved (Prompt 14) |
+| 6 | Docs and release verification | Full matrix, supported OS verification, GO/NO-GO | Completed | GO (Release Ready) |
 
 ## Gate policy
 A phase is not complete until:

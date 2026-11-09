@@ -41,13 +41,13 @@ For each finding record: `Not started`, `In progress`, `Implemented`, `Tested`, 
 | AUD-08 | Implemented | 00b10ff | tests/messaging/inbox-state.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_3_REPORT.md | Gate Approved (User prompt 12) |
 | AUD-09 | Implemented | df55c20 | tests/core/lock.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_4_REPORT.md | Gate Approved (User prompt 13) |
 | AUD-10 | Implemented | 00b10ff | tests/messaging/direct-message.test.ts, tests/messaging/broadcast.test.ts, tests/cli/messaging-cli.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_3_REPORT.md | Gate Approved (User prompt 12) |
-| AUD-11 | Implemented | 115aac0 | tests/security/secret-redaction-canary.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Pending Gate Approval |
+| AUD-11 | Implemented | 115aac0 | tests/security/secret-redaction-canary.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Gate Approved (User prompt 14) |
 | AUD-12 | Implemented | df55c20 | tests/execution/controller.test.ts, tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_4_REPORT.md | Gate Approved (User prompt 13) |
-| AUD-13 | Implemented | 115aac0 | tests/capability/presets-table.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Pending Gate Approval |
+| AUD-13 | Implemented | 115aac0 | tests/capability/presets-table.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Gate Approved (User prompt 14) |
 | AUD-14 | Implemented | 910db4b | tests/execution/controller.test.ts, tests/capability/capability.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_1_REPORT.md | Gate Approved (User prompt 10) |
-| AUD-15 | Implemented | 115aac0 | tests/security/prompt-injection.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Pending Gate Approval |
+| AUD-15 | Implemented | 115aac0 | tests/security/prompt-injection.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Gate Approved (User prompt 14) |
 | AUD-16 | Implemented | df55c20 | tests/capability/capability.test.ts, tests/execution/controller.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_4_REPORT.md | Gate Approved (User prompt 13) |
 | AUD-17 | Implemented | 95914d6 | tests/tools/file-tools.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_2_REPORT.md | Gate Approved (User prompt 11) |
-| AUD-18 | Not started | — | — | — | — |
-| AUD-19 | Not started | — | — | — | — |
-| AUD-20 | Implemented | 115aac0 | tests/bot/cancellation.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Pending Gate Approval |
+| AUD-18 | Implemented | 82aa536 | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/05_TRACEABILITY_MATRIX.md | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md | Gate Approved (User prompt 14) |
+| AUD-19 | Implemented | 82aa536 | package.json, package-lock.json, tests/cli.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md | Gate Approved (User prompt 14) |
+| AUD-20 | Implemented | 115aac0 | tests/bot/cancellation.test.ts | docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/PHASE_5_REPORT.md | Gate Approved (User prompt 14) |

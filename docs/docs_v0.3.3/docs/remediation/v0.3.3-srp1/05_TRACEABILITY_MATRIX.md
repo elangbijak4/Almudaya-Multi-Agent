@@ -19,8 +19,8 @@
 | AUD-15 | REQ-10 | Embedded delimiter/injection adversarial tests (`tests/security/prompt-injection.test.ts`) | 5 | Implemented (115aac0) |
 | AUD-16 | REQ-11 | Audit store failure prevents protected action (`tests/capability/capability.test.ts`, `tests/execution/controller.test.ts`) | 4 | Implemented (df55c20) |
 | AUD-17 | REQ-03/01 | Hardlink/TOCTOU tests + OS boundary tests (`tests/tools/file-tools.test.ts`) | 2 | Implemented (95914d6) |
-| AUD-18 | REQ-13 | All docs and tests use canonical finding IDs | 6 | Not started |
-| AUD-19 | REQ-13 | lockfile/package/archive hygiene checks | 6 | Not started |
+| AUD-18 | REQ-13 | All docs and tests use canonical finding IDs (`01_AUDIT_FINDINGS_REGISTER.md`, `05_TRACEABILITY_MATRIX.md`) | 6 | Implemented (82aa536) |
+| AUD-19 | REQ-13 | lockfile/package/archive hygiene checks (`package.json`, `package-lock.json`, `dist-release/`) | 6 | Implemented (82aa536) |
 | AUD-20 | REQ-12 | Stop aborts provider request and retry wait (`tests/bot/cancellation.test.ts`) | 5 | Implemented (115aac0) |
 
 ## Required per-row completion fields

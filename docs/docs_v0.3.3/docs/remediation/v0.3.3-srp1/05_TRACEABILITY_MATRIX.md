@@ -10,14 +10,14 @@
 | AUD-06 | REQ-04 | limit=1 mutates only returned/acked message (`tests/messaging/direct-message.test.ts`) | 3 | Implemented (00b10ff) |
 | AUD-07 | REQ-05 | Mixed-category, callback-failure, restart redelivery (`tests/messaging/broadcast-cursor-atomic.test.ts`) | 3 | Implemented (00b10ff) |
 | AUD-08 | REQ-04 | Stale lease owner/fencing token rejected (`tests/messaging/inbox-state.test.ts`) | 3 | Implemented (00b10ff) |
-| AUD-09 | REQ-06 | Stale lock holder cannot write after reacquire | 4 | Not started |
+| AUD-09 | REQ-06 | Stale lock holder cannot write after reacquire (`tests/core/lock.test.ts`) | 4 | Implemented (df55c20) |
 | AUD-10 | REQ-02 | Unknown sender rejected by service (`tests/messaging/direct-message.test.ts`, `tests/messaging/broadcast.test.ts`, `tests/cli/messaging-cli.test.ts`) | 3 | Implemented (00b10ff) |
 | AUD-11 | REQ-07 | Canary secret absent from argv and all sinks | 5 | Not started |
-| AUD-12 | REQ-08 | Per-action approval invokes trusted approver or grant rejected | 4 | Not started |
+| AUD-12 | REQ-08 | Per-action approval invokes trusted approver or grant rejected (`tests/execution/controller.test.ts`, `tests/capability/capability.test.ts`) | 4 | Implemented (df55c20) |
 | AUD-13 | REQ-09 | Table-driven end-to-end preset tests | 5 | Not started |
 | AUD-14 | REQ-01/09 | Unsupported capability denies (`tests/execution/controller.test.ts`, `tests/capability/capability.test.ts`) | 1/5 | Implemented (910db4b) |
 | AUD-15 | REQ-10 | Embedded delimiter/injection adversarial tests | 5 | Not started |
-| AUD-16 | REQ-11 | Audit store failure prevents protected action | 4 | Not started |
+| AUD-16 | REQ-11 | Audit store failure prevents protected action (`tests/capability/capability.test.ts`, `tests/execution/controller.test.ts`) | 4 | Implemented (df55c20) |
 | AUD-17 | REQ-03/01 | Hardlink/TOCTOU tests + OS boundary tests (`tests/tools/file-tools.test.ts`) | 2 | Implemented (95914d6) |
 | AUD-18 | REQ-13 | All docs and tests use canonical finding IDs | 6 | Not started |
 | AUD-19 | REQ-13 | lockfile/package/archive hygiene checks | 6 | Not started |

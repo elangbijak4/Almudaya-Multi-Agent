@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.3] - 2026-11-09
+
+### Security & Reliability Remediation (SRP-1)
+
+#### Fixed & Hardened
+- **Fail-Closed Execution & Identity (AUD-01, AUD-02, AUD-04, AUD-14 / REQ-01, REQ-02):**
+  - Enforced mandatory authenticated `sessionId` and `botId` identity context across `ExecutionController`, `run_command`, `write_file`, `edit_file`, and messaging boundaries; removed policy skip when context is absent.
+  - Strict bot binding: bot-specific capability grants match only the authenticated bot principal.
+  - Truthful isolation contracts: Windows process tree and Linux process group backends accurately report lack of OS-level filesystem/network sandboxing (`os_isolation_required`).
+  - Added platform-specific negative tests verifying access to sentinel files and disallowed resources is denied.
+- **Scope & Persistence Integrity (AUD-03, AUD-05, AUD-17 / REQ-03):**
+  - Enforced session ID regex format validation before constructing any filesystem path across all persistence layers, preventing directory traversal via path manipulation.
+  - Canonical, platform-aware path containment checks with case preservation respecting filesystem semantics.
+  - Hardened against symlink, Windows Directory Junction, and traversal attacks.
+- **Messaging Delivery Correctness & Lease Fencing (AUD-06, AUD-07, AUD-08, AUD-10 / REQ-04, REQ-05, REQ-02):**
+  - Fixed `readInbox` to apply filters and limits before altering delivery state; messages outside the returned page are never marked read.
+  - Monotonic lease fencing tokens (`fence_token`) required on worker message ACK (`completeMessage`) and failure (`failMessage`), preventing stale workers from mutating reclaimed messages.
+  - Fixed broadcast event cursors to advance strictly after consumer callback succeeds; pagination and filtering never skip unread events across categories.
+  - Authenticated sender identity at service boundary: unknown or inactive senders are rejected; system/human principals require explicit typed identification.
+- **Lock Coordination, Storage Fencing & Approval Integrity (AUD-09, AUD-12, AUD-16 / REQ-06, REQ-08, REQ-11):**
+  - Atomic mutual-exclusion barrier (`.lock_barrier`) for stale lock recovery and lease renewal, eliminating TOCTOU races where a new owner lock could be unlinked.
+  - Enforced monotonic fencing token validation at the storage write boundary (`verifyStorageFencing`) so stale lock holders cannot commit after lease expiry.
+  - Interactive human approval callback wired into `ExecutionController.authorizeFileAccess` for `per_action` filesystem access with `CAPABILITY_APPROVED` / `CAPABILITY_DENIED` audit recording; rejection of unsupported `per_action` grants at creation time if no approval interface is available.
+  - Mandatory security audit persistence: capability grants roll back and sensitive executions fail closed if audit logs cannot be durably written.
+- **Secret Lifecycle, Presets, Prompt Trust & Cancellation (AUD-11, AUD-13, AUD-15, AUD-20 / REQ-07, REQ-09, REQ-10, REQ-12):**
+  - Deprecated `--api-key` in CLI with explicit security warning; registered provider secrets on init and unregistered on `dispose()`.
+  - Centralized recursive secret redaction (`redactRecursively`) across work logs, broadcast logs, direct message inboxes, security audit logs, exceptions, and command outputs.
+  - Reconciled capability preset definitions (`controlled`, `extended`, `unrestricted`) with explicit `paths: ['*']` and `commands: ['*']` wildcards, supporting caller path overrides. Unenforced capabilities fail closed.
+  - Escaped delimiter sequences (`<<<` to `\<\<\<`, `>>>` to `\>\>\>`) in untrusted peer messages, metadata attributes, and shared work logs; declared delimiters as defense-in-depth in prompt boundary notice.
+  - Integrated `AbortController` cancellation propagation across `BotRuntime`, `AutonomousAgentLoop`, provider inference calls, and rate-limit retry backoffs (`sleepWithSignal`).
+- **Release Hygiene & Consistency (AUD-18, AUD-19 / REQ-13):**
+  - Canonical reconciliation of audit finding IDs AUD-01 through AUD-20 across all documentation, tests, and traceability registers.
+  - Synchronized package version `0.3.3` across `package.json`, `package-lock.json`, and core runtime version constants.
+
+---
+
 ## [0.3.2] - 2026-11-08
 
 ### Added

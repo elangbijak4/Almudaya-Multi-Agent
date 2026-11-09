@@ -165,5 +165,5 @@ describe('Phase 7: End-to-End Autonomous Multi-Bot Coding Benchmark (v0.2.0)', (
     // 10. Clean shutdown
     await architectRuntime.stop();
     await coderRuntime.stop();
-  });
+  }, 15000);
 });

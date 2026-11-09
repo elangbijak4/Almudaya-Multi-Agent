@@ -1,14 +1,52 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.2)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 295 Passed](https://img.shields.io/badge/Tests-295%20Passed-brightgreen.svg)](./docs/docs_v0.3.2/docs/remediation/v0.3.2/FINAL_VERIFICATION_REPORT.md)
+[![Tests: 379 Passed](https://img.shields.io/badge/Tests-379%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
 [![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
 
 A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, and **Cross-Root Location-Aware Session Work Memory**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.3 (Security Remediation Package 1 — SRP-1)
+
+Version 0.3.3 successfully remediates all 20 findings (AUD-01 through AUD-20) identified in the independent security and runtime audit:
+
+1. **Fail-Closed Execution & Identity (AUD-01, AUD-02, AUD-04, AUD-14):**
+   - Mandatory session identity and authenticated bot principal required for all sensitive executions and message dispatches; zero bypass when context is absent.
+   - Capability grants bound to specific bots require exact authenticated caller matching.
+   - Truthful isolation reporting; execution fails closed with exit code 127 when required OS sandboxing (`os_isolation_required`) is unsupported by the platform backend.
+
+2. **Scope & Path Traversal Hardening (AUD-03, AUD-05, AUD-17):**
+   - Session identifier format validation (`SESSION_ID_REGEX`) prior to path construction prevents directory traversal across all storage operations.
+   - Canonical, platform-aware path containment with case preservation respecting OS filesystem semantics.
+   - Symlink, directory junction, and hardlink TOCTOU defenses.
+
+3. **Messaging Delivery Correctness & Lease Fencing (AUD-06, AUD-07, AUD-08, AUD-10):**
+   - Fixed inbox pagination/limit to never mark unreturned messages as read.
+   - Broadcast cursors advance strictly after successful callback execution; category filtering never loses unread events.
+   - Worker lease fencing tokens prevent stale workers from mutating reclaimed messages.
+   - Authenticated sender verification at service boundary.
+
+4. **Lock Coordination, Write Fencing & Durable Audit (AUD-09, AUD-12, AUD-16):**
+   - Atomic mutual-exclusion barrier (`.lock_barrier`) eliminates stale lock recovery and renewal race conditions.
+   - Monotonic fencing validation at the storage write boundary (`verifyStorageFencing`) prevents stale lock holders from committing after lease expiration.
+   - Wired interactive human approval callback for `per_action` filesystem access; rejection of unsupported grants at creation time.
+   - Mandatory security audit persistence: operations fail closed and grants roll back if audit logs cannot be written.
+
+5. **Secret Redaction, Presets, Prompt Delimiters & Cancellation (AUD-11, AUD-13, AUD-15, AUD-20):**
+   - Centralized recursive secret redaction (`redactRecursively`) across work logs, broadcasts, inboxes, and audit trails; API key deprecation on CLI; provider secret registration and disposal.
+   - Reconciled capability preset definitions (`controlled`, `extended`, `unrestricted`) with explicit wildcard scopes and path override support. Unenforced capabilities fail closed.
+   - Prompt delimiter escaping (`<<<` to `\<\<\<`, `>>>` to `\>\>\>`) for untrusted peer messages, metadata, and shared work logs.
+   - Clean `AbortSignal` cancellation propagation across bot runtime, agent loop, provider calls, and rate-limit wait delays without post-stop retry.
+
+6. **Release Hygiene & Verification (AUD-18, AUD-19):**
+   - Synchronized package version (`0.3.3`) and lockfile metadata.
+   - 47 test suites / 379 tests passing with 100% pass rate.
 
 ---
 

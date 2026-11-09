@@ -5,7 +5,7 @@ import { createProgram } from '../src/cli/index.js';
 describe('Core Version & Metadata', () => {
   it('should export expected package metadata constants', () => {
     expect(PACKAGE_NAME).toBe('almudaya-multiagent');
-    expect(VERSION).toBe('0.3.2');
+    expect(VERSION).toBe('0.3.3');
     expect(CLI_NAME).toBe('almudaya');
   });
 });
@@ -14,7 +14,7 @@ describe('CLI Commander Program', () => {
   it('should configure the CLI name, version, and description correctly', () => {
     const program = createProgram();
     expect(program.name()).toBe('almudaya');
-    expect(program.version()).toBe('0.3.2');
+    expect(program.version()).toBe('0.3.3');
     expect(program.description()).toContain('Almudaya Multi-Agent CLI');
   });
 

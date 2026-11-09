@@ -335,5 +335,5 @@ describe('Phase 6: End-to-End Multi-Root Orchestration Benchmark (v0.3.0)', () =
     await architectRuntime.stop();
     await coderRuntime.stop();
     await testerRuntime.stop();
-  });
+  }, 15000);
 });

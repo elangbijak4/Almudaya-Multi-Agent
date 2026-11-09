@@ -24,9 +24,13 @@ class MockCancellableProvider implements IAIModelProvider {
   public simulateRateLimit = false;
   public rateLimitDelaySeconds = 10;
   public hangMs = 0;
+  public onGenerateStart?: () => void;
 
   public async generateResponse(request: AIRequest): Promise<AIResponse> {
     this.callCount++;
+    if (this.onGenerateStart) {
+      this.onGenerateStart();
+    }
 
     if (request.signal?.aborted) {
       throw new Error('Request aborted by signal prior to inference');
@@ -142,14 +146,15 @@ describe('AUD-20 (REQ-12) Cancellation Propagation & Graceful Abort Suite', () =
     });
 
     const abortController = new AbortController();
+    provider.onGenerateStart = () => {
+      // Abort once provider inference has actually started
+      setTimeout(() => {
+        abortController.abort();
+      }, 10);
+    };
 
     // Trigger handleMessage in background
     const handlePromise = loop.handleMessage(createDummyMessage(), abortController.signal);
-
-    // Abort after 50ms
-    setTimeout(() => {
-      abortController.abort();
-    }, 50);
 
     await expect(handlePromise).rejects.toThrow(/aborted/i);
     expect(provider.callCount).toBe(1);
@@ -168,14 +173,15 @@ describe('AUD-20 (REQ-12) Cancellation Propagation & Graceful Abort Suite', () =
     });
 
     const abortController = new AbortController();
+    provider.onGenerateStart = () => {
+      // Abort once rate limit pause is entered in sleepWithSignal
+      setTimeout(() => {
+        abortController.abort();
+      }, 20);
+    };
+
     const startTime = Date.now();
-
     const handlePromise = loop.handleMessage(createDummyMessage(), abortController.signal);
-
-    // Abort after 80ms while agent is paused in sleepWithSignal
-    setTimeout(() => {
-      abortController.abort();
-    }, 80);
 
     await expect(handlePromise).rejects.toThrow(/cancelled|aborted/i);
     const duration = Date.now() - startTime;

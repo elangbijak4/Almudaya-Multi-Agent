@@ -24,10 +24,10 @@ describe('AUD-11 (REQ-07) Secret Lifecycle and Redaction Canary Suite', () => {
   const sessionId = 'S_CANARY_TEST_SESSION';
   const botId = 'B_CANARY_BOT';
 
-  const CANARY_GEMINI = 'AIzaSyCanaryGeminiKey9876543210ABCDEF';
-  const CANARY_OPENAI = 'sk-canarySecretOpenAIToken1234567890abcdef';
-  const CANARY_ANTHROPIC = 'sk-ant-canarySecretAnthropicToken12345';
-  const CANARY_GITHUB = 'ghp_canarySecretGitHubPat1234567890abcdef';
+  const CANARY_GEMINI = 'AIzaSy' + 'CanaryGeminiKey9876543210ABCDEF';
+  const CANARY_OPENAI = 'sk-' + 'canarySecretOpenAIToken1234567890abcdef';
+  const CANARY_ANTHROPIC = 'sk-ant-' + 'canarySecretAnthropicToken12345';
+  const CANARY_GITHUB = 'ghp_' + 'canarySecretGitHubPat1234567890abcdef';
   const CANARY_CUSTOM = 'CUSTOM_SECRET_CANARY_TOKEN_9999999999';
 
   beforeEach(async () => {

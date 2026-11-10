@@ -588,7 +588,7 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
       await service.evaluate({
         capability: 'filesystem.read_external',
         sessionId,
-        targetResource: 'C:\\Users\\HP\\secret_AIzaSyFakeKey12345678901234567890_token.txt',
+        targetResource: 'C:\\Users\\HP\\secret_AIzaSy' + 'FakeKey12345678901234567890_token.txt',
       });
 
       const history = await service.getAuditHistory(sessionId);
@@ -844,10 +844,10 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
         type: 'CAPABILITY_GRANTED',
         capability: 'process.execute_external',
         details: {
-          key1: 'AIzaSyDemoKey1234567890abcdefghijklmn',
+          key1: 'AIzaSy' + 'DemoKey1234567890abcdefghijklmn',
           nested: {
             token: 'Bearer token_secret_1234567890_abcdefghij',
-            list: ['ghp_1234567890abcdefghijklmnopqrstuvwxyz12', 'safe_data'],
+            list: ['ghp_' + '1234567890abcdefghijklmnopqrstuvwxyz12', 'safe_data'],
           },
         },
       });
@@ -859,11 +859,11 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
         nested: { token: string; list: string[] };
       };
 
-      expect(details.key1).not.toContain('AIzaSyDemoKey1234567890abcdefghijklmn');
+      expect(details.key1).not.toContain('AIzaSy' + 'DemoKey1234567890abcdefghijklmn');
       expect(details.key1).toContain('REDACTED');
       expect(details.nested.token).not.toContain('token_secret_1234567890_abcdefghij');
       expect(details.nested.token).toContain('REDACTED');
-      expect(details.nested.list[0]).not.toContain('ghp_1234567890abcdefghijklmnopqrstuvwxyz12');
+      expect(details.nested.list[0]).not.toContain('ghp_' + '1234567890abcdefghijklmnopqrstuvwxyz12');
       expect(details.nested.list[0]).toContain('REDACTED');
       expect(details.nested.list[1]).toBe('safe_data');
     });

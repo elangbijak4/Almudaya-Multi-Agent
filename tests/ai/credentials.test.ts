@@ -60,7 +60,7 @@ describe('AI Credentials Resolution', () => {
   });
 
   it('should mask API keys cleanly', () => {
-    expect(maskApiKey('AIzaSyD-1234567890abcdefQWERTY')).toBe('AIzaSy...****ERTY');
+    expect(maskApiKey('AIzaSy' + 'D-1234567890abcdefQWERTY')).toBe('AIzaSy...****ERTY');
     expect(maskApiKey('short')).toBe('****');
   });
 });

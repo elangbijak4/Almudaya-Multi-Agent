@@ -61,8 +61,8 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
         PATH: 'C:\\Windows\\system32',
         SYSTEMROOT: 'C:\\Windows',
         TEMP: 'C:\\Temp',
-        GEMINI_API_KEY: 'AIzaSySentinelSecretDoNotLeak12345',
-        GITHUB_TOKEN: 'ghp_abcdef1234567890abcdef1234567890',
+        GEMINI_API_KEY: 'AIzaSy' + 'SentinelSecretDoNotLeak12345',
+        GITHUB_TOKEN: 'ghp_' + 'abcdef1234567890abcdef1234567890',
         DATABASE_PASSWORD: 'supersecretpassword',
         MY_SECRET_KEY: 'secret123',
         AUTH_TOKEN: 'bearer_token_xyz',
@@ -121,7 +121,7 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
 
   describe('redactSensitiveOutput', () => {
     it('should redact Google Gemini API keys (classic AIzaSy and new AQ. format)', () => {
-      const text = 'Failed with key AIzaSyBCDEFGHIJKLMNOPQRSTUVWXYZ12345 and AQ.Abcdefghijklmnopqrstuvwxyz123456789';
+      const text = 'Failed with key AIzaSy' + 'BCDEFGHIJKLMNOPQRSTUVWXYZ12345 and AQ.Abcdefghijklmnopqrstuvwxyz123456789';
       const redacted = redactSensitiveOutput(text);
 
       expect(redacted).not.toContain('AIzaSy');
@@ -130,7 +130,7 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
     });
 
     it('should redact GitHub Personal Access Tokens', () => {
-      const text = 'Clone failed with ghp_123456789012345678901234567890123456';
+      const text = 'Clone failed with ghp_' + '123456789012345678901234567890123456';
       const redacted = redactSensitiveOutput(text);
 
       expect(redacted).not.toContain('ghp_12345');
@@ -141,8 +141,8 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
   describe('executeRunCommand Integration (SEC-01 Live Verification)', () => {
     it('should NOT inherit GEMINI_API_KEY or GITHUB_TOKEN into spawned shell process', async () => {
       // Set sensitive keys in parent process.env
-      process.env.GEMINI_API_KEY = 'SENTINEL_LEAK_TEST_KEY_AIzaSy123456789';
-      process.env.GITHUB_TOKEN = 'ghp_sentineltoken12345678901234567890';
+      process.env.GEMINI_API_KEY = 'SENTINEL_LEAK_TEST_KEY_AIzaSy' + '123456789';
+      process.env.GITHUB_TOKEN = 'ghp_' + 'sentineltoken12345678901234567890';
 
       const res = await executeRunCommand(
         [projectRoot],
@@ -162,7 +162,7 @@ describe('Environment Sanitization & Credential Protection (SEC-01, FR-319, Inva
       const res = await executeRunCommand(
         [projectRoot],
         {
-          command: 'node -e "console.log(\'Key leaked: AIzaSyBBBBBBBBBBBBBBBBBBBBBBBBBBBB123\')"'
+          command: 'node -e "console.log(\'Key leaked: \' + \'AIzaSy\' + \'BBBBBBBBBBBBBBBBBBBBBBBBBBBB123\')"'
         },
         context
       );

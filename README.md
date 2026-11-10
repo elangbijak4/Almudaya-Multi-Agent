@@ -197,7 +197,7 @@ almudaya bot run --session S001 --bot BOT001 --name "Architect" --role "System A
 
 **Terminal 2 (Coder Console with Gemini AI & Turbo Mode):**
 ```powershell
-$env:GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+$env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 almudaya bot run --session S001 --bot BOT002 --name "Coder" --role "Software Engineer" --provider gemini --mode turbo
 # Coder automatically handles incoming messages, executes tools, and logs to work_log.jsonl:
 # Coder> /log

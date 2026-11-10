@@ -161,7 +161,7 @@ Buka jendela Command Prompt / PowerShell kedua, masuk ke `D:\testingbot`:
 
 1. **Setel API Key Gemini Anda:**
    ```powershell
-   $env:GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+   $env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
    ```
    *(Atau gunakan flag `--provider mock` jika ingin mencoba secara offline tanpa API key).*
 

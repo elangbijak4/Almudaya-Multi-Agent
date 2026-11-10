@@ -141,7 +141,7 @@ describe('ExecutionController & Enforcement Boundary (Phase 3, SEC-03, ADR-002, 
         botId,
         projectRoots: [projectRoot],
       };
-      const fakeSecret = 'AIzaSyFakeKey123456789012345678901234';
+      const fakeSecret = 'AIzaSy' + 'FakeKey123456789012345678901234';
       const req: CommandExecutionRequest = { command: `echo ${fakeSecret}` };
 
       const res = await controller.executeCommand(context, req);

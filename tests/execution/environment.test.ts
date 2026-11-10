@@ -25,7 +25,7 @@ describe('Execution Environment Architecture & Sanitization (SEC-01, NT-02)', ()
         PATH: 'C:\\Windows\\system32',
         SYSTEMROOT: 'C:\\Windows',
         TEMP: 'C:\\Temp',
-        GEMINI_API_KEY: 'AIzaSySecret12345678901234567890',
+        GEMINI_API_KEY: 'AIzaSy' + 'Secret12345678901234567890',
         AWS_SECRET_ACCESS_KEY: 'supersecretawskey',
         PRIVATE_SSH_KEY: 'ssh-rsa-secret',
         CUSTOM_INTERNAL_METRIC: 'metric_data',

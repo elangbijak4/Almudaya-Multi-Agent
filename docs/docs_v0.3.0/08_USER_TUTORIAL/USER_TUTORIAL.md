@@ -19,10 +19,10 @@ mkdir frontend
 Pastikan API Key Google Gemini telah dikonfigurasi:
 ```powershell
 # Di PowerShell:
-$env:GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+$env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 
 # Atau di Command Prompt cmd.exe:
-set "GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere"
+set "GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>"
 ```
 
 ---

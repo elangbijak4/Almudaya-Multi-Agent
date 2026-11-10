@@ -1,0 +1,979 @@
+# PKU Unified Persistent Memory Architecture Specification
+**Version:** 0.2  
+**Project:** Almudaya Multi-Agent Coding Environment  
+**Status:** APPROVED — Architecture Specification  
+**Architecture Approach:** Evolutionary Integration, Backward Compatibility, and Incremental Migration
+
+---
+
+## 1. Executive Summary
+
+PKU (Project Knowledge Universe) merupakan fondasi persisten dan terpusat bagi seluruh memori dalam Almudaya Multi-Agent Coding Environment.
+
+PKU bertanggung jawab atas penyimpanan, pengorganisasian, pengelolaan, pemeliharaan, pengambilan, dan pemanfaatan kembali seluruh pengetahuan yang dihasilkan atau digunakan oleh sistem multi-agent.
+
+Blackboard dan ACMA tidak lagi diposisikan sebagai penyimpanan permanen yang independen. Keduanya menjadi sistem register operasional:
+
+- **Blackboard — Global Register:** meja kerja bersama untuk koordinasi seluruh bot dalam suatu sesi.
+- **ACMA — Individual Register:** meja kerja individual untuk kontinuitas, pengalaman, dan konteks masing-masing bot.
+- **PKU — Persistent Memory Foundation:** fondasi penyimpanan permanen yang menyediakan sumber pengetahuan bagi seluruh register.
+- **KOE — Knowledge Optimization Engine:** mekanisme optimasi pengambilan dan penyusunan pengetahuan untuk memenuhi kebutuhan tugas dengan konteks minimum yang memadai.
+
+Arsitektur harus mempertahankan implementasi Blackboard dan ACMA yang sudah ada. Integrasi dilakukan melalui compatibility layer, adapter, dan migrasi inkremental tanpa mengasumsikan penggantian total sistem.
+
+---
+
+## 2. Architectural Vision
+
+PKU dirancang untuk memastikan bahwa pengetahuan proyek dan pengalaman agent dapat bertahan melampaui:
+
+- Sesi eksekusi.
+- Siklus hidup bot.
+- Pergantian model AI.
+- Pergantian platform atau runtime.
+- Pergantian developer.
+- Penghentian sementara atau permanen proyek.
+- Perubahan struktur kode dan infrastruktur penyimpanan.
+
+PKU juga harus memungkinkan pengetahuan dari proyek lama dimanfaatkan kembali oleh proyek baru tanpa mencampurkan identitas, kepemilikan, dan konteks kedua proyek tersebut.
+
+### 2.1 Foundational Principles
+
+1. Persistent by design.
+2. Project-scoped knowledge isolation.
+3. Register-based operational memory.
+4. Model-independent and backend-independent.
+5. Evidence-grounded knowledge.
+6. Provenance and traceability.
+7. Incremental synchronization.
+8. Backward-compatible migration.
+9. Permission-controlled memory sharing.
+10. Lifecycle-aware memory management.
+11. Reconstructable operational registers.
+12. Minimal sufficient knowledge retrieval.
+
+---
+
+## 3. Unified Memory Architecture
+
+### 3.1 Conceptual Architecture
+
+PKU menjadi fondasi persisten seluruh sistem.
+
+Blackboard dan ACMA menyediakan antarmuka register operasional yang terhubung dengan PKU.
+
+KOE bertugas menyusun pengetahuan yang diperlukan dari berbagai sumber di PKU untuk dimasukkan ke register yang relevan.
+
+Messaging menyediakan mekanisme komunikasi antarbot dan membawa referensi pengetahuan serta konteks eksekusi.
+
+### 3.2 Architectural Components
+
+| Component | Responsibility |
+|---|---|
+| PKU Core | Persistent knowledge foundation |
+| Project Memory Universe | Isolated project knowledge environment |
+| Knowledge Object Store | Canonical knowledge persistence |
+| Knowledge Graph | Relationships and dependencies |
+| Tree Structure Manager | Hierarchical organization |
+| KOE | Retrieval and context optimization |
+| Global Register | Blackboard operational workspace |
+| Individual Register | ACMA operational workspace |
+| Messaging Integration | Memory-aware inter-agent communication |
+| Memory Integration Gateway | Coordination between memory subsystems |
+| Memory Lifecycle Management | Retention, archival, deletion, and reuse |
+| UMI | Unified Memory Interface |
+| External Adapters | Integration with external memory systems |
+
+### 3.3 High-Level Architecture
+
+```mermaid
+flowchart TB
+    AG["Multi-Agent Runtime"]
+
+    subgraph REG["Operational Registers"]
+        GR["Global Register"]
+        IR["Individual Registers"]
+    end
+
+    subgraph PKU["PKU Persistent Memory Foundation"]
+        PMU["Project Memory Universes"]
+        KS["Knowledge Store"]
+        KG["Knowledge Graph"]
+        TS["Tree Structure"]
+        PROV["Provenance & History"]
+    end
+
+    KOE["Knowledge Optimization Engine"]
+    MSG["Messaging Integration"]
+    MLM["Memory Lifecycle Management"]
+    UMI["Unified Memory Interface"]
+    EXT["External Memory Adapters"]
+
+    AG <--> REG
+    REG <--> KOE
+    MSG <--> REG
+    MSG <--> PKU
+    KOE <--> PKU
+    PKU <--> UMI
+    MLM <--> PKU
+    UMI <--> EXT
+```
+
+---
+
+## 4. PKU — Persistent Memory Foundation
+
+### 4.1 Responsibility
+
+PKU menjadi sumber persisten bagi seluruh informasi yang secara kebijakan ditetapkan sebagai memori sistem.
+
+PKU menyimpan:
+
+- Project identity.
+- Requirements and specifications.
+- Architecture and design.
+- Source code knowledge and structural metadata.
+- Dependencies and interfaces.
+- Database schemas and data lineage.
+- Architecture Decision Records.
+- Development history.
+- Agent decisions and experiences.
+- Execution events and traces.
+- Runtime checkpoints.
+- Tests and validation evidence.
+- Errors, failures, and recovery records.
+- Project constraints and policies.
+- Roadmaps and backlogs.
+- Knowledge inherited from earlier projects.
+- Provenance and source references.
+
+PKU tidak harus menduplikasi seluruh file sumber. PKU dapat menyimpan representasi, metadata, indeks, relasi, dan referensi menuju source of truth eksternal.
+
+### 4.2 Knowledge Ownership
+
+Setiap jenis data harus memiliki ownership yang jelas.
+
+| Data | Primary source of truth |
+|---|---|
+| Source code | Git repository |
+| Commit history | Git |
+| Shared session state | PKU-backed Global Register |
+| Individual agent continuity | PKU-backed Individual Register |
+| Project knowledge representation | PKU |
+| Message delivery state | Existing messaging/Blackboard subsystem, progressively integrated |
+| External Obsidian notes | Obsidian Vault |
+| Vector index | Registered vector backend |
+| External graph database | Registered graph backend |
+
+PKU menyimpan representasi dan provenance yang dibutuhkan untuk mengakses sumber-sumber tersebut tanpa mengambil alih kepemilikannya secara otomatis.
+
+### 4.3 Canonical Knowledge Object
+
+Setiap pengetahuan yang dipersistenkan harus memiliki identitas dan metadata.
+
+Conceptual schema:
+
+```typescript
+interface KnowledgeObject {
+  id: string;
+  projectId: string;
+  type: string;
+
+  scope:
+    | "project"
+    | "session"
+    | "agent"
+    | "shared"
+    | "cross_project";
+
+  ownerId?: string;
+  content: unknown;
+
+  provenance: {
+    sourceType: string;
+    sourceId?: string;
+    sourceLocation?: string;
+    createdBy?: string;
+    createdAt: string;
+  };
+
+  relationships: string[];
+
+  validationStatus:
+    | "unverified"
+    | "validated"
+    | "rejected"
+    | "superseded";
+
+  lifecycleStatus:
+    | "active"
+    | "archived"
+    | "deleted";
+
+  version: number;
+}
+```
+
+Schema ini merupakan conceptual contract. Field final dan tipe data harus ditentukan pada spesifikasi Canonical Schema berikutnya.
+
+---
+
+## 5. Project Memory Universe (PMU)
+
+### 5.1 Definition
+
+Setiap proyek memiliki Project Memory Universe yang menjadi lingkungan pengetahuan independen di dalam PKU.
+
+PMU memiliki:
+
+- Unique project identity.
+- Independent knowledge namespace.
+- Hierarchical tree.
+- Project knowledge graph.
+- Provenance.
+- Memory lifecycle.
+- Access control.
+- Version and history.
+- External memory references.
+
+### 5.2 Tree and Graph Representation
+
+Tree digunakan untuk organisasi hierarkis:
+
+```text
+Project
+├── Identity
+├── Requirements
+├── Architecture
+│   ├── Modules
+│   ├── Components
+│   └── Interfaces
+├── Development
+├── Experiments
+├── Decisions
+├── Tests
+└── Roadmap
+```
+
+Graph digunakan untuk relasi:
+
+- Depends on.
+- Implements.
+- Derived from.
+- Supersedes.
+- Validates.
+- Contradicts.
+- Influences.
+- Reuses.
+- Created by.
+- Executed during.
+
+Satu knowledge object dapat memiliki posisi dalam tree dan banyak relasi dalam graph.
+
+Tree membership dan graph relationships harus dikelola sebagai struktur yang berbeda agar penghapusan cabang tidak secara tidak sengaja menghapus knowledge object yang masih digunakan.
+
+### 5.3 Cross-Project Knowledge
+
+PKU memungkinkan proyek baru memanfaatkan pengetahuan proyek lama.
+
+Mekanisme:
+
+- Reference reuse.
+- Knowledge fork.
+- Controlled import.
+- Cross-project graph traversal.
+- Knowledge inheritance with provenance.
+
+Tidak boleh terjadi pencampuran otomatis antara dua PMU tanpa kebijakan akses dan pencatatan asal-usul.
+
+---
+
+## 6. Global Register — Blackboard Integration
+
+### 6.1 Definition
+
+Blackboard berfungsi sebagai Global Register, yaitu ruang kerja bersama seluruh bot dalam sesi.
+
+Fungsinya meliputi:
+
+- Bot registry.
+- Shared session state.
+- Task coordination.
+- Inbox.
+- Broadcast.
+- Event coordination.
+- Shared artifacts.
+- Inter-agent coordination state.
+
+### 6.2 Existing Implementation Preservation
+
+Blackboard telah diimplementasikan sebelumnya dalam source code proyek.
+
+Implementasi tersebut tidak boleh langsung digantikan atau dipindahkan ke struktur baru tanpa proses analisis dan migrasi.
+
+Artefak existing yang perlu diperiksa dan dipertahankan antara lain:
+
+- `session.json`
+- Bot registry.
+- `broadcast/events.jsonl`
+- Individual inboxes.
+- Shared artifacts.
+- Existing message and coordination flows.
+
+Daftar ini merupakan baseline berdasarkan arsitektur yang sudah diketahui dan wajib diverifikasi terhadap source code aktual.
+
+### 6.3 PKU Integration
+
+Blackboard menggunakan PKU sebagai fondasi persistensi.
+
+Alur konseptual:
+
+1. Blackboard membuat atau membuka Global Register.
+2. PKU menyediakan konteks sesi yang relevan.
+3. Blackboard mengelola perubahan operasional selama sesi.
+4. Perubahan yang memenuhi persistence policy dicatat melalui PKU.
+5. Register dapat ditutup dan dibangun kembali berdasarkan rekaman PKU.
+
+### 6.4 Compatibility Requirement
+
+Implementasi lama harus tetap dapat digunakan selama tahap migrasi.
+
+Compatibility Bridge harus mempertahankan:
+
+- Existing API contracts.
+- Existing storage interfaces.
+- Existing event semantics.
+- Existing bot registry behavior.
+- Existing inbox and broadcast behavior.
+- Existing session initialization.
+- Existing artifact access.
+
+Tidak boleh ada perubahan perilaku yang tidak disengaja akibat integrasi PKU.
+
+---
+
+## 7. Individual Register — ACMA Integration
+
+### 7.1 Definition
+
+ACMA menyediakan Individual Register untuk setiap bot.
+
+Register menyimpan dan menyusun konteks individual seperti:
+
+- Working memory.
+- Semantic memory.
+- Episodic memory.
+- Procedural memory.
+- Retrieval memory.
+- Prospective memory.
+- Execution checkpoints.
+- Handoff state.
+- Personal task continuity.
+
+### 7.2 Existing Implementation Preservation
+
+ACMA dan mekanisme individual memory yang telah diimplementasikan harus diperlakukan sebagai existing subsystem.
+
+PKU tidak menggantikan fungsi ACMA.
+
+PKU menjadi fondasi persistensi, sedangkan ACMA tetap mengatur siklus hidup dan organisasi memori individual.
+
+### 7.3 Individual Isolation
+
+Setiap bot memiliki identitas dan ruang memori individual.
+
+Default policy:
+
+- Individual memory private by default.
+- Sharing requires permission.
+- Handoff shares selected context.
+- Shared knowledge requires explicit publication or promotion.
+- Bot tidak otomatis memperoleh akses ke seluruh memori bot lain.
+
+### 7.4 Reconstruction
+
+Ketika bot diaktifkan kembali:
+
+1. Runtime mengidentifikasi bot.
+2. ACMA membuka Individual Register.
+3. PKU mengambil memori dan checkpoint yang relevan.
+4. KOE menyusun konteks berdasarkan tugas.
+5. ACMA merekonstruksi register.
+6. Bot melanjutkan pekerjaan sesuai checkpoint dan authorization.
+
+---
+
+## 8. Knowledge Optimization Engine (KOE)
+
+### 8.1 Objective
+
+KOE bertanggung jawab mengoptimalkan akses terhadap pengetahuan PKU.
+
+Tujuannya adalah memberikan konteks minimum yang mencukupi untuk keberhasilan tugas.
+
+Formulasi konseptual:
+
+\[
+K^* = \arg\min_{K'} Tokens(K')
+\]
+
+Dengan batasan:
+
+\[
+P(Success \mid K', Task) \geq \tau
+\]
+
+### 8.2 Core Capabilities
+
+1. Hierarchical knowledge retrieval.
+2. Knowledge graph traversal.
+3. Task-aware context assembly.
+4. Progressive retrieval.
+5. Knowledge compression and compilation.
+6. Version-aware retrieval.
+7. Incremental context updates.
+8. Evidence-grounded retrieval.
+9. Token budget optimization.
+10. Knowledge sufficiency evaluation.
+
+### 8.3 Hierarchical Knowledge Levels
+
+| Level | Description |
+|---|---|
+| L0 | Project-level index |
+| L1 | Domain and module summaries |
+| L2 | Detailed specifications and contracts |
+| L3 | Raw evidence, source files, logs, and records |
+
+KOE harus mampu memperluas konteks jika bukti awal tidak mencukupi.
+
+Ringkasan dan kompilasi pengetahuan tidak boleh menggantikan akses terhadap raw evidence ketika tugas memerlukannya.
+
+### 8.4 Cross-Register Retrieval
+
+KOE dapat mengakses:
+
+- Project knowledge from PKU.
+- Session knowledge from Global Register.
+- Individual memory from ACMA.
+- Relevant message references.
+- Checkpoints and execution evidence.
+
+Semua retrieval harus mematuhi ownership, scope, permission, dan security policy.
+
+---
+
+## 9. Messaging Integration
+
+### 9.1 Objective
+
+Messaging tetap menjadi mekanisme komunikasi antarbot.
+
+Integrasi PKU menjadikan pesan memiliki kemampuan referensi terhadap pengetahuan, pengalaman, dan konteks eksekusi.
+
+### 9.2 Knowledge-Aware Message Envelope
+
+Conceptual schema:
+
+```typescript
+interface KnowledgeAwareMessage {
+  messageId: string;
+  senderId: string;
+  recipientId?: string;
+  sessionId: string;
+
+  messageType: string;
+  payload: unknown;
+
+  knowledgeRefs?: string[];
+  executionRefs?: string[];
+
+  handoff?: {
+    checkpointId?: string;
+    sourceBotId: string;
+    targetBotId: string;
+  };
+
+  createdAt: string;
+}
+```
+
+Pesan tidak perlu membawa seluruh dokumen atau memori. Gunakan referensi menuju knowledge objects di PKU apabila penerima memiliki izin akses.
+
+### 9.3 Message Persistence
+
+Pesan yang memenuhi kebijakan persistensi harus memiliki rekaman permanen di PKU.
+
+Namun, tidak setiap pesan harus dipromosikan menjadi project knowledge.
+
+KOE dan knowledge qualification mechanism menentukan apakah pesan merupakan:
+
+- Operational communication.
+- Individual experience.
+- Session event.
+- Project decision.
+- Reusable knowledge.
+- Validated project finding.
+
+Pesan asli dan pengetahuan hasil ekstraksi harus tetap dapat dibedakan.
+
+---
+
+## 10. Memory Lifecycle Management
+
+### 10.1 Objective
+
+Memory Lifecycle Management mengatur keberlangsungan memori proyek dan individual.
+
+### 10.2 Lifecycle States
+
+- Active.
+- Dormant.
+- Archived.
+- Reusable.
+- Deleted.
+- Purged.
+
+Archived dan Reusable dapat berlaku bersamaan.
+
+### 10.3 Supported Operations
+
+| Operation | Description |
+|---|---|
+| Archive | Menyimpan PMU sebagai arsip |
+| Restore | Mengaktifkan kembali PMU |
+| Prune | Memangkas cabang tree |
+| Detach | Melepaskan relasi tanpa menghapus node |
+| Delete | Menandai data untuk penghapusan |
+| Purge | Menghapus data secara permanen |
+| Reuse | Menggunakan pengetahuan lintas proyek |
+| Fork | Membentuk PMU baru berdasarkan PMU lama |
+| Export | Mengekspor pengetahuan |
+| Merge | Menggabungkan pengetahuan secara terkendali |
+
+### 10.4 Structural Pruning vs Data Purging
+
+Kedua operasi harus dibedakan.
+
+**Structural Pruning**
+
+Mengubah struktur organisasi atau hubungan pengetahuan tanpa otomatis menghapus data sumber.
+
+**Data Purging**
+
+Menghapus data aktual dari penyimpanan yang dikelola PKU, termasuk indeks dan salinan sesuai kebijakan.
+
+### 10.5 Deletion Safeguards
+
+Sebelum penghapusan permanen, sistem harus:
+
+1. Memeriksa dependency graph.
+2. Memeriksa shared references.
+3. Memeriksa ownership.
+4. Memeriksa retention policy.
+5. Memeriksa legal or security constraints.
+6. Membuat audit record.
+7. Memastikan otorisasi.
+8. Memberikan kesempatan pemulihan jika kebijakan mengharuskannya.
+
+Penghapusan data eksternal tidak boleh dilakukan otomatis oleh PKU jika PKU tidak memiliki kewenangan atau ownership terhadap data tersebut.
+
+---
+
+## 11. UMI and Memory Integration Gateway
+
+### 11.1 Unified Memory Interface
+
+UMI menjadi kontrak akses tunggal bagi bot dan subsystem.
+
+Bot tidak perlu mengetahui backend yang digunakan.
+
+Operasi konseptual mencakup:
+
+- Connect.
+- Discover.
+- Retrieve.
+- Search.
+- Traverse.
+- Read.
+- Store.
+- Update.
+- Link.
+- Validate.
+- Sync.
+- Status.
+- Archive.
+- Delete.
+- Export.
+- Import.
+- Checkpoint.
+- Restore.
+
+### 11.2 Memory Integration Gateway
+
+Memory Integration Gateway menghubungkan:
+
+- PKU.
+- KOE.
+- Global Register.
+- Individual Register.
+- Messaging.
+- Agent Runtime.
+- External adapters.
+
+Gateway mengatur routing, identity, permissions, synchronization, dan provenance.
+
+### 11.3 External Memory Adapters
+
+Backend eksternal dapat dihubungkan melalui adapter dengan capability manifest.
+
+Contoh:
+
+- Obsidian.
+- Qdrant.
+- Chroma.
+- Weaviate.
+- Neo4j.
+- Graphiti.
+- Redis.
+- Custom RAG systems.
+
+Adapter harus mengiklankan operasi yang benar-benar didukung. PKU tidak boleh mengasumsikan semua backend mendukung semua operasi.
+
+---
+
+## 12. Critical Requirement: Existing System Migration
+
+### 12.1 Migration Philosophy
+
+PKU dikembangkan melalui evolutionary integration.
+
+Implementasi Blackboard dan ACMA yang telah ada adalah aset sistem dan tidak boleh dianggap sebagai komponen disposable.
+
+Tidak boleh dilakukan:
+
+- Rewrite total tanpa justifikasi.
+- Pemindahan data tanpa mapping.
+- Penggantian API secara langsung.
+- Perubahan storage format secara mendadak.
+- Penghapusan mekanisme lama sebelum penggantinya tervalidasi.
+- Perubahan workflow bot tanpa pengujian kompatibilitas.
+
+### 12.2 Migration Discovery Phase
+
+Sebelum implementasi migrasi, lakukan source-code audit terhadap sistem aktual.
+
+Inventarisasi minimum:
+
+**Blackboard**
+- Directory structure.
+- Classes and functions.
+- Public APIs.
+- Storage paths.
+- JSON schemas.
+- Event format.
+- Registry format.
+- Inbox and broadcast semantics.
+- Artifact handling.
+- Session lifecycle.
+
+**ACMA / Individual Memory**
+- Memory stores.
+- Memory types.
+- Storage format.
+- Bot identity mapping.
+- Checkpoint implementation.
+- Retrieval mechanisms.
+- Persistence rules.
+- Handoff mechanisms.
+- Existing memory APIs.
+
+**Messaging**
+- Message envelope.
+- Delivery flow.
+- Inbox persistence.
+- Broadcast events.
+- Memory references.
+- Handoff behavior.
+- Error handling.
+
+Hasil audit harus menjadi baseline migrasi yang dapat diperiksa.
+
+### 12.3 Migration Phases
+
+#### Phase 0 — Existing System Audit
+
+- Audit source code.
+- Identify existing interfaces.
+- Inventory persisted data.
+- Document dependencies.
+- Record current runtime behavior.
+- Establish baseline tests.
+
+Deliverable: Existing Memory System Inventory.
+
+#### Phase 1 — PKU Foundation
+
+- Introduce PKU core.
+- Define canonical knowledge schema.
+- Establish project identity.
+- Introduce persistence interfaces.
+- Preserve existing Blackboard and ACMA implementations.
+
+Deliverable: PKU Foundation Prototype.
+
+#### Phase 2 — Compatibility Layer
+
+- Introduce Blackboard Bridge.
+- Introduce ACMA Bridge.
+- Preserve existing APIs.
+- Map existing data structures to PKU knowledge objects.
+- Add provenance and identity mapping.
+
+Deliverable: Backward-Compatible Memory Integration Layer.
+
+#### Phase 3 — Controlled Persistence Integration
+
+- Connect Global Register to PKU.
+- Connect Individual Registers to PKU.
+- Integrate message persistence.
+- Implement idempotent event ingestion.
+- Add synchronization and consistency checks.
+
+Deliverable: PKU-Backed Registers.
+
+#### Phase 4 — Reconstruction and Recovery
+
+- Reconstruct Global Register from PKU.
+- Reconstruct Individual Register from PKU.
+- Validate checkpoint recovery.
+- Validate bot handoff.
+- Validate session restoration.
+
+Deliverable: Persistent Register Reconstruction.
+
+#### Phase 5 — KOE Integration
+
+- Introduce task-aware retrieval.
+- Implement progressive retrieval.
+- Implement context assembly.
+- Add evidence tracking.
+- Benchmark against brute-force context loading.
+
+Deliverable: Operational KOE.
+
+#### Phase 6 — Lifecycle Management
+
+- Introduce archival.
+- Introduce project pruning.
+- Introduce reuse and fork.
+- Introduce deletion safeguards.
+- Validate recovery and purge policies.
+
+Deliverable: Project Memory Lifecycle Manager.
+
+#### Phase 7 — Gradual Cutover
+
+Only after successful validation:
+
+- Transition selected persistence paths.
+- Deprecate redundant legacy persistence mechanisms where appropriate.
+- Preserve compatibility facades.
+- Remove legacy code only after explicit approval and migration verification.
+
+Deliverable: PKU-Centered Memory Architecture.
+
+### 12.4 Migration Consistency Strategies
+
+Migration must use safe synchronization strategies.
+
+Possible strategies:
+
+**Read-through compatibility:** existing APIs continue operating while data is retrieved through PKU-backed adapters where available.
+
+**Dual-write:** write to old and new storage only when the operations can be made consistent and idempotent.
+
+**Backfill:** import historical records into PKU with original timestamps, identities, and provenance.
+
+**Reconciliation:** compare old and new records and resolve discrepancies.
+
+**Staged cutover:** move one persistence responsibility at a time.
+
+Dual-write must not be introduced blindly. It can produce duplicated events, inconsistent ordering, and partial commits. The migration contract must define event identifiers, retry semantics, idempotency keys, and conflict resolution.
+
+### 12.5 Rollback
+
+Every migration phase must define:
+
+- Rollback trigger.
+- Recovery procedure.
+- Data reconciliation procedure.
+- Compatibility state.
+- Backup requirements.
+- Validation criteria.
+
+The legacy implementation must remain operational until the replacement path has passed acceptance testing.
+
+---
+
+## 13. Synchronization and Consistency
+
+PKU must maintain consistency between persistent knowledge and operational registers.
+
+Important mechanisms:
+
+- Event identifiers.
+- Idempotent writes.
+- Version control.
+- Optimistic concurrency.
+- Conflict detection.
+- Event ordering.
+- Checkpointing.
+- Reconciliation.
+- Recovery logs.
+
+A register must be able to identify whether its current state is synchronized with PKU.
+
+The system should distinguish:
+
+- Persisted.
+- Pending persistence.
+- Synchronization failed.
+- Reconciliation required.
+- Reconstructed.
+
+---
+
+## 14. Security and Access Control
+
+Memory access must be controlled at multiple levels:
+
+- Project.
+- Session.
+- Bot.
+- Individual knowledge object.
+- External adapter.
+
+Requirements:
+
+- Bot identity verification.
+- Permission-aware retrieval.
+- Individual memory isolation.
+- Explicit cross-agent sharing.
+- Controlled cross-project access.
+- Secure external credentials.
+- Audit logging.
+- Deletion authorization.
+- Data export authorization.
+
+---
+
+## 15. Reliability and Graceful Degradation
+
+PKU failure must not automatically destroy the ability of bots to coordinate.
+
+The system must define:
+
+- Register behavior during PKU outage.
+- Local buffering of pending persistence events.
+- Retry mechanisms.
+- Reconciliation after recovery.
+- Read-only degradation.
+- External adapter failure isolation.
+- Recovery from incomplete writes.
+
+Existing Blackboard coordination must remain operational during staged migration and under defined PKU outage conditions.
+
+No event may silently disappear because a persistence backend is temporarily unavailable.
+
+---
+
+## 16. Observability and Evaluation
+
+Metrics:
+
+- Persistence success rate.
+- Synchronization lag.
+- Event duplication rate.
+- Register reconstruction success.
+- Memory retrieval latency.
+- KOE token reduction.
+- Context recall.
+- Evidence coverage.
+- Task success rate.
+- Stale knowledge rate.
+- Migration discrepancy rate.
+- Recovery success rate.
+- Lifecycle operation auditability.
+
+KOE must be evaluated against a fair brute-force baseline using the same project snapshot, task, model, and tool configuration.
+
+---
+
+## 17. Acceptance Criteria
+
+The architecture is accepted when:
+
+1. PKU can persist project knowledge independently of session lifetime.
+2. Global Register can be reconstructed from PKU.
+3. Individual Register can be reconstructed for the correct bot identity.
+4. Existing Blackboard APIs remain compatible during migration.
+5. Existing ACMA functionality remains operational during migration.
+6. Messaging retains its existing delivery behavior.
+7. Messages can reference PKU knowledge objects.
+8. Individual memory remains isolated by default.
+9. KOE can retrieve knowledge across authorized scopes.
+10. PMUs have independent identity and lifecycle.
+11. Tree and graph structures can be managed independently.
+12. Cross-project reuse preserves provenance.
+13. Deletion safeguards protect shared dependencies.
+14. Archive and restore work without losing project knowledge.
+15. Migration is idempotent, verifiable, and recoverable.
+16. PKU outage has a defined graceful-degradation behavior.
+17. External memory backends can be connected through UMI without bot-level backend dependencies.
+
+---
+
+## 18. Implementation Constraints
+
+The following are mandatory constraints for subsequent engineering work:
+
+- Existing code must be inspected before any migration plan is finalized.
+- Existing Blackboard must not be replaced by assumption.
+- Existing ACMA must not be replaced by assumption.
+- Existing message flows must be mapped before changing them.
+- Data migration must preserve identity, provenance, and timestamps where available.
+- Migration must be incremental.
+- Compatibility must be testable.
+- Technology selection must follow approved contracts.
+- No destructive migration without explicit authorization.
+- No claim of successful migration without validation evidence.
+
+---
+
+## 19. Subsequent Specifications
+
+The next specifications should be developed in this order:
+
+1. **PKU Knowledge Ontology & Canonical Schema Specification v0.1**
+2. **PKU UMI & Adapter Contract Specification v0.1**
+3. **Global Register / Blackboard Compatibility & Migration Specification v0.1**
+4. **Individual Register / ACMA Compatibility & Migration Specification v0.1**
+5. **Memory-Aware Messaging Integration Contract v0.1**
+6. **KOE Retrieval and Context Assembly Specification v0.1**
+7. **Project Memory Universe & Lifecycle Management Specification v0.1**
+8. **PKU Migration and Validation Test Plan v0.1**
+
+Technology and database selection should follow the approval of the relevant contracts.
+
+---
+
+## 20. Final Architectural Statement
+
+PKU is the persistent memory foundation of the Almudaya Multi-Agent Coding Environment.
+
+Blackboard and ACMA are operational register systems backed by PKU. KOE optimizes access to knowledge. Messaging connects agents through knowledge-aware communication. Project Memory Universe organizes independent project knowledge. Memory Lifecycle Management preserves, archives, reuses, and safely deletes knowledge.
+
+The architecture must evolve from the existing implementation rather than discard it.
+
+**The objective is not to replace an existing multi-agent memory system, but to transform it into a unified, persistent, reconstructable, and knowledge-optimized memory ecosystem without sacrificing existing functionality.**

@@ -197,7 +197,7 @@ All reproductions were executed against the baseline codebase without modifying 
 - **Expected:** Secrets must not be passed via CLI argv. All sinks must redact secrets recursively.
 - **Actual:**
   - CLI `bot run` explicitly defines `.option('--api-key <key>', 'Gemini API key...')`.
-  - `workLogService.recordWork` persisted `details: { token: 'AIzaSyA_SAMPLE_CANARY_SECRET_1234567890' }` directly into `work_log.jsonl` without redaction (`detailsContainsSecret: true`).
+  - `workLogService.recordWork` persisted `details: { token: 'AIzaSy...<SAMPLE_CANARY_REDACTED>' }` directly into `work_log.jsonl` without redaction (`detailsContainsSecret: true`).
 - **Result:** **REPRODUCED**. Process argv secret exposure and unredacted nested payload persistence.
 
 ### AUD-12 — External filesystem `per_action` approval cannot be completed

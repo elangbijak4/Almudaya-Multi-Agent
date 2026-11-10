@@ -1,0 +1,29 @@
+{
+  "benchmark_id": "avds-pilot-academy-001",
+  "scenario_id": "01-almudaya-academy",
+  "condition": "avds_assisted",
+  "agent": {
+    "name": "to_be_recorded",
+    "model": "to_be_recorded"
+  },
+  "environment": {
+    "date": "YYYY-MM-DD",
+    "repository_commit": "to_be_recorded",
+    "stack": "to_be_recorded",
+    "viewports": [
+      "desktop",
+      "tablet",
+      "phone"
+    ]
+  },
+  "operational_metrics": {
+    "rework_cycles": 0,
+    "open_major_or_blocker": 0
+  },
+  "scores": {},
+  "evidence": [],
+  "limitations": [
+    "Template only. No agent execution or application evaluation has been performed."
+  ],
+  "conclusion": "not_evaluated"
+}

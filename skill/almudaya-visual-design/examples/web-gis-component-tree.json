@@ -1,0 +1,47 @@
+{
+  "tree_id": "web-gis-semantic-tree",
+  "root": {
+    "id": "application",
+    "role": "application",
+    "purpose": "Wildfire risk intelligence workspace",
+    "children": [
+      {
+        "id": "global-nav",
+        "role": "navigation",
+        "purpose": "Navigate product areas",
+        "component_hint": "Responsive navigation"
+      },
+      {
+        "id": "analysis-workspace",
+        "role": "main",
+        "purpose": "Investigate spatial risk",
+        "children": [
+          {
+            "id": "layer-controls",
+            "role": "region",
+            "purpose": "Configure visible spatial layers",
+            "component_hint": "Layer selector and filters"
+          },
+          {
+            "id": "map-canvas",
+            "role": "application",
+            "purpose": "Explore spatial features",
+            "component_hint": "Accessible map canvas",
+            "accessibility": "Provide keyboard alternative and text-based feature index"
+          },
+          {
+            "id": "feature-inspector",
+            "role": "complementary",
+            "purpose": "Review selected feature evidence",
+            "responsive_behavior": "Parallel on wide screens; switchable panel on compact screens"
+          }
+        ]
+      },
+      {
+        "id": "source-status",
+        "role": "status",
+        "purpose": "Communicate data freshness and loading state"
+      }
+    ]
+  }
+}

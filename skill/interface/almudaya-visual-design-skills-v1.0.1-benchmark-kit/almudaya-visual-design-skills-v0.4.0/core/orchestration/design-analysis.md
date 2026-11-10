@@ -1,0 +1,2 @@
+# Design Analysis
+Analyze product purpose, users, primary tasks, information hierarchy, interaction model, error consequences, brand constraints, accessibility, device targets, and technical constraints. Domain alone does not determine style: a security tool need not be dark; an academic product need not be editorial; an environmental product need not be green. Output a concise product archetype, task model, information model, interaction model, trust model, and visual constraints.

@@ -1,0 +1,2 @@
+# Style Selection Rubric
+Score candidates 1–5: domain fit 0.25, task fit 0.25, audience fit 0.20, brand fit 0.15, technical/accessibility fit 0.10, diversity contribution 0.05. Weighted score is decision support, not objective truth. Exclude candidates that violate explicit brand rules, harm readability, fail required accessibility, depend on unavailable assets/effects, or undermine a primary task. Choose one primary style; add secondary influences only for clearly bounded purposes.

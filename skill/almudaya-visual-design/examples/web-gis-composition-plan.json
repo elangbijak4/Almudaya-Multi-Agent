@@ -1,0 +1,147 @@
+{
+  "plan_id": "example-web-gis-risk-intelligence",
+  "product_context": {
+    "primary_task": "Identify and investigate wildfire risk around selected areas of interest",
+    "secondary_tasks": [
+      "Compare risk layers",
+      "Inspect hotspot evidence",
+      "Review time trends"
+    ],
+    "user_groups": [
+      "analyst",
+      "regional decision maker"
+    ],
+    "assumptions": [
+      "Desktop analysis is the primary workflow",
+      "Map layers and evidence sources are available"
+    ]
+  },
+  "platform": {
+    "profile": "web",
+    "form_factors": [
+      "desktop",
+      "tablet",
+      "phone"
+    ],
+    "modalities": [
+      "mouse",
+      "keyboard",
+      "touch"
+    ]
+  },
+  "visual_identity": {
+    "primary_style": "Geospatial Cartographic",
+    "influences": [
+      "Data Intelligence"
+    ]
+  },
+  "archetype": {
+    "primary": "Map-Centric",
+    "hybrid_with": [
+      "Data Exploration"
+    ],
+    "rationale": "The map is the primary spatial reasoning surface; evidence and time-series tools support investigation.",
+    "alternatives_rejected": [
+      "Dashboard / Monitoring: map interaction is central, not secondary"
+    ]
+  },
+  "regions": [
+    {
+      "id": "map-workspace",
+      "responsibility": "Spatial analysis canvas with visible layer context",
+      "priority": "critical",
+      "composition_operator": "parallel",
+      "notes": "Dominant work surface; avoid decorative map chrome."
+    },
+    {
+      "id": "layer-query",
+      "responsibility": "Select layers, time range, and filters",
+      "priority": "high",
+      "composition_operator": "contain"
+    },
+    {
+      "id": "feature-inspector",
+      "responsibility": "Inspect selected hotspot or area evidence",
+      "priority": "high",
+      "composition_operator": "switch"
+    },
+    {
+      "id": "temporal-evidence",
+      "responsibility": "Review trend and source timeline",
+      "priority": "medium",
+      "composition_operator": "sequence"
+    },
+    {
+      "id": "system-feedback",
+      "responsibility": "Show loading, source freshness, and errors",
+      "priority": "high",
+      "composition_operator": "anchor"
+    }
+  ],
+  "navigation_model": {
+    "global": "Compact product navigation",
+    "local": "Analysis sections",
+    "contextual": "Selected area and layer context"
+  },
+  "adaptive_variants": [
+    {
+      "size_class": "wide",
+      "structural_changes": [
+        "Map and inspector can be visible in parallel",
+        "Layer controls remain adjacent to map"
+      ],
+      "preserved_priorities": [
+        "Map",
+        "Evidence"
+      ]
+    },
+    {
+      "size_class": "compact",
+      "structural_changes": [
+        "Inspector becomes a switchable panel",
+        "Layer controls collapse into a dedicated control surface"
+      ],
+      "preserved_priorities": [
+        "Map",
+        "Selected feature context"
+      ]
+    },
+    {
+      "size_class": "phone",
+      "structural_changes": [
+        "Single primary map view",
+        "Filters and feature details open as focused sheets"
+      ],
+      "preserved_priorities": [
+        "Current location/area",
+        "Critical alerts"
+      ]
+    }
+  ],
+  "interaction_map": [
+    {
+      "action": "Select map feature",
+      "modality": "mouse or touch",
+      "alternative": "Keyboard-accessible feature list",
+      "feedback": "Highlight feature and update inspector"
+    },
+    {
+      "action": "Change layer",
+      "modality": "mouse, touch, or keyboard",
+      "alternative": "Accessible layer selector",
+      "feedback": "Announce active layer and loading state"
+    }
+  ],
+  "decisions": [
+    "Use map-first hierarchy rather than KPI-card dashboard",
+    "Show source freshness near evidence, not as a hidden tooltip"
+  ],
+  "validation": {
+    "task_clarity": "Primary map investigation task is immediately apparent",
+    "platform_fit": "Uses web map interaction patterns and responsive inspector behavior",
+    "accessibility_review": "Provide keyboard feature selection, text alternatives, and non-color-only layer distinctions",
+    "unresolved_risks": [
+      "Validate map performance with production-scale layers"
+    ]
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "product": "Almudaya Academy",
+  "primary_style": "scandinavian",
+  "secondary_styles": [
+    "playful-contemporary"
+  ],
+  "shared_semantics": {
+    "tone": "warm, approachable, scholarly",
+    "color_roles": "neutral surfaces with restrained brand accents",
+    "typography": "high legibility and clear hierarchy"
+  },
+  "targets": [
+    {
+      "platform": "web",
+      "primary_tasks": [
+        "browse courses",
+        "resume lesson"
+      ],
+      "modalities": [
+        "mouse-pointer",
+        "keyboard",
+        "touch"
+      ],
+      "constraints": {
+        "responsive": true
+      },
+      "verification": [
+        "keyboard navigation",
+        "responsive layout"
+      ]
+    },
+    {
+      "platform": "android",
+      "primary_tasks": [
+        "resume lesson",
+        "download content"
+      ],
+      "modalities": [
+        "touch"
+      ],
+      "constraints": {
+        "offline_mode": "optional"
+      },
+      "verification": [
+        "screen reader",
+        "system back",
+        "touch targets"
+      ]
+    },
+    {
+      "platform": "windows-desktop",
+      "primary_tasks": [
+        "author course",
+        "manage resources"
+      ],
+      "modalities": [
+        "mouse-pointer",
+        "keyboard"
+      ],
+      "constraints": {
+        "multiwindow": true
+      },
+      "verification": [
+        "keyboard shortcuts",
+        "window resizing"
+      ]
+    }
+  ],
+  "risk_notes": [
+    "Ensure accessibility checks are performed per target."
+  ]
+}

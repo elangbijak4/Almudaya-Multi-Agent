@@ -1,0 +1,39 @@
+id: swiss-international
+name: "Swiss International"
+version: 1.0.0
+family: minimalist
+philosophy: "Grid-led clarity, disciplined typography, strong hierarchy."
+visual_language:
+  mood: [precise, rational, editorial]
+  composition: "strict modular grid"
+  distinctiveness: "Express identity through composition, hierarchy, typography, and component language—not palette changes alone."
+  density: "Context-dependent; prioritize task completion."
+layout:
+  principle: "strict modular grid"
+  navigation: "Choose navigation from user journeys; do not assume a sidebar."
+  responsive: "Recompose for small screens; do not merely shrink desktop."
+typography:
+  direction: "neutral sans with clear typographic scale"
+  body_readability: "Prioritize readable size, line length, and line height."
+  numeric_data: "Use tabular numerals when comparison benefits."
+color_direction:
+  principle: "limited palette, high contrast, one deliberate accent"
+  semantic_states: "Define accessible success, warning, danger, info, focus, and disabled roles."
+  contrast: "Verify actual foreground/background pairs; palette names do not prove compliance."
+components:
+  shape_language: "Derive from this style's composition and product context."
+  surfaces: "Use only the elevation and layering needed to express hierarchy."
+  states: "Specify hover, focus-visible, active, disabled, loading, and error."
+interaction:
+  motion: "Use motion to communicate state and spatial relationships; avoid gratuitous effects."
+  reduced_motion: "Provide a reduced-motion experience."
+  feedback: "Make state changes perceivable without relying on color alone."
+accessibility:
+  target: "WCAG 2.2 AA where applicable"
+  keyboard: "All essential interactions must be keyboard accessible."
+  color_independence: "Never use color as the sole carrier of meaning."
+recommended_for: [research portals, institutions, data-heavy interfaces]
+anti_patterns: [decorative clutter, arbitrary alignment]
+compatibility:
+  composition_policy: "Use one primary style. Add a secondary influence only for a clearly bounded purpose."
+  requires_project_validation: true

@@ -1,0 +1,2 @@
+# Style Composition
+The primary style controls the dominant visual language and page composition. A secondary influence may inform a bounded area such as typography, chart design, or illustration. Check density, grid philosophy, typography, contrast, shape language, elevation, motion, and interaction conventions. If foundational assumptions conflict, do not compose them. Avoid style mashups that produce visual noise.

@@ -9,6 +9,7 @@ import { BotService } from './service.js';
 import { MessagingService } from '../messaging/service.js';
 import { SharedContextService } from '../shared/service.js';
 import { WorkLogService } from '../shared/work-log.js';
+import { SkillService } from '../skills/service.js';
 import { generateMessageId, type DirectMessage } from '../messaging/schema.js';
 import { VERSION } from '../core/version.js';
 
@@ -24,9 +25,9 @@ export interface BotConsoleOptions {
 }
 
 /**
- * All-in-One Interactive Bot Console REPL (v0.3.0).
+ * All-in-One Interactive Bot Console REPL (v0.3.0+).
  * Provides a non-blocking interactive command prompt for each bot process,
- * supporting slash commands (/msg, /broadcast, /peers, /roots, /log, /mode, /help, /clear, /exit),
+ * supporting slash commands (/msg, /broadcast, /peers, /roots, /log, /mode, /skill, /help, /clear, /exit),
  * direct natural language AI instructions, and non-destructive TTY rendering.
  */
 export class BotConsole {
@@ -55,6 +56,7 @@ export class BotConsole {
   private readonly messagingService: MessagingService;
   private readonly sharedContextService: SharedContextService;
   private readonly workLogService: WorkLogService;
+  private readonly skillService: SkillService;
 
   private closeResolver?: () => void;
   private closePromise?: Promise<void>;
@@ -81,6 +83,7 @@ export class BotConsole {
     this.messagingService = new MessagingService(this.storage, this.botService);
     this.sharedContextService = new SharedContextService(this.storage);
     this.workLogService = new WorkLogService(this.storage);
+    this.skillService = new SkillService({ storage: this.storage });
 
     // Wire up Human-in-the-Loop review prompt handler
     this.executionModeController.setPromptHandler(async (question: string) => {
@@ -210,7 +213,7 @@ export class BotConsole {
   }
 
   /**
-   * Dispatches slash commands (/msg, /broadcast, /peers, /roots, /log, /mode, /status, /clear, /help, /exit).
+   * Dispatches slash commands (/msg, /broadcast, /peers, /roots, /log, /mode, /skill, /status, /clear, /help, /exit).
    */
   public async dispatchSlashCommand(line: string): Promise<void> {
     const [cmdToken, ...argTokens] = line.split(/\s+/);
@@ -359,6 +362,90 @@ export class BotConsole {
         break;
       }
 
+      case '/skill':
+      case '/skills': {
+        const sub = (argTokens[0] ?? 'list').toLowerCase();
+        try {
+          if (sub === 'list') {
+            const installed = await this.skillService.listSkills();
+            const bindings = await this.skillService.getSessionSkills(this.sessionId, this.botId, false);
+            this.writeLine(`[Console] Modul Skill Terpasang (${installed.length}):`);
+            for (const s of installed) {
+              this.writeLine(
+                `  * ${s.skill_id} (v${s.version}) — ${s.styles_count} styles, ${s.platforms_count} platforms, ${s.modalities_count} modalities`
+              );
+            }
+            if (bindings.length > 0) {
+              this.writeLine(`[Console] Konfigurasi Skill pada Sesi [${this.sessionId}]:`);
+              for (const b of bindings) {
+                const target = b.bot_id ? `Bot ${b.bot_id}` : 'Seluruh Sesi';
+                const cfg = [
+                  b.config.primary_style ? `style=${b.config.primary_style}` : '',
+                  b.config.platform ? `platform=${b.config.platform}` : '',
+                  b.config.entry_point ? `entry=${b.config.entry_point}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ');
+                this.writeLine(`  - [${b.status.toUpperCase()}] ${b.skill_id} (${target}) ${cfg ? `[${cfg}]` : ''}`);
+              }
+            }
+          } else if (sub === 'styles') {
+            const family = argTokens[1];
+            const styles = await this.skillService.listStyles(family);
+            this.writeLine(`[Console] AVDS Visual Styles (${styles.length}):`);
+            for (const st of styles) {
+              this.writeLine(`  - ${st.id} [${st.family}]: ${st.name}`);
+            }
+          } else if (sub === 'platforms') {
+            const platforms = await this.skillService.listPlatforms();
+            this.writeLine(`[Console] AVDS Platform Profiles (${platforms.length}):`);
+            for (const p of platforms) {
+              this.writeLine(`  - ${p.id}: ${p.title}`);
+            }
+          } else if (sub === 'modalities') {
+            const modalities = await this.skillService.listModalities();
+            this.writeLine(`[Console] AVDS Interaction Modalities (${modalities.length}):`);
+            for (const m of modalities) {
+              this.writeLine(`  - ${m.id}: ${m.description}`);
+            }
+          } else if (sub === 'enable') {
+            const skillId = argTokens[1] ?? 'almudaya-visual-design';
+            const primaryStyle = argTokens[2];
+            const platform = argTokens[3];
+            const binding = await this.skillService.enableSkill(this.sessionId, {
+              skillId,
+              botId: this.botId,
+              config: {
+                primary_style: primaryStyle,
+                platform,
+              },
+              updatedBy: this.botId,
+            });
+            this.writeLine(
+              `[Console] Skill "${binding.skill_id}" diaktifkan untuk Bot "${this.botDisplayName}" [${this.botId}].`
+            );
+          } else if (sub === 'disable') {
+            const skillId = argTokens[1] ?? 'almudaya-visual-design';
+            const binding = await this.skillService.disableSkill(
+              this.sessionId,
+              skillId,
+              this.botId,
+              this.botId
+            );
+            this.writeLine(
+              `[Console] Skill "${binding.skill_id}" dinonaktifkan untuk Bot "${this.botDisplayName}" [${this.botId}].`
+            );
+          } else {
+            this.writeLine(
+              '[Console] Penggunaan: /skill [list | styles [family] | platforms | modalities | enable [skillId] [style] [platform] | disable [skillId]]'
+            );
+          }
+        } catch (err: unknown) {
+          this.writeLine(`[Console] Gagal menjalankan perintah skill: ${(err as Error).message}`);
+        }
+        break;
+      }
+
       case '/status': {
         this.writeLine(`[Console] Status Bot "${this.botDisplayName}" [${this.botId}]:`);
         this.writeLine(`  Session ID:     ${this.sessionId}`);
@@ -386,6 +473,7 @@ export class BotConsole {
         this.writeLine(`  /roots                    Tampilkan daftar project roots terdaftar`);
         this.writeLine(`  /log [limit] [root]       Tampilkan linimasa memori kerja sesi`);
         this.writeLine(`  /mode [review|turbo]      Tampilkan atau ubah mode eksekusi keamanan`);
+        this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
         this.writeLine(`  /status                   Tampilkan ringkasan status bot lokal`);
         this.writeLine(`  /clear                    Bersihkan tampilan layar terminal`);
         this.writeLine(`  /exit, /quit              Hentikan bot dan keluar dari konsol`);

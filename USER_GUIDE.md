@@ -1,176 +1,150 @@
-# Almudaya Multi-Agent v0.2.0 — User & Operator Guide
+# Almudaya Multi-Agent v0.3.3 — User & Operator Guide
 
-Panduan konseptual dan operasional komprehensif untuk pengembang, arsitek sistem, dan operator yang mengelola lingkungan kolaborasi multi-agent dengan Almudaya Multi-Agent (`almudaya-multiagent` v0.2.0 — The Autonomous AI Coding Agent Engine).
+Panduan konseptual, arsitektural, dan operasional komprehensif untuk pengembang, arsitek sistem, desainer produk, dan operator yang mengelola ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**.
 
 ---
 
-## 1. Filosofi & Arsitektur Sistem
+## 1. Filosofi & Arsitektur Sistem Terpadu
 
-Almudaya dirancang untuk mengatasi kelemahan arsitektur agen tradisional yang memusatkan semua agen ke dalam satu proses monolitik (*single-process loop*). Almudaya mengadopsi prinsip **Session-Centric**, **Multi-Process**, **Persistent Blackboard**, dan **Multi-Provider AI Reasoning**.
+Almudaya mengadopsi arsitektur **Session-Centric**, **Multi-Process**, **Persistent Blackboard**, **PKU Unified Persistent Memory (Spec v0.2)**, **Agent Capability Governance (ACG)**, dan **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 ```text
-                      ┌───────────────────────────────────────────────┐
-                      │              Session Blackboard               │
-                      │         (sessions/<session_id>/)              │
-                      │                                               │
-                      │  ┌──────────────────────────────────────────┐ │
-                      │  │ Bot Registry (bots.json)                 │ │
-                      │  ├──────────────────────────────────────────┤ │
-                      │  │ Broadcast Event Stream (events.jsonl)    │ │
-                      │  ├──────────────────────────────────────────┤ │
-                      │  │ Shared Project Context (context.json)    │ │
-                      │  └──────────────────────────────────────────┘ │
-                      │  ┌──────────────────────────────────────────┐ │
-                      │  │ Individual Inboxes (inbox/<bot_id>/)     │ │
-                      │  │ - messages.json                          │ │
-                      │  │ - cursors.json                           │ │
-                      │  └──────────────────────────────────────────┘ │
-                      └──────────────────────▲────────────────────────┘
-                                             │
-                       ┌─────────────────────┴─────────────────────┐
-                       │                                           │
-          ┌────────────┴─────────────┐                ┌────────────┴─────────────┐
-          │  Bot Process 1 (Node.js) │                │  Bot Process 2 (Node.js) │
-          │  - Bot ID: BOT001        │                │  - Bot ID: BOT002        │
-          │  - Display: "Architect"  │                │  - Display: "Coder"      │
-          │  - Provider: Gemini AI   │                │  - Provider: Gemini AI   │
-          │  - Mode: REQUEST_REVIEW  │                │  - Mode: TURBO (Otonom)  │
-          └────────────┬─────────────┘                └────────────┬─────────────┘
-                       │                                           │
-                       └─────────────────────┬─────────────────────┘
-                                             │
-                                             ▼
-                      ┌───────────────────────────────────────────────┐
-                      │    Target Project Root (Sandboxed Codebase)   │
-                      │             D:\testingbot\                    │
-                      │  - read_file, write_file, edit_file           │
-                      │  - list_dir, search_files                     │
-                      │  - run_command (test runner, compiler, git)   │
-                      └───────────────────────────────────────────────┘
+                       ┌───────────────────────────────────────────────────────┐
+                       │         Session Blackboard & PKU Memory Store         │
+                       │       (sessions/<session_id>/ & pku/universes/)       │
+                       │                                                       │
+                       │  ┌─────────────────────────────────────────────────┐  │
+                       │  │ Global Register (Blackboard)                    │  │
+                       │  │ - bots.json, events.jsonl, context.json         │  │
+                       │  │ - work_log.jsonl, skills.json                   │  │
+                       │  ├─────────────────────────────────────────────────┤  │
+                       │  │ Individual Register (Inbox & ACMA 8 Domains)    │  │
+                       │  │ - inbox/<bot_id>/messages.json & cursors.json   │  │
+                       │  │ - working, semantic, episodic, procedural, ...  │  │
+                       │  ├─────────────────────────────────────────────────┤  │
+                       │  │ Project Memory Universe (PMU) & KOE (L0-L3)     │  │
+                       │  │ - 8-Domain Knowledge Tree + Knowledge Graph     │  │
+                       │  └─────────────────────────────────────────────────┘  │
+                       └──────────────────────────▲────────────────────────────┘
+                                                  │
+                        ┌─────────────────────────┴─────────────────────────┐
+                        │                                                   │
+           ┌────────────┴─────────────┐                        ┌────────────┴─────────────┐
+           │  Bot Process 1 (Node.js) │                        │  Bot Process 2 (Node.js) │
+           │  - Bot ID: BOT001        │                        │  - Bot ID: BOT002        │
+           │  - Display: "Architect"  │                        │  - Display: "Coder"      │
+           │  - Console REPL Active   │                        │  - Console REPL Active   │
+           │  - Skill: AVDS v1.0.1    │                        │  - Skill: AVDS v1.0.1    │
+           └────────────┬─────────────┘                        └────────────┬─────────────┘
+                        │                                                   │
+                        └─────────────────────────┬─────────────────────────┘
+                                                  │
+                                                  ▼
+                       ┌───────────────────────────────────────────────────────┐
+                       │    Target Project Roots & AVDS Design Contracts       │
+                       │  - File Tools: read_file, write_file, edit_file       │
+                       │  - ExecutionController: run_command (ACG + OS JobObj) │
+                       │  - Collaboration Tools: send_message, get_work_log    │
+                       │  - Skill Engine Tool: use_skill (AVDS v1.0.1)         │
+                       └───────────────────────────────────────────────────────┘
 ```
 
-### Empat Pilar Arsitektur:
-1. **Session Boundary (Batas Kolaborasi):** Setiap proyek kolaborasi dibatasi dalam sebuah *Session*. Data antar-session terisolasi total secara fisik.
-2. **Process Isolation (Isolasi Proses OS):** Setiap bot berjalan di proses Node.js masing-masing. Jika satu bot mengalami crash, infinite loop, atau memakan CPU tinggi, bot lain dan session tetap berjalan normal tanpa terganggu.
-3. **Blackboard Durability (Persistensi Mutlak):** Semua status, pesan, dan event disimpan ke disk menggunakan penulisan atomik dan *locking* kooperatif. Seluruh riwayat tetap utuh meski sistem mati atau di-*restart*.
-4. **Decentralized Coordination:** Tidak ada bot "dewa" atau *supervisor* wajib. Bot berkoordinasi secara otonom melalui broadcast dan pesan langsung di Blackboard.
+### Enam Pilar Arsitektur Almudaya v0.3.3:
+1. **Session Boundary & Multi-Root Orchestration:** Setiap sesi kolaborasi mengisolasi state dan dapat mengelola banyak direktori proyek (*project roots* seperti `backend`, `frontend`, `mobile`, `docs`) secara simultan dengan pelacakan lokasi presisi di `work_log.jsonl`.
+2. **Process Isolation & Interactive Bot Console REPL:** Setiap bot berjalan di proses OS independen dengan konsol interaktif *non-blocking* (`<BotName>> `) yang mendukung perintah slash (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/skill`, `/status`) dan instruksi bahasa alami.
+3. **Blackboard Durability & Lease/Fencing Delivery:** Pengiriman pesan dilindungi oleh *atomic write*, *cooperative lock* dengan *fencing token* monotonik, serta *inbox delivery state machine* (`PENDING` $\rightarrow$ `PROCESSING` $\rightarrow$ `ACKED` / `FAILED` / `DEAD_LETTER`).
+4. **Agent Capability Governance (ACG) & Defense-in-Depth:** Eksekusi perintah eksternal dikendalikan oleh kebijakan *fail-closed*, *prompt-injection boundary delimiters* (`<<<UNTRUSTED_*>>>`), sanitasi *environment variables*, serta *automatic secret redaction*.
+5. **PKU Unified Persistent Memory Architecture (Spec v0.2):** Menyatukan memori operasional Blackboard dan memori kognitif individual bot (ACMA) ke dalam penyimpanan pengetahuan jangka panjang yang deterministik, terisolasi per proyek (*PMU*), hemat token via *Knowledge Optimization Engine* (`KOE` L0–L3), dan mendukung *graceful degradation* (`PKU-001` s/d `PKU-020`).
+6. **Almudaya Visual Design Skills (AVDS v1.0.1):** Kerangka kerja desain dan rekayasa UI/UX adaptif lintas-platform yang memisahkan **Identitas Visual (40 gaya)**, **Konvensi Platform (13 platform)**, dan **Modalitas Interaksi (10 modalitas)** agar agen AI menghasilkan antarmuka yang khas, kontekstual, dan bebas dari jebakan desain generik.
 
 ---
 
-## 2. Pemisahan Penting: Tiga Wilayah Direktori
-
-Salah satu aspek paling penting yang harus dipahami oleh pengguna adalah pemisahan antara **tiga entitas direktori**:
+## 2. Pemisahan Empat Wilayah Direktori
 
 ```text
-┌───────────────────────────────────────┐
-│ 1. Engine Almudaya (Source Code)      │ -> D:\almudaya_multiagent_v0.1.0\
-│    - Tempat kode engine disimpan.    │    (src, package.json, tests, docs)
-└───────────────────────────────────────┘
-                    │
-                    ▼
-┌───────────────────────────────────────┐
-│ 2. Session Blackboard (Data Runtime)  │ -> %LOCALAPPDATA%\almudaya\sessions\S001\
-│    - Tempat Blackboard & Inbox hidup. │    (Atau via flag --workspace D:\Workspaces)
-└───────────────────────────────────────┘
-                    │
-                    ▼
-┌───────────────────────────────────────┐
-│ 3. Target Proyek yang Digarap Agen    │ -> D:\Projects\TokoOnline\
-│    - Kode aplikasi yang dikerjakan.   │    (Didaftarkan via: almudaya context root)
-└───────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ 1. Engine Almudaya (Source Code)            │ -> D:\almudaya_multiagent_v0.1.0\src\
+├─────────────────────────────────────────────┤
+│ 2. Modul Skill & AVDS v1.0.1                │ -> D:\almudaya_multiagent_v0.1.0\skill\almudaya-visual-design\
+├─────────────────────────────────────────────┤
+│ 3. Session Blackboard & PKU Store (Runtime) │ -> %LOCALAPPDATA%\almudaya\ (atau --workspace)
+├─────────────────────────────────────────────┤
+│ 4. Target Proyek yang Digarap Agen          │ -> D:\Projects\AplikasiAnda\ (via context root add)
+└─────────────────────────────────────────────┘
 ```
 
-1. **Direktori Engine Almudaya (`D:\almudaya_multiagent_v0.1.0`):** Berisi kode sumber framework ini. Direktori ini tidak boleh dan tidak akan pernah dikotori oleh data sesi kerja Anda.
-2. **Direktori Session Blackboard Workspace:** Secara default berada di folder data sistem (`%LOCALAPPDATA%\almudaya` di Windows). Anda bebas memindahkannya ke mana pun dengan flag `--workspace <path>` atau variabel `$env:ALMUDAYA_WORKSPACE`.
-3. **Direktori Target Proyek (Codebase yang Dikerjakan):** Proyek perangkat lunak yang sedang Anda bangun bersama agen (misal proyek web di `D:\MyWebProject`). Proyek ini dihubungkan ke session menggunakan perintah `almudaya context root add`.
+---
+
+## 3. Arsitektur Memori Persisten Terpadu (PKU Spec v0.2)
+
+### 3.1 Dua Register Memori yang Saling Terhubung
+1. **Global Register (Blackboard Integration):**
+   - Menangkap fakta tingkat sesi/proyek: metadata sesi, registri bot, project roots, dokumen SDLC, *broadcast events*, dan *work log*.
+   - Menyaring *heartbeat churn* (perubahan `last_seen_at` murni tidak membanjiri log pengetahuan PKU).
+   - Dapat direkonstruksi secara deterministik dari PKU melalui `reconstructGlobalRegister(sessionId)` (`PKU-010`).
+2. **Individual Register (ACMA 8 Cognitive Domains):**
+   - Mengelola memori privat per-bot dalam 8 domain kognitif:
+     - `working`: konteks aktif tugas yang sedang berjalan.
+     - `semantic`: aturan domain dan fakta yang dipelajari bot.
+     - `episodic`: riwayat pengalaman dan eksekusi masa lalu.
+     - `procedural`: pola langkah kerja dan *skill* teknis.
+     - `retrieval`: indeks referensi cepat.
+     - `prospective`: rencana tindakan atau pengingat masa depan.
+     - `checkpoint`: titik pemulihan iterasi ReAct (`CheckpointDescriptor`).
+     - `handoff`: serah-terima tugas terstruktur antar-bot (`HandoffContext`).
+   - Dilindungi oleh **`ScopedMemoryClient`**: Bot B dilarang keras membaca memori privat (`scope: 'agent'`) milik Bot A kecuali Bot A membagikannya secara eksplisit di dalam `sharedKnowledgeIds` pada saat *handoff* (`PKU-009`, `PKU-011`).
+
+### 3.2 Project Memory Universe (PMU) & Pemisahan Pohon vs. Graf
+- Setiap proyek memiliki **PMU** terisolasi (`PKU-014`) dengan 8 domain pohon hierarkis standar (`Identity`, `Requirements`, `Architecture`, `Development`, `Experiments`, `Decisions`, `Tests`, `Roadmap`).
+- **Invarian Pemisahan Pohon dari Graf (`PKU-015`)**: Struktur pohon hanya mengatur penempatan navigasi hierarkis, sedangkan objek pengetahuan (`KnowledgeObject`) dan relasi semantik (`KnowledgeRelation`) disimpan secara independen. Memangkas (*prune*) cabang pohon **tidak pernah** merusak atau menghapus objek pengetahuan bersama yang masih dirujuk oleh cabang lain.
+
+### 3.3 Knowledge Optimization Engine (KOE — Retrieval L0 s/d L3)
+Agar jendela konteks (*context window*) LLM tetap efisien dan hemat biaya token:
+- **Level `L0` (Index)**: Hanya memuat ID, judul, tipe, dan path domain (~15–25 token per item).
+- **Level `L1` (Digest)**: Memuat ringkasan padat dan metadata validasi (~40–80 token per item).
+- **Level `L2` (Full Object)**: Memuat isi objek pengetahuan terstruktur beserta relasinya.
+- **Level `L3` (Raw Evidence)**: Memuat jejak bukti mentah dan *provenance* lengkap (`PKU-012`, `PKU-013`).
 
 ---
 
-## 3. Aturan Identitas & Penamaan Bot (Identity Invariant)
+## 4. Almudaya Visual Design Skills (AVDS v1.0.1)
 
-Untuk mencegah ambiguitas komunikasi antar-agen, Almudaya menerapkan aturan identitas ganda:
+### 4.1 Mengapa AVDS Dibutuhkan oleh Agen Koding?
+Tanpa panduan desain terstruktur, model AI cenderung menghasilkan tampilan web generik yang seragam (sidebar kiri + kartu bulat + gradien biru-ungu) atau memaksakan tata letak web ke aplikasi mobile, desktop, maupun perangkat *embedded*.
 
-1. **Bot ID Stabil (Imutabel):**
-   - Format: `BOT001`, `BOT002`, dst.
-   - Bersifat permanen seumur hidup bot di dalam session tersebut.
-   - Digunakan sebagai kunci unik folder inbox (`inbox/BOT001/`) dan referensi riwayat pesan masa lalu.
-2. **Display Name (Nama Tampilan yang Manusiawi):**
-   - Contoh: `"System Architect"`, `"Frontend Developer"`.
-   - Dapat diubah kapan saja menggunakan perintah `almudaya bot rename`.
-   - **Wajib unik dalam satu Session** untuk mencegah salah kirim pesan.
-   - Jika saat pendaftaran pengguna tidak menentukan nama, sistem membuatkan nama default deterministik: `<session>_<seq>` (misal `S001_1`).
+**AVDS v1.0.1** mengatasi masalah ini melalui **Pemisahan 3 Dimensi Independen**:
+1. **Visual Identity (`styles/` — 40 Profil Gaya Visual)**:
+   - *Minimalist*: `swiss-international`, `scandinavian`, `japanese-zen`, `monochromatic`, `functionalist`.
+   - *Futuristic*: `cyberpunk`, `sci-fi-holographic`, `terminal-hacker`, `quantum-futurism`, `space-exploration`.
+   - *Premium*: `glassmorphism`, `neumorphism`, `luxury-minimal`, `gradient-mesh`, `architectural`.
+   - *Editorial*: `editorial-magazine`, `neo-brutalist`, `experimental-typography`, `asymmetric-art`, `retro-editorial`.
+   - *Organic*: `organic-nature`, `earthy-minimal`, `biophilic`, `botanical`, `eco-tech`.
+   - *Corporate*: `corporate-modern`, `academic-institutional`, `fintech-professional`, `civic-digital`, `data-intelligence`.
+   - *Playful*: `playful-contemporary`, `pastel-soft`, `memphis-design`, `retro-digital`, `three-dimensional-contemporary`.
+   - *Specialized*: `scientific-visualization`, `geospatial-cartographic`, `cybersecurity-operations`, `generative-art`, `digital-laboratory`.
+2. **Platform Profile (`platform-design/` — 13 Platform Target)**:
+   - `web`, `windows-desktop`, `macos-desktop`, `linux-desktop`, `android`, `ios`, `tablet`, `tv`, `wearable`, `automotive`, `industrial-hmi`, `spatial-xr`, `voice-conversational`.
+3. **Interaction Modality (`interaction-design/` — 10 Modalitas Interaksi)**:
+   - `mouse-pointer`, `keyboard`, `touch`, `stylus`, `voice`, `gesture`, `gaze-spatial`, `remote-dpad`, `haptic`, `multimodal`.
 
-> [!NOTE]
-> Jika `BOT001` dengan nama `"Architect"` berganti nama menjadi `"Lead Architect"`, seluruh riwayat pesan terdahulu tetap valid dan utuh karena pesan internal diikat ke `BOT001`. Pengirim baru pun dapat menyapa menggunakan nama baru `"Lead Architect"`.
+### 4.2 Siklus Hidup Penuh AVDS (`Unified Orchestrator v1.0.0`)
+```text
+Intake ➔ Design Brief ➔ Style & Platform Resolution ➔ Composition Plan & Component Tree
+       ➔ Design Contract Validation ➔ Implementation Handoff ➔ Evidence-Based QA ➔ Delivery
+```
+Setiap perpindahan fase antar-bot (misal dari bot *UI Architect* ke bot *Frontend Engineer* lalu ke bot *QA Auditor*) diikat oleh **Design-to-Code Contract (`design-contract.schema.json`)** dan **Agent Handoff Envelope (`handoff-envelope.schema.json`)** yang dapat divalidasi langsung menggunakan perintah:
+```bash
+almudaya skill validate <path-ke-kontrak.json>
+```
 
----
-
-## 4. Model Komunikasi: Broadcast vs Direct Message
-
-### A. Broadcast Event Log (`events.jsonl`)
-- Bersifat **Append-Only** (hanya menambah di baris akhir file).
-- Cocok untuk pengumuman publik, pembaruan status arsitektur, keputusan bersama (*decision*), atau tugas baru (*task assigned*).
-- Setiap bot memiliki catatan **Read Cursor** tersendiri di `inbox/<bot_id>/cursors.json`. Ketika bot membaca broadcast, posisi baca otomatis bergerak maju sehingga bot tidak membaca ulang pengumuman yang sama.
-
-### B. Direct Messaging & Individual Blackboard (`inbox/<bot_id>/`)
-- Bersifat **Point-to-Point**.
-- Pesan langsung ditujukan kepada bot spesifik (bisa via Bot ID atau Display Name).
-- Memiliki status siklus hidup: `unread` ➔ `read` ➔ `acknowledged`.
-- Pengakuan (*acknowledgement*) bersifat **Idempotent**: pemanggilan berkali-kali tidak akan merusak data status.
-
----
-
-## 5. Ketahanan Sistem & Penanganan Kegagalan (Fault Tolerance)
-
-### A. Deteksi Bot Mati (Stale Detection)
-Jika sebuah proses bot dimatikan secara paksa (misal `kill -9` atau terminal ditutup paksa):
-1. Sistem operasi akan menghapus PID proses tersebut.
-2. Saat bot lain atau operator menjalankan perintah `almudaya bot list`, sistem memeriksa `last_seen_at` dan keaktifan PID (`process.kill(pid, 0)`).
-3. Bot yang PID-nya mati otomatis diperbarui statusnya menjadi `stale`.
-4. Bot tersebut dapat dinyalakan kembali menggunakan `almudaya bot run` dengan ID yang sama tanpa kehilangan data.
-
-### B. Penguncian File Aman (Cross-Process File Locking)
-Untuk mencegah kerusakan saat beberapa proses bot menulis ke Blackboard pada mikrodetik yang sama:
-- Sistem menggunakan *kernel-atomic file locking* via `fs.open(lockFilePath, 'wx')`.
-- Pada sistem operasi Windows, sistem secara cerdas menangani perebutan handle (`EEXIST`, `EPERM`, `EBUSY`, `EACCES`) dengan *jitter* acak dan *bounded backoff*.
-- Jika sebuah bot crash saat sedang memegang lock, sistem mendeteksi kematian PID bot tersebut dan otomatis membuka (*break*) *stale lock* tersebut.
-
----
-
-## 6. Keamanan & Sanitasi Kredensial (Secret Redaction)
-
-Saat agen bekerja sama, sering kali variabel lingkungan atau token API dibagikan dalam konteks proyek. Untuk mencegah kebocoran kredensial ke file Blackboard publik atau log:
-- Modul [`src/shared/service.ts`](file:///d:/almudaya_multiagent_v0.1.0/src/shared/service.ts) secara otomatis memindai pasangan *key-value*.
-- Kunci yang mengandung pola sensitif (seperti `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `AUTH`, `PRIVATE`) atau nilai string yang cocok dengan format token ber-entropi tinggi (misal token GitHub `ghp_*`, AWS key, private key) langsung diubah menjadi:
-  `[REDACTED]`
-
----
-
-## 7. Mesin Agen Koding Otonom (Autonomous ReAct Loop & AI Engine)
-
-Mulai versi v0.2.0, bot Almudaya bukan sekadar penerima pesan pasif, melainkan **agen rekayasa perangkat lunak otonom** yang mampu memahami tugas koding, menjelajahi kode sumber, membuat file baru, mengedit kode secara bedah, dan mengeksekusi tes sistem.
-
-### A. Alur Siklus Otonom (ReAct Loop)
-Ketika sebuah bot menerima pesan instruksi di inbox-nya:
-1. **Dynamic Prompt Assembly:** Sistem menyusun prompt sistem dinamis yang memuat identitas bot, peran bot, rekan-rekan bot aktif dalam session, dan direktori target project root yang didaftarkan.
-2. **Reasoning (Penalaran AI):** AI Model Provider (misal Google Gemini 2.5) memproses pesan dan memutuskan langkah yang harus diambil (misal memanggil tool `write_file` atau `read_file`).
-3. **Action & Sandboxing:** Perkakas dijalankan di dalam batasan target project root. Jika berada di mode `REQUEST_REVIEW`, sistem meminta persetujuan manusia terlebih dahulu.
-4. **Observation:** Hasil eksekusi berkas atau tangkapan output shell dikembalikan ke AI.
-5. **Autonomous Reply:** Setelah tugas selesai, bot otomatis mengirim balasan langsung ke bot pengirim dan mencatat keputusan ke Blackboard event stream.
-6. **Guardrail Bounded Loop:** Siklus dibatasi maksimal 10 iterasi per pesan untuk mencegah infinite loop tak terkendali.
-
-### B. Mode Keamanan: Request Review vs Turbo
-- **Mode `REQUEST_REVIEW` (Human-in-the-Loop / Invariant 6):**
-  Untuk tugas-tugas kritis di mana pengembang ingin memverifikasi setiap perubahan file atau eksekusi perintah shell. Sistem akan menampilkan pratinjau dan meminta input:
-  `[y = Setuju, n = Tolak, d = Lihat Detail] (y/n/d):`
-- **Mode `TURBO` (Autonomous Mode):**
-  Bot mengeksekusi semua perkakas secara mandiri dan cepat tanpa henti, dengan seluruh tindakan tercatat secara transparan di log audit Blackboard.
-
----
-
-## 8. Rencana Pengembangan Antarmuka (GUI Roadmap v0.3.0)
-
-Dengan tuntasnya mesin otonom v0.2.0, rilis v0.3.0 mendatang akan menghadirkan:
-1. **Web Dashboard Lokal:** Visualisasi real-time interaksi bot, status file di project root, dan linimasa event Blackboard.
-2. **Terminal UI (TUI):** Multi-pane split screen untuk mengamati aktivitas beberapa bot sekaligus dalam satu jendela terminal.
-3. **Webhooks & Notification:** Integrasi pengiriman notifikasi penyelesaian tugas ke Discord, Slack, atau Telegram.
+### 4.3 Cara Bot Menggunakan AVDS secara Otonom
+1. Operator dapat mengaktifkan konfigurasi AVDS untuk sesi atau bot tertentu melalui CLI:
+   ```bash
+   almudaya skill enable avds --session S001 --bot BOT001 --style quantum-futurism --platform windows-desktop --modalities keyboard mouse-pointer --entry-point full-cycle
+   ```
+   atau langsung dari dalam konsol REPL bot:
+   ```text
+   Architect> /skill enable avds quantum-futurism windows-desktop
+   ```
+2. Ketika bot memproses pesan tugas, `AutonomousAgentLoop` secara otomatis menyuntikkan konfigurasi skill aktif ke dalam System Prompt bot dan menyediakan perkakas otonom **`use_skill`**.
+3. Bot dapat memanggil `use_skill` kapan saja untuk mengambil spesifikasi YAML gaya visual, aturan adaptasi platform, tata bahasa komposisi (`LAYOUT_GRAMMAR.md`), maupun protokol audit QA (`ACCESSIBILITY_AUDIT_PROTOCOL.md`).

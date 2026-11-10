@@ -1,8 +1,10 @@
-# Almudaya Multi-Agent v0.2.0 — Hands-on Step-by-Step Tutorial
+# Almudaya Multi-Agent v0.3.3 — Hands-on Step-by-Step Tutorial
 
-Panduan praktis langkah demi langkah untuk menguji dan memahami ekosistem kolaborasi multi-agent otonom Almudaya Multi-Agent (`almudaya-multiagent` v0.2.0 — The Autonomous AI Coding Agent Engine) secara langsung di komputer Anda.
-
-Tutorial ini disusun berdasarkan alur pengujian nyata yang terbukti berhasil menghubungkan proses bot independen dalam multi-terminal dan mengeksekusi koding otonom langsung ke root direktori proyek target.
+Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**, termasuk:
+1. Orkestrasi multi-proses lintas-terminal dengan **Interactive Bot Console REPL**,
+2. Tata kelola keamanan **Agent Capability Governance (ACG)**,
+3. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
+4. Sinkronisasi memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory Architecture (Spec v0.2)**.
 
 ---
 
@@ -10,17 +12,16 @@ Tutorial ini disusun berdasarkan alur pengujian nyata yang terbukti berhasil men
 
 Kita akan membangun lingkungan kolaborasi nyata dengan konfigurasi:
 1. **Target Proyek Eksternal:** Folder kerja di luar engine, misalnya di `D:\testingbot`.
-2. **Session Kolaborasi:** Session `S002` bernama `proyek-baru`.
-3. **Dua Bot Independen:**
-   - `BOT001` ("Architect") — Arsitek Sistem (Terminal 1).
-   - `BOT002` ("Coder") — Software Engineer bertenaga AI (Terminal 2).
-4. **Satu Terminal Operator (Terminal 3):** Untuk mengirim instruksi langsung atau memantau status.
+2. **Session Kolaborasi:** Session `S002` bernama `proyek-quantum-ui`.
+3. **Dua Bot Independen dengan Konsol REPL Interaktif:**
+   - `BOT001` (`"Architect"`) — UI/UX & System Architect yang merancang *Composition Plan* berbasis **AVDS v1.0.1** (Terminal 1).
+   - `BOT002` (`"Coder"`) — Fullstack Engineer bertenaga AI Google Gemini yang mengimplementasikan kode dan mengujinya (Terminal 2).
 
 ---
 
-## BAGIAN I: Persiapan Workspace & Registri Multi-Process
+## BAGIAN I: Persiapan Workspace, Root Proyek, Capability & Skill AVDS
 
-### Langkah 1: Persiapan Global CLI Engine
+### Langkah 1: Kompilasi & Registrasi Global CLI Engine
 
 Buka PowerShell / Command Prompt pertama Anda, arahkan ke folder engine Almudaya:
 
@@ -30,222 +31,175 @@ cd D:\almudaya_multiagent_v0.1.0
 # 1. Kompilasi kode sumber TypeScript
 npm run build
 
-# 2. Daftarkan CLI 'almudaya' ke sistem global Windows
+# 2. Daftarkan CLI 'almudaya' ke sistem global
 npm link
 
-# 3. Uji apakah CLI sudah aktif secara global
+# 3. Verifikasi versi CLI
 almudaya --version
 ```
-Jika muncul output `0.2.0`, artinya perintah `almudaya` kini dapat dipanggil dari folder mana pun di komputer Anda!
+Pastikan output menampilkan **`0.3.3`**.
 
 ---
 
-### Langkah 2: Pindah ke Direktori Target di Luar Engine
-
-Pindah ke folder di luar engine (misalnya folder proyek Anda di `D:\testingbot`):
+### Langkah 2: Siapkan Folder Target Proyek & Buat Session Baru
 
 ```powershell
-# Buat folder jika belum ada, lalu masuk ke dalamnya:
 cd D:\
 mkdir testingbot
 cd testingbot
-```
 
-Periksa daftar session awal:
-```powershell
-almudaya session list
-```
-Sistem akan melaporkan:
-`No sessions found in workspace: C:\Users\<User>\AppData\Local\almudaya`
-*(Ini membuktikan bahwa workspace tersimpan di folder sistem yang aman dan tidak mengotori `D:\testingbot`).*
-
----
-
-### Langkah 3: Buat Session Baru
-
-Di dalam `D:\testingbot`, buat Session baru dengan ID `S002`:
-
-```powershell
-almudaya session create proyek-baru --session S002
-```
-
-Output:
-```text
-Session created successfully!
-  Session ID:   S002
-  Name:         proyek-baru
-  Status:       active
-  Created:      2026-11-02T...
-  Location:     C:\Users\<User>\AppData\Local\almudaya\sessions\S002
+# Buat Session baru dengan ID S002
+almudaya session create proyek-quantum-ui --session S002 --description "Kolaborasi desain dan implementasi dengan AVDS v1.0.1 & PKU Memory"
 ```
 
 ---
 
-### Langkah 4: Daftarkan `D:\testingbot` sebagai Target Project Root
+### Langkah 3: Daftarkan Target Project Root & Terapkan Preset Kapabilitas (ACG)
 
-Agar bot diizinkan menganalisis, membaca, membuat, dan mengedit file (*Invariant 5 Sandboxing*), daftarkan folder `D:\testingbot` ke dalam session:
+1. Daftarkan folder `D:\testingbot` sebagai target *project root* utama:
+   ```powershell
+   almudaya context root add --session S002 --id app-root --name "Quantum Lab App" --path D:\testingbot --type primary
+   ```
+2. Terapkan preset izin kapabilitas `standard_coding` agar bot memiliki izin eksekusi terarah di dalam `D:\testingbot`:
+   ```powershell
+   almudaya capability preset apply standard_coding --session S002 --paths D:\testingbot
+   almudaya capability list --session S002
+   ```
+
+---
+
+### Langkah 4: Eksplorasi & Aktifkan Modul Skill AVDS v1.0.1
+
+Sebelum menjalankan bot, mari kita jelajahi katalog **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI:
 
 ```powershell
-almudaya context root add --session S002 --name testing --path D:\testingbot
+# 1. Lihat modul skill yang terpasang
+almudaya skill list
+
+# 2. Lihat detail sub-skill, skema kontrak, dan skenario benchmark AVDS
+almudaya skill inspect almudaya-visual-design
+
+# 3. Lihat daftar profil gaya visual keluarga 'futuristic' dan 'specialized'
+almudaya skill styles --family futuristic
+almudaya skill styles --family specialized
+
+# 4. Baca spesifikasi lengkap profil gaya 'quantum-futurism'
+almudaya skill styles quantum-futurism
+
+# 5. Lihat 13 profil platform dan 10 modalitas interaksi
+almudaya skill platforms
+almudaya skill modalities
 ```
 
-Periksa hasilnya:
+Sekarang aktifkan skill **AVDS (`almudaya-visual-design`)** untuk Session `S002` dengan gaya utama `quantum-futurism`, pengaruh sekunder `scientific-visualization`, platform `web`, dan modalitas `keyboard` serta `mouse-pointer`:
+
 ```powershell
-almudaya context root list --session S002
+almudaya skill enable avds --session S002 --style quantum-futurism --secondary-styles scientific-visualization --platform web --modalities keyboard mouse-pointer --entry-point full-cycle --notes "Gunakan komposisi spasial modular dan kontras WCAG 2.2 AA"
 ```
-Output:
-```text
-Project roots in Session [S002]:
 
-  - [testing] testing (primary) -> D:\testingbot
+Periksa status ikatan skill pada sesi `S002` (yang juga otomatis tersinkronisasi ke penyimpanan **PKU Memory**):
+```powershell
+almudaya skill list --session S002
 ```
 
 ---
 
 ### Langkah 5: Daftarkan Identitas Dua Bot ke Session
 
-Daftarkan bot Arsitek dan bot Coder:
-
 ```powershell
 # Bot 1: Architect
-almudaya bot join --session S002 --bot BOT001 --display-name "Architect" --role "System Architect"
+almudaya bot join --session S002 --bot BOT001 --display-name "Architect" --role "System & UI/UX Architect"
 
 # Bot 2: Coder
-almudaya bot join --session S002 --bot BOT002 --display-name "Coder" --role "Software Engineer"
+almudaya bot join --session S002 --bot BOT002 --display-name "Coder" --role "Frontend & Systems Engineer"
 ```
 
-Periksa registri bot:
+---
+
+## BAGIAN II: Kolaborasi Multi-Terminal dengan Interactive Bot Console REPL
+
+Dengan fitur **Interactive Bot Console REPL**, Anda cukup menggunakan **2 jendela terminal** (satu untuk setiap bot) tanpa memerlukan terminal ketiga!
+
+### 🖥️ Terminal 1 (Kiri): Jalankan Bot "Architect"
+
 ```powershell
-almudaya bot list --session S002
+$env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
+almudaya bot run --session S002 --bot BOT001 --provider gemini --mode review
+```
+Terminal 1 akan menampilkan banner interaktif dan prompt `Architect> `:
+```text
+================================================================
+ Almudaya Multi-Agent v0.3.3 — Interactive Bot Console REPL
+ Bot: "Architect" [BOT001] | Session: S002
+ Mode: REQUEST_REVIEW | Provider: gemini (gemini-2.5-flash)
+ Ketik /help untuk daftar perintah slash atau ketik instruksi langsung.
+================================================================
+Architect> 
+```
+
+Di dalam prompt `Architect> `, coba jalankan perintah slash berikut:
+```text
+Architect> /peers
+Architect> /roots
+Architect> /skill list
+Architect> /skill styles futuristic
+```
+
+---
+
+### 🖥️ Terminal 2 (Kanan): Jalankan Bot "Coder" di Mode TURBO
+
+Buka jendela terminal kedua di `D:\testingbot`:
+
+```powershell
+$env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
+almudaya bot run --session S002 --bot BOT002 --provider gemini --mode turbo
+```
+Terminal 2 akan menampilkan prompt `Coder> `.
+
+---
+
+### 🚀 Langkah 6: Kirim Tugas Berbasis Skill AVDS dari Konsol "Architect" ke "Coder"
+
+Di **Terminal 1 (`Architect> `)**, kirimkan pesan tugas langsung ke `Coder` menggunakan perintah `/msg`:
+
+```text
+Architect> /msg Coder Tolong gunakan tool use_skill untuk membaca profil gaya 'quantum-futurism' dan platform 'web', lalu buatkan berkas 'src/theme-tokens.json' dan modul 'src/math.js' beserta pengujiannya dengan node.
+```
+
+### Apa yang Terjadi Secara Otonom di Terminal 2 (`Coder> `)?
+1. Bot **Coder** langsung menerima pesan dengan *non-destructive TTY rendering* (tanpa merusak baris prompt).
+2. `AutonomousAgentLoop` secara otomatis menyuntikkan konfigurasi aktif **AVDS (`quantum-futurism`, `web`, `keyboard`, `mouse-pointer`)** ke dalam System Prompt Coder.
+3. Coder memanggil perkakas **`use_skill`** (`action: "get_style", target_id: "quantum-futurism"` dan `action: "get_platform", target_id: "web"`) untuk membaca spesifikasi desain resmi AVDS.
+4. Coder memanggil **`write_file`** untuk menulis `src/theme-tokens.json` dan `src/math.js` di dalam `D:\testingbot`.
+5. Coder memanggil **`run_command`** untuk memverifikasi kode dengan `node`.
+6. Seluruh mutasi berkas dan eksekusi perintah otomatis tercatat ke `work_log.jsonl`, serta Coder mengirim balasan langsung kembali ke `Architect`!
+
+---
+
+### Langkah 7: Periksa Riwayat Kerja & Validasi Kontrak AVDS
+
+Di **Terminal 1 (`Architect> `)**, ketik:
+```text
+Architect> /log
+```
+Anda akan melihat linimasa lengkap seluruh berkas yang ditulis dan perintah yang dijalankan oleh `Coder` beserta lokasi root-nya.
+
+Anda juga dapat memvalidasi berkas kontrak desain atau rencana komposisi AVDS kapan saja dari CLI:
+```powershell
+almudaya skill validate D:\almudaya_multiagent_v0.1.0\skill\almudaya-visual-design\design-contract\examples\design-contract-example.json
 ```
 Output:
 ```text
-Bots in Session [S002]:
-
-  - [BOT001] "Architect" (stale)
-      Role: System Architect
-      PID: 31420, Joined: 2026-11-02T...
-  - [BOT002] "Coder" (stale)
-      Role: Software Engineer
-      PID: 21036, Joined: 2026-11-02T...
+AVDS Artifact Validation (design-contract): VALID ✅
 ```
 
 ---
 
-## BAGIAN II: Mengaktifkan Koding AI Otonom Multi-Terminal
+### Langkah 8: Menghentikan Bot dengan Aman
 
-Sekarang atur layar Anda agar menampilkan **3 jendela terminal berdampingan**:
-
-### 🖥️ Terminal 1 (Kiri): Jalankan Daemon Bot "Architect"
-Di terminal pertama Anda di `D:\testingbot`, jalankan runtime bot `BOT001`:
-```powershell
-almudaya bot run --session S002 --bot BOT001
-```
-Output:
+Di masing-masing terminal bot (`Architect> ` dan `Coder> `), cukup ketik:
 ```text
-Bot runtime started successfully!
-  Session ID:     S002
-  Bot ID:         BOT001
-  Display Name:   Architect
-  PID:            27724
-  AI Provider:    Disabled (Messaging only)
-  Execution Mode: REQUEST_REVIEW
-Press Ctrl+C to terminate bot process.
+/exit
 ```
-*(Terminal 1 sekarang aktif secara live, memompa heartbeat, dan memantau inbox).*
-
----
-
-### 🖥️ Terminal 2 (Kanan Atas): Jalankan Bot "Coder" Bertenaga AI Google Gemini
-Buka jendela Command Prompt / PowerShell kedua, masuk ke `D:\testingbot`:
-
-1. **Setel API Key Gemini Anda:**
-   ```powershell
-   $env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
-   ```
-   *(Atau gunakan flag `--provider mock` jika ingin mencoba secara offline tanpa API key).*
-
-2. **Jalankan Bot Coder dengan Mode TURBO (Otonom Penuh):**
-   ```powershell
-   almudaya bot run --session S002 --bot BOT002 --provider gemini --mode turbo
-   ```
-   Output:
-   ```text
-   Bot runtime started successfully!
-     Session ID:     S002
-     Bot ID:         BOT002
-     Display Name:   Coder
-     PID:            25872
-     AI Provider:    gemini (gemini-2.5-flash)
-     Execution Mode: TURBO
-   Press Ctrl+C to terminate bot process.
-   ```
-   *(Terminal 2 sekarang siap berpikir mandiri, memanggil perkakas file/shell, dan menulis kode langsung ke `D:\testingbot`!)*
-
-> [!TIP]
-> **Pilihan Mode Keamanan:**
-> - Jika Anda menggunakan `--mode turbo`, Coder akan langsung mengedit file dan menjalankan perintah secara mandiri.
-> - Jika Anda menggunakan `--mode review` (default), setiap kali Coder hendak menulis file atau menjalankan command, terminal akan meminta persetujuan Anda: `[y = Setuju, n = Tolak, d = Lihat Detail] (y/n/d):`.
-
----
-
-### 🖥️ Terminal 3 (Kanan Bawah): Berikan Tugas Koding Nyata!
-Buka jendela terminal ketiga di `D:\testingbot`. Kirimkan pesan tugas koding dari `BOT001` (Architect) kepada `BOT002` (Coder):
-
-```powershell
-almudaya message send --session S002 --sender BOT001 --recipient "Coder" --body "Halo Coder! Tolong buatkan modul kalkulator 'src/math.js' dengan fungsi add(a, b) dan multiply(a, b), lalu uji hasilnya menggunakan perintah node."
-```
-
-Output di Terminal 3:
-```text
-Message sent successfully!
-  Message ID: msg_...
-  Session ID: S002
-  Sender:     BOT001
-  Recipient:  BOT002
-  Type:       DIRECT
-```
-
----
-
-## 🚀 Amati Aksi Otonom di Terminal 2 & Terminal 1!
-
-### Apa yang terjadi di Terminal 2 (Bot "Coder"):
-Tanpa Anda sentuh, Bot Coder akan langsung:
-1. Menangkap pesan masuk dari Architect.
-2. Membentuk System Prompt dinamis dengan konteks proyek `D:\testingbot`.
-3. Memanggil perkakas `write_file` untuk membuat `src/math.js`.
-4. Memanggil perkakas `run_command` untuk menjalankan verifikasi node:
-   `node -e "const { add } = require('./src/math.js'); console.log(add(3, 4));"`
-5. Menghasilkan ringkasan dan secara otomatis mengirimkan pesan balasan kembali ke inbox Architect!
-6. Mencatat seluruh jejak audit ke Session Blackboard (`events.jsonl`).
-
-### Apa yang terjadi di Terminal 1 (Bot "Architect"):
-Terminal 1 secara instan menerima balasan konfirmasi dari Coder:
-```text
-[BOT BOT001] Received message from BOT002: Modul src/math.js telah berhasil dibuat dan seluruh verifikasi pengujian fungsi add dan multiply telah lulus dengan sukses.
-```
-
----
-
-### Langkah 7: Buktikan File Baru Telah Tercipta di Disk!
-Di Terminal 3, periksa isi folder `D:\testingbot`:
-
-```powershell
-dir src
-type src\math.js
-```
-File `src\math.js` benar-benar telah dibuat di hard drive Anda oleh agen AI Almudaya!
-
----
-
-## Langkah 8: Mematikan & Memulihkan Proses (Crash Recovery)
-
-1. Di Terminal 2, tekan `Ctrl + C`. Bot `BOT002` akan berhenti secara aman (*graceful shutdown*).
-2. Di Terminal 3, ketik `almudaya bot list --session S002`. Sistem akan langsung mendeteksi `BOT002` sebagai `stopped` atau `stale`, sedangkan `BOT001` tetap `active`.
-3. Jalankan kembali `almudaya bot run --session S002 --bot BOT002 --provider gemini --mode turbo`. Bot akan langsung pulih kembali dan seluruh riwayat percakapan masa lalu tetap tersimpan utuh di Blackboard.
-
----
-
-## Selamat! 🎉
-Anda telah berhasil menjalankan **Almudaya Multi-Agent v0.2.0** — ekosistem multi-agent independen pertama yang menggabungkan ketahanan arsitektur Blackboard multi-proses dengan kekuatan koding otonom Google Gemini AI!
+Kedua bot akan melakukan *graceful shutdown*, melepaskan lock dengan bersih, dan menyimpan seluruh jejak sesi di Blackboard serta penyimpanan memori persisten PKU.

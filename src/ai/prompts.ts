@@ -11,6 +11,7 @@ export interface PromptContext {
   projectRoots?: ProjectRootRecord[];
   executionMode?: 'REQUEST_REVIEW' | 'TURBO';
   recentWorkLogsMarkdown?: string;
+  skillsPromptMarkdown?: string;
 }
 
 /**
@@ -107,6 +108,11 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
     sections.push('<<<UNTRUSTED_WORK_LOG_START>>>');
     sections.push(escapePromptDelimiters(context.recentWorkLogsMarkdown));
     sections.push('<<<UNTRUSTED_WORK_LOG_END>>>');
+  }
+
+  // Active Skill Modules & AVDS Context
+  if (context.skillsPromptMarkdown) {
+    sections.push(context.skillsPromptMarkdown);
   }
 
   // Security Invariants Notice (SEC-02)

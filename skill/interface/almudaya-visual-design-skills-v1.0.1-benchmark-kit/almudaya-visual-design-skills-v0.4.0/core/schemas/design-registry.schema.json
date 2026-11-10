@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AVDS Design Registry",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "projects"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "projects": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "primary_style"
+        ],
+        "properties": {
+          "primary_style": {
+            "type": "string"
+          },
+          "secondary_styles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "palette_direction": {
+            "type": "string"
+          },
+          "layout_signature": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

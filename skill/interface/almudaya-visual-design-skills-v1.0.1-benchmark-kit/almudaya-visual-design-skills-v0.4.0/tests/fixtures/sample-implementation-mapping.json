@@ -1,0 +1,65 @@
+{
+  "product": {
+    "name": "Almudaya Research Field App",
+    "purpose": "Capture field observations and synchronize research data"
+  },
+  "target_environment": {
+    "platform": "android",
+    "minimum_version": "project-defined",
+    "framework": "Flutter",
+    "form_factors": [
+      "phone",
+      "tablet"
+    ],
+    "input_modalities": [
+      "touch",
+      "keyboard",
+      "screen-reader"
+    ],
+    "output_modalities": [
+      "visual",
+      "haptic"
+    ],
+    "device_capabilities": [
+      "camera",
+      "location",
+      "offline-storage"
+    ]
+  },
+  "design_decision": {
+    "primary_visual_style": "organic-nature",
+    "platform_profile": "android",
+    "interaction_profiles": [
+      "touch",
+      "keyboard"
+    ],
+    "rationale": "Field use requires clear touch controls, readable status, and resilient offline workflows"
+  },
+  "component_mapping": [
+    {
+      "ux_intent": "Primary navigation",
+      "component_choice": "adaptive platform navigation",
+      "accessibility_behavior": "labeled destinations and predictable focus order"
+    },
+    {
+      "ux_intent": "Risk status",
+      "component_choice": "status text plus icon and semantic color",
+      "accessibility_behavior": "status is not conveyed by color alone"
+    }
+  ],
+  "semantic_tokens": {
+    "source": "AVDS semantic token contract",
+    "scaling": "platform typography scaling supported"
+  },
+  "verification_plan": {
+    "tests": [
+      "unit",
+      "integration",
+      "accessibility semantics"
+    ],
+    "known_unverified_areas": [
+      "physical outdoor sunlight test",
+      "device-specific location permission flow"
+    ]
+  }
+}

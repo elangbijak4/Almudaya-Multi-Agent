@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/handoff-envelope.schema.json",
+  "title": "AVDS Agent Handoff Envelope",
+  "type": "object",
+  "required": [
+    "handoff_id",
+    "workflow_id",
+    "from_role",
+    "to_role",
+    "phase",
+    "input_artifacts",
+    "requested_output",
+    "acceptance_criteria",
+    "status"
+  ],
+  "properties": {
+    "handoff_id": {
+      "type": "string"
+    },
+    "workflow_id": {
+      "type": "string"
+    },
+    "from_role": {
+      "type": "string"
+    },
+    "to_role": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "string"
+    },
+    "input_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "artifact_id",
+          "version",
+          "path"
+        ],
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "checksum": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "approved_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "open_assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requested_output": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "accepted",
+        "in_progress",
+        "returned",
+        "reviewed",
+        "blocked",
+        "rejected",
+        "cancelled"
+      ]
+    },
+    "return_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

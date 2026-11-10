@@ -1,0 +1,70 @@
+{
+  "contract_id": "avds-example-contract-academy",
+  "version": "1.0.0",
+  "status": "approved",
+  "project_id": "almudaya-academy-example",
+  "workflow_id": "academy-mobile-learning-001",
+  "artifacts": [
+    {
+      "artifact_id": "brief-academy-001",
+      "type": "design_brief",
+      "version": "1.0.0",
+      "status": "approved",
+      "path": "examples/academy-cross-platform/design-brief.json",
+      "depends_on": []
+    },
+    {
+      "artifact_id": "composition-academy-001",
+      "type": "composition_plan",
+      "version": "1.0.0",
+      "status": "approved",
+      "path": "examples/mobile-academy-composition-plan.json",
+      "depends_on": [
+        "brief-academy-001"
+      ]
+    },
+    {
+      "artifact_id": "tree-academy-001",
+      "type": "component_tree",
+      "version": "1.0.0",
+      "status": "approved",
+      "path": "examples/web-gis-component-tree.json",
+      "depends_on": [
+        "composition-academy-001"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "C-001",
+      "description": "Phone-first learning flow",
+      "priority": "must"
+    },
+    {
+      "id": "C-002",
+      "description": "Explicit offline and synchronization state",
+      "priority": "must"
+    }
+  ],
+  "decisions": [
+    "Editorial / Reading is the primary archetype",
+    "Visual identity remains independent of Android platform conventions"
+  ],
+  "open_assumptions": [
+    "Offline lesson storage mechanism is not yet specified"
+  ],
+  "handoff": {
+    "current_phase": "approved_for_implementation",
+    "requested_output": [
+      "Mobile lesson flow",
+      "Practice interaction",
+      "Offline state handling"
+    ],
+    "acceptance_criteria": [
+      "Resume lesson position",
+      "Accessible practice controls",
+      "Clear sync status"
+    ],
+    "assigned_agent_role": "mobile-implementation-agent"
+  }
+}

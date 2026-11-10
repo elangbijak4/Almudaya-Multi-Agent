@@ -1,0 +1,60 @@
+{
+  "report_id": "example-avds-qa-web-gis",
+  "scope": {
+    "product": "Wildfire Risk Intelligence Web GIS",
+    "platforms": [
+      "web desktop",
+      "web tablet",
+      "web phone"
+    ],
+    "build_or_commit": "example-build-001",
+    "test_date": "2026-11-08"
+  },
+  "coverage": {
+    "critical_journeys": "partial",
+    "visual_review": "partial",
+    "interaction_review": "not_assessed",
+    "accessibility_review": "not_assessed",
+    "platform_review": "partial",
+    "states_review": "not_assessed"
+  },
+  "traceability": [
+    {
+      "requirement": "Investigate selected map feature",
+      "component": "feature-inspector",
+      "test_case": "AVDS-QA-002",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    {
+      "requirement": "Map remains primary on phone",
+      "component": "map-canvas",
+      "test_case": "AVDS-QA-003",
+      "status": "not_assessed",
+      "evidence": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "EXAMPLE-001",
+      "severity": "major",
+      "platforms": [
+        "web phone"
+      ],
+      "location": "feature-inspector",
+      "title": "Feature detail behavior needs verification",
+      "status": "open",
+      "expected": "Feature details remain discoverable on narrow screens",
+      "observed": "No runtime evidence supplied in this example",
+      "evidence": [],
+      "impact": "Users may not be able to inspect selected features efficiently",
+      "recommendation": "Test the switchable panel/sheet behavior at the declared phone size classes"
+    }
+  ],
+  "release_recommendation": "not_assessed",
+  "limitations": [
+    "Illustrative report only; no implementation was inspected",
+    "No accessibility tree, device testing, or runtime recordings were supplied"
+  ],
+  "summary": "This example demonstrates honest reporting when implementation evidence is unavailable."
+}

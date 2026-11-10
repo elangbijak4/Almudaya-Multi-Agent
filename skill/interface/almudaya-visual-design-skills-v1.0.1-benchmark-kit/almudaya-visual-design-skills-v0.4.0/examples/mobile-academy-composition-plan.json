@@ -1,0 +1,133 @@
+{
+  "plan_id": "example-mobile-academy-learning",
+  "product_context": {
+    "primary_task": "Continue a lesson and complete its practice activity",
+    "secondary_tasks": [
+      "Find a course",
+      "Review learning progress",
+      "Resume downloaded content"
+    ],
+    "user_groups": [
+      "learner"
+    ],
+    "assumptions": [
+      "Phone-first use",
+      "Intermittent connectivity is possible"
+    ]
+  },
+  "platform": {
+    "profile": "android",
+    "form_factors": [
+      "phone",
+      "tablet"
+    ],
+    "modalities": [
+      "touch",
+      "keyboard",
+      "voice"
+    ]
+  },
+  "visual_identity": {
+    "primary_style": "Scandinavian",
+    "influences": [
+      "Academic Institutional"
+    ]
+  },
+  "archetype": {
+    "primary": "Editorial / Reading",
+    "hybrid_with": [
+      "Focused Task"
+    ],
+    "rationale": "Learning content and practice require readable progression with low-friction resumption.",
+    "alternatives_rejected": [
+      "Dashboard / Monitoring: progress is supporting context, not the primary task"
+    ]
+  },
+  "regions": [
+    {
+      "id": "lesson-content",
+      "responsibility": "Present lesson content with readable hierarchy",
+      "priority": "critical",
+      "composition_operator": "sequence"
+    },
+    {
+      "id": "lesson-progress",
+      "responsibility": "Show position and completion state",
+      "priority": "high",
+      "composition_operator": "anchor"
+    },
+    {
+      "id": "lesson-actions",
+      "responsibility": "Resume, bookmark, and open practice",
+      "priority": "high",
+      "composition_operator": "sequence"
+    },
+    {
+      "id": "practice-task",
+      "responsibility": "Present one practice task at a time",
+      "priority": "critical",
+      "composition_operator": "switch"
+    },
+    {
+      "id": "offline-state",
+      "responsibility": "Explain availability and sync state",
+      "priority": "high",
+      "composition_operator": "contain"
+    }
+  ],
+  "navigation_model": {
+    "global": "Platform-native bottom navigation where appropriate",
+    "local": "Course and lesson outline",
+    "contextual": "Lesson actions"
+  },
+  "adaptive_variants": [
+    {
+      "size_class": "phone",
+      "structural_changes": [
+        "Single-column reading flow",
+        "Lesson outline opens as a sheet",
+        "Practice uses focused task screens"
+      ],
+      "preserved_priorities": [
+        "Lesson content",
+        "Resume action"
+      ]
+    },
+    {
+      "size_class": "tablet",
+      "structural_changes": [
+        "Optional persistent lesson outline beside content"
+      ],
+      "preserved_priorities": [
+        "Reading hierarchy",
+        "Practice flow"
+      ]
+    }
+  ],
+  "interaction_map": [
+    {
+      "action": "Resume lesson",
+      "modality": "touch or voice",
+      "alternative": "Keyboard navigation on supported devices",
+      "feedback": "Restore last valid lesson position"
+    },
+    {
+      "action": "Submit practice",
+      "modality": "touch or keyboard",
+      "alternative": "Accessible form controls",
+      "feedback": "Show result, explanation, and retry path"
+    }
+  ],
+  "decisions": [
+    "Avoid dense dashboard metrics on the learning surface",
+    "Make offline and sync states explicit"
+  ],
+  "validation": {
+    "task_clarity": "Continue lesson is the dominant action",
+    "platform_fit": "Uses mobile reading and native navigation conventions",
+    "accessibility_review": "Support scalable text, screen readers, captions, and accessible practice controls",
+    "unresolved_risks": [
+      "Validate offline conflict and sync behavior"
+    ]
+  }
+}

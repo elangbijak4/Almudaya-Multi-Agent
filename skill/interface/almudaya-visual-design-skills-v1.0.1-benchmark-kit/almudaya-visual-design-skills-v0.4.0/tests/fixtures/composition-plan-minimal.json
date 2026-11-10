@@ -1,0 +1,59 @@
+{
+  "plan_id": "fixture-focused-form",
+  "product_context": {
+    "primary_task": "Submit a research project intake form",
+    "secondary_tasks": [
+      "Save a draft"
+    ],
+    "assumptions": [
+      "Single-user workflow"
+    ]
+  },
+  "platform": {
+    "profile": "web",
+    "form_factors": [
+      "desktop",
+      "phone"
+    ],
+    "modalities": [
+      "keyboard",
+      "mouse",
+      "touch"
+    ]
+  },
+  "archetype": {
+    "primary": "Focused Task",
+    "rationale": "One finite task with limited supporting navigation."
+  },
+  "regions": [
+    {
+      "id": "form",
+      "responsibility": "Collect required project information",
+      "priority": "critical",
+      "composition_operator": "sequence"
+    }
+  ],
+  "adaptive_variants": [
+    {
+      "size_class": "phone",
+      "structural_changes": [
+        "Single-column fields"
+      ],
+      "preserved_priorities": [
+        "Form completion"
+      ]
+    }
+  ],
+  "interaction_map": [
+    {
+      "action": "Submit form",
+      "modality": "keyboard or touch",
+      "feedback": "Show validation summary and confirmation"
+    }
+  ],
+  "validation": {
+    "task_clarity": "Single task",
+    "platform_fit": "Responsive web form",
+    "accessibility_review": "Labels and keyboard order required"
+  }
+}

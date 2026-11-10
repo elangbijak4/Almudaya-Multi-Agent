@@ -1,0 +1,134 @@
+{
+  "plan_id": "example-desktop-quantum-lab",
+  "product_context": {
+    "primary_task": "Configure, run, and inspect a quantum experiment",
+    "secondary_tasks": [
+      "Browse experiment history",
+      "Inspect circuit or model parameters",
+      "Compare execution results"
+    ],
+    "user_groups": [
+      "researcher",
+      "advanced student"
+    ],
+    "assumptions": [
+      "Desktop is the primary environment",
+      "Users may work with complex parameter sets"
+    ]
+  },
+  "platform": {
+    "profile": "windows-desktop",
+    "form_factors": [
+      "desktop",
+      "wide desktop"
+    ],
+    "modalities": [
+      "mouse",
+      "keyboard",
+      "stylus"
+    ]
+  },
+  "visual_identity": {
+    "primary_style": "Scientific Visualization",
+    "influences": [
+      "Digital Laboratory"
+    ]
+  },
+  "archetype": {
+    "primary": "Workspace",
+    "hybrid_with": [
+      "Data Exploration"
+    ],
+    "rationale": "Researchers need a persistent experiment surface, editable configuration, and inspectable results.",
+    "alternatives_rejected": [
+      "Command Surface alone: visual experiment state must remain inspectable"
+    ]
+  },
+  "regions": [
+    {
+      "id": "project-navigation",
+      "responsibility": "Navigate projects and experiment history",
+      "priority": "medium",
+      "composition_operator": "anchor"
+    },
+    {
+      "id": "experiment-canvas",
+      "responsibility": "Construct and inspect experiment or circuit",
+      "priority": "critical",
+      "composition_operator": "parallel"
+    },
+    {
+      "id": "parameter-inspector",
+      "responsibility": "Edit selected operation and runtime parameters",
+      "priority": "high",
+      "composition_operator": "parallel"
+    },
+    {
+      "id": "execution-console",
+      "responsibility": "Show logs, progress, and runtime feedback",
+      "priority": "high",
+      "composition_operator": "sequence"
+    },
+    {
+      "id": "results-analysis",
+      "responsibility": "Inspect output, metrics, and evidence",
+      "priority": "critical",
+      "composition_operator": "switch"
+    }
+  ],
+  "navigation_model": {
+    "global": "Native application menu and project navigation",
+    "local": "Experiment workspace tabs",
+    "contextual": "Selection-aware parameter inspector"
+  },
+  "adaptive_variants": [
+    {
+      "size_class": "wide desktop",
+      "structural_changes": [
+        "Canvas and inspector remain parallel",
+        "Console can be docked or collapsed"
+      ],
+      "preserved_priorities": [
+        "Experiment canvas",
+        "Execution state"
+      ]
+    },
+    {
+      "size_class": "compact desktop",
+      "structural_changes": [
+        "Inspector becomes a switchable pane",
+        "Console collapses without losing running-state visibility"
+      ],
+      "preserved_priorities": [
+        "Experiment state",
+        "Critical runtime feedback"
+      ]
+    }
+  ],
+  "interaction_map": [
+    {
+      "action": "Edit experiment graph",
+      "modality": "mouse, keyboard, or stylus",
+      "alternative": "Structured operation list",
+      "feedback": "Show validation and dependency changes"
+    },
+    {
+      "action": "Run experiment",
+      "modality": "mouse or keyboard",
+      "alternative": "Accessible command action",
+      "feedback": "Display execution state, cancellation, and logs"
+    }
+  ],
+  "decisions": [
+    "Keep runtime status visible during execution",
+    "Separate editable configuration from immutable result evidence"
+  ],
+  "validation": {
+    "task_clarity": "Experiment construction and execution are the central workflow",
+    "platform_fit": "Supports desktop density, keyboard shortcuts, resizable panes, and native menus",
+    "accessibility_review": "Keyboard-operable graph alternative and explicit focus management required",
+    "unresolved_risks": [
+      "Confirm graph-canvas accessibility strategy"
+    ]
+  }
+}

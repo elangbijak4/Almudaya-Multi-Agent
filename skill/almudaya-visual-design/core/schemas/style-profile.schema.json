@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AVDS Style Profile",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "family",
+    "philosophy",
+    "visual_language",
+    "layout",
+    "typography",
+    "color_direction",
+    "components",
+    "interaction",
+    "accessibility",
+    "recommended_for",
+    "anti_patterns"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "philosophy": {
+      "type": "string"
+    },
+    "visual_language": {
+      "type": "object"
+    },
+    "layout": {
+      "type": "object"
+    },
+    "typography": {
+      "type": "object"
+    },
+    "color_direction": {
+      "type": "object"
+    },
+    "components": {
+      "type": "object"
+    },
+    "interaction": {
+      "type": "object"
+    },
+    "accessibility": {
+      "type": "object"
+    },
+    "recommended_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anti_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "compatibility": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

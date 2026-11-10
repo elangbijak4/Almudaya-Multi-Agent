@@ -21,6 +21,8 @@ import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
 import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js';
 import { SEND_MESSAGE_TOOL, executeSendMessage } from '../tools/messaging-tools.js';
+import { USE_SKILL_TOOL, executeUseSkill } from '../tools/skill-tools.js';
+import { SkillService } from '../skills/service.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
 import { ExecutionModeController } from './execution-mode.js';
@@ -42,6 +44,7 @@ export interface AgentLoopOptions {
   botService?: BotService;
   messagingService?: MessagingService;
   sharedContextService?: SharedContextService;
+  skillService?: SkillService;
   onStep?: (event: AgentStepEvent) => Promise<void> | void;
   onStatus?: (statusMessage: string) => Promise<void> | void;
 }
@@ -64,6 +67,7 @@ export class AutonomousAgentLoop {
   private readonly messagingService: MessagingService;
   private readonly sharedContextService: SharedContextService;
   private readonly workLogService: WorkLogService;
+  private readonly skillService: SkillService;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -83,6 +87,7 @@ export class AutonomousAgentLoop {
     this.sharedContextService =
       options.sharedContextService ?? new SharedContextService(this.storage);
     this.workLogService = new WorkLogService(this.storage);
+    this.skillService = options.skillService ?? new SkillService({ storage: this.storage });
     this.onStepCallback = options.onStep;
     this.onStatusCallback = options.onStatus;
   }
@@ -110,6 +115,10 @@ export class AutonomousAgentLoop {
       this.sessionId,
       10
     );
+    const skillsPromptMarkdown = await this.skillService.buildBotSkillPromptSection(
+      this.sessionId,
+      this.botId
+    );
 
     const systemPrompt = buildDynamicSystemPrompt({
       sessionId: this.sessionId,
@@ -121,14 +130,16 @@ export class AutonomousAgentLoop {
       projectRoots,
       executionMode: this.executionModeController.getMode(),
       recentWorkLogsMarkdown,
+      skillsPromptMarkdown,
     });
 
-    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool + Native Send Message Tool)
+    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool + Native Send Message Tool + Skill Tool)
     const availableTools: ToolDefinition[] = [
       ...FILE_TOOLS,
       RUN_COMMAND_TOOL,
       GET_WORK_LOG_TOOL,
       SEND_MESSAGE_TOOL,
+      USE_SKILL_TOOL,
     ];
 
     // 3. Sender Identity Verification (IDV-01, §18, §5.20)
@@ -266,6 +277,14 @@ export class AutonomousAgentLoop {
                 this.storage,
                 this.sessionId,
                 toolCall.arguments
+              );
+            } else if (toolCall.name === 'use_skill') {
+              result = await executeUseSkill(
+                this.storage,
+                this.sessionId,
+                this.botId,
+                toolCall.arguments,
+                this.skillService.skillRootDir
               );
             } else if (toolCall.name === 'run_command') {
               const cmdArgs: RunCommandArgs = {

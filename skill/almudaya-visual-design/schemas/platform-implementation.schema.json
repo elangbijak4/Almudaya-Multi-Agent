@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AVDS Platform Implementation Mapping",
+  "type": "object",
+  "required": [
+    "product",
+    "target_environment",
+    "design_decision",
+    "component_mapping",
+    "verification_plan"
+  ],
+  "properties": {
+    "product": {
+      "type": "object",
+      "required": [
+        "name",
+        "purpose"
+      ]
+    },
+    "target_environment": {
+      "type": "object",
+      "required": [
+        "platform",
+        "framework",
+        "input_modalities"
+      ]
+    },
+    "design_decision": {
+      "type": "object",
+      "required": [
+        "primary_visual_style",
+        "platform_profile",
+        "interaction_profiles"
+      ]
+    },
+    "component_mapping": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ux_intent",
+          "component_choice",
+          "accessibility_behavior"
+        ]
+      }
+    },
+    "semantic_tokens": {
+      "type": "object"
+    },
+    "verification_plan": {
+      "type": "object",
+      "required": [
+        "tests",
+        "known_unverified_areas"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/composition-plan.schema.json",
+  "title": "AVDS Composition Plan",
+  "type": "object",
+  "required": [
+    "plan_id",
+    "product_context",
+    "platform",
+    "archetype",
+    "regions",
+    "adaptive_variants",
+    "interaction_map",
+    "validation"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string"
+    },
+    "product_context": {
+      "type": "object",
+      "required": [
+        "primary_task"
+      ],
+      "properties": {
+        "primary_task": {
+          "type": "string"
+        },
+        "secondary_tasks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "user_groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "profile"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string"
+        },
+        "form_factors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modalities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "visual_identity": {
+      "type": "object",
+      "properties": {
+        "primary_style": {
+          "type": "string"
+        },
+        "influences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "archetype": {
+      "type": "object",
+      "required": [
+        "primary",
+        "rationale"
+      ],
+      "properties": {
+        "primary": {
+          "type": "string"
+        },
+        "hybrid_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "alternatives_rejected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "responsibility",
+          "priority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "responsibility": {
+            "type": "string"
+          },
+          "priority": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "composition_operator": {
+            "enum": [
+              "sequence",
+              "parallel",
+              "contain",
+              "overlay",
+              "switch",
+              "repeat",
+              "anchor",
+              "flow"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "navigation_model": {
+      "type": "object",
+      "properties": {
+        "global": {
+          "type": "string"
+        },
+        "local": {
+          "type": "string"
+        },
+        "contextual": {
+          "type": "string"
+        }
+      }
+    },
+    "adaptive_variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "size_class",
+          "structural_changes"
+        ],
+        "properties": {
+          "size_class": {
+            "type": "string"
+          },
+          "structural_changes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preserved_priorities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "interaction_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "action",
+          "modality",
+          "feedback"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "modality": {
+            "type": "string"
+          },
+          "alternative": {
+            "type": "string"
+          },
+          "feedback": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "task_clarity",
+        "platform_fit",
+        "accessibility_review"
+      ],
+      "properties": {
+        "task_clarity": {
+          "type": "string"
+        },
+        "platform_fit": {
+          "type": "string"
+        },
+        "accessibility_review": {
+          "type": "string"
+        },
+        "unresolved_risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

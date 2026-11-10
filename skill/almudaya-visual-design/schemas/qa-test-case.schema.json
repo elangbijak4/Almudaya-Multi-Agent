@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/qa-test-case.schema.json",
+  "title": "AVDS QA Test Case",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "platform",
+    "preconditions",
+    "steps",
+    "expected_result"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "form_factor": {
+      "type": "string"
+    },
+    "modality": {
+      "type": "string"
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_result": {
+      "type": "string"
+    },
+    "evidence_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "severity_if_failed": {
+      "enum": [
+        "blocker",
+        "major",
+        "minor",
+        "note"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

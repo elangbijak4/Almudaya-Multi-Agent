@@ -1,0 +1,1 @@
+Maintain a project-specific registry of selected styles, palette direction, and layout signatures. Use it to identify repeated visual patterns. Diversity is a tie-breaker and must never override explicit brand or usability requirements.

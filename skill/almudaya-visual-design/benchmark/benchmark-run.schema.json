@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/benchmark-run.schema.json",
+  "title": "AVDS Benchmark Run",
+  "type": "object",
+  "required": [
+    "benchmark_id",
+    "scenario_id",
+    "condition",
+    "agent",
+    "environment",
+    "scores",
+    "evidence",
+    "limitations"
+  ],
+  "properties": {
+    "benchmark_id": {
+      "type": "string"
+    },
+    "scenario_id": {
+      "type": "string"
+    },
+    "condition": {
+      "enum": [
+        "baseline",
+        "avds_assisted"
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "required": [
+        "name",
+        "model"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "repository_commit": {
+          "type": "string"
+        },
+        "stack": {
+          "type": "string"
+        },
+        "viewports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "operational_metrics": {
+      "type": "object",
+      "properties": {
+        "time_to_runnable_minutes": {
+          "type": "number"
+        },
+        "total_minutes": {
+          "type": "number"
+        },
+        "rework_cycles": {
+          "type": "integer"
+        },
+        "build_pass": {
+          "type": "boolean"
+        },
+        "open_major_or_blocker": {
+          "type": "integer"
+        },
+        "token_or_cost_estimate": {
+          "type": "string"
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "task_fit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "visual_distinction": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "composition_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "platform_adaptation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "responsive_behavior": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "interaction_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "accessibility": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "design_consistency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "implementation_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "contract_fidelity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conclusion": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/component-tree.schema.json",
+  "title": "AVDS Semantic Component Tree",
+  "type": "object",
+  "required": [
+    "tree_id",
+    "root"
+  ],
+  "properties": {
+    "tree_id": {
+      "type": "string"
+    },
+    "root": {
+      "$ref": "#/$defs/node"
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "purpose"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "component_hint": {
+          "type": "string"
+        },
+        "state_contract": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "responsive_behavior": {
+          "type": "string"
+        },
+        "accessibility": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AVDS Design Brief",
+  "type": "object",
+  "required": [
+    "product",
+    "audience",
+    "primary_tasks",
+    "constraints",
+    "design_decision"
+  ],
+  "properties": {
+    "product": {
+      "type": "object"
+    },
+    "audience": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "primary_tasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "object"
+    },
+    "design_decision": {
+      "type": "object"
+    },
+    "responsive_strategy": {
+      "type": "object"
+    },
+    "accessibility": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,55 @@
+{
+  "workflow_id": "avds-full-cycle-demo-001",
+  "project_id": "almudaya-academy-demo",
+  "current_phase": "composition_approved",
+  "phases": [
+    {
+      "phase": "intake",
+      "status": "completed",
+      "outputs": [
+        "design-brief.json"
+      ]
+    },
+    {
+      "phase": "style_platform_resolution",
+      "status": "completed",
+      "outputs": [
+        "style-resolution.json",
+        "platform-resolution.json"
+      ]
+    },
+    {
+      "phase": "composition",
+      "status": "completed",
+      "outputs": [
+        "mobile-academy-composition-plan.json",
+        "component-tree.json"
+      ]
+    },
+    {
+      "phase": "contract_validation",
+      "status": "completed",
+      "outputs": [
+        "design-contract.json"
+      ]
+    },
+    {
+      "phase": "implementation",
+      "status": "pending",
+      "outputs": []
+    },
+    {
+      "phase": "qa",
+      "status": "pending",
+      "outputs": []
+    },
+    {
+      "phase": "delivery",
+      "status": "pending",
+      "outputs": []
+    }
+  ],
+  "limitations": [
+    "Illustrative orchestration manifest; no application build or runtime tests are included"
+  ]
+}

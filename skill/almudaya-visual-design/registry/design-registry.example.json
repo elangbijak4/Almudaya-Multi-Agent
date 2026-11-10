@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "projects": {
+    "research-portal": {
+      "primary_style": "editorial-magazine",
+      "secondary_styles": [
+        "swiss-international"
+      ],
+      "palette_direction": "warm-neutral",
+      "layout_signature": "editorial-content-first"
+    },
+    "quantum-lab": {
+      "primary_style": "quantum-futurism",
+      "secondary_styles": [
+        "scientific-visualization"
+      ],
+      "palette_direction": "deep-neutral-luminous-accent",
+      "layout_signature": "modular-scientific-workspace"
+    },
+    "academy": {
+      "primary_style": "playful-contemporary",
+      "secondary_styles": [
+        "scandinavian"
+      ],
+      "palette_direction": "pastel-natural",
+      "layout_signature": "friendly-learning-path"
+    },
+    "geospatial-intelligence": {
+      "primary_style": "geospatial-cartographic",
+      "secondary_styles": [
+        "scientific-visualization"
+      ],
+      "palette_direction": "map-safe-earth-informed",
+      "layout_signature": "map-centric-workspace"
+    }
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/implementation-manifest.schema.json",
+  "title": "AVDS Implementation Manifest",
+  "type": "object",
+  "required": [
+    "manifest_id",
+    "contract_id",
+    "stack",
+    "entry_points",
+    "component_mapping",
+    "deviations"
+  ],
+  "properties": {
+    "manifest_id": {
+      "type": "string"
+    },
+    "contract_id": {
+      "type": "string"
+    },
+    "stack": {
+      "type": "object",
+      "required": [
+        "language",
+        "framework"
+      ],
+      "properties": {
+        "language": {
+          "type": "string"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "build_tool": {
+          "type": "string"
+        }
+      }
+    },
+    "entry_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "component_mapping": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "component_id",
+          "implementation_reference"
+        ],
+        "properties": {
+          "component_id": {
+            "type": "string"
+          },
+          "implementation_reference": {
+            "type": "string"
+          },
+          "native_component": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirement",
+          "reason",
+          "impact"
+        ],
+        "properties": {
+          "requirement": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "approved_by": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "build_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

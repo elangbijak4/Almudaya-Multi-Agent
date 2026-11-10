@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://almudaya.org/avds/schemas/qa-report.schema.json",
+  "title": "AVDS Cross-Platform QA Report",
+  "type": "object",
+  "required": [
+    "report_id",
+    "scope",
+    "coverage",
+    "findings",
+    "release_recommendation",
+    "limitations"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "product",
+        "platforms"
+      ],
+      "properties": {
+        "product": {
+          "type": "string"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "build_or_commit": {
+          "type": "string"
+        },
+        "test_date": {
+          "type": "string"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "critical_journeys": {
+          "type": "string"
+        },
+        "visual_review": {
+          "type": "string"
+        },
+        "interaction_review": {
+          "type": "string"
+        },
+        "accessibility_review": {
+          "type": "string"
+        },
+        "platform_review": {
+          "type": "string"
+        },
+        "states_review": {
+          "type": "string"
+        }
+      }
+    },
+    "traceability": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirement",
+          "component",
+          "test_case",
+          "status"
+        ],
+        "properties": {
+          "requirement": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "test_case": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "not_assessed",
+              "not_applicable"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "title",
+          "status",
+          "impact",
+          "recommendation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "major",
+              "minor",
+              "note"
+            ]
+          },
+          "platforms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "location": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "fixed_pending_retest",
+              "verified",
+              "accepted_risk"
+            ]
+          },
+          "expected": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "impact": {
+            "type": "string"
+          },
+          "reproduction_steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "release_recommendation": {
+      "enum": [
+        "pass",
+        "pass_with_conditions",
+        "fail",
+        "not_assessed"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

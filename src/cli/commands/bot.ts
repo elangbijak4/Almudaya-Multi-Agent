@@ -9,6 +9,11 @@ import { ExecutionModeController, type ExecutionMode } from '../../bot/execution
 import { BotConsole } from '../../bot/console.js';
 import { GeminiProvider } from '../../ai/gemini.js';
 import { MockAIProvider } from '../../ai/mock-provider.js';
+import {
+  createAIProvider,
+  discoverModels,
+  type CatalogProviderId,
+} from '../../ai/catalog.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
 import { ValidationError } from '../../core/errors.js';
 import { registerSecret } from '../../execution/environment.js';
@@ -81,9 +86,10 @@ export function registerBotCommands(program: Command): void {
     .option('--interval <ms>', 'Heartbeat interval in ms (default: 2000)')
     .option('--auto-ack', 'Automatically acknowledge incoming direct messages', true)
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
-    .option('--provider <provider>', 'AI model provider ("gemini" | "mock")')
-    .option('--model <model>', 'AI model name (defaults to "gemini-2.5-flash")')
-    .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY env var)')
+    .option('--provider <provider>', 'AI model provider ("gemini" | "openrouter" | "9router" | "mock")')
+    .option('--model <model>', 'AI model name (e.g. "gemini-2.5-flash", "deepseek/deepseek-chat-v3-0324:free")')
+    .option('--base-url <url>', 'Custom OpenAI-compatible base URL (e.g. 9router endpoint)')
+    .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY / OPENROUTER_API_KEY env var)')
     .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
     .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
     .option('-w, --workspace <path>', 'Workspace directory path')
@@ -98,6 +104,7 @@ export function registerBotCommands(program: Command): void {
       autoAck?: boolean;
       provider?: string;
       model?: string;
+      baseUrl?: string;
       apiKey?: string;
       mode?: string;
       maxIterations?: string;
@@ -133,25 +140,50 @@ export function registerBotCommands(program: Command): void {
         const providerName = options.provider?.toLowerCase();
 
         if (providerName) {
-          if (!['gemini', 'mock'].includes(providerName)) {
-            throw new ValidationError(`Unknown provider "${options.provider}". Valid providers: "gemini", "mock".`);
+          if (!['gemini', 'openrouter', '9router', 'mock'].includes(providerName)) {
+            throw new ValidationError(
+              `Unknown provider "${options.provider}". Valid providers: "gemini", "openrouter", "9router", "mock".`
+            );
           }
         }
 
         if (providerName === 'gemini') {
           aiProvider = new GeminiProvider({
             apiKey: options.apiKey,
-            modelName: options.model ?? 'gemini-2.5-flash'
+            modelName: options.model ?? 'gemini-2.5-flash',
+          });
+        } else if (providerName === 'openrouter' || providerName === '9router') {
+          const defaultModel =
+            providerName === 'openrouter'
+              ? 'deepseek/deepseek-chat-v3-0324:free'
+              : options.model ?? 'default';
+          aiProvider = createAIProvider({
+            provider: providerName as CatalogProviderId,
+            modelName: options.model ?? defaultModel,
+            apiKey: options.apiKey,
+            baseUrl: options.baseUrl,
           });
         } else if (providerName === 'mock') {
           aiProvider = new MockAIProvider('mock-model', [
-            { text: 'Tugas telah diproses oleh Mock AI.' }
+            { text: 'Tugas telah diproses oleh Mock AI.' },
           ]);
         } else if ((process.env.GEMINI_API_KEY || options.apiKey) && !providerName) {
           // Auto-enable Gemini if API key is present
           aiProvider = new GeminiProvider({
             apiKey: options.apiKey,
-            modelName: options.model ?? 'gemini-2.5-flash'
+            modelName: options.model ?? 'gemini-2.5-flash',
+          });
+        } else if (process.env.OPENROUTER_API_KEY && !providerName) {
+          aiProvider = createAIProvider({
+            provider: 'openrouter',
+            modelName: options.model ?? 'deepseek/deepseek-chat-v3-0324:free',
+            baseUrl: options.baseUrl,
+          });
+        } else if (process.env.NINEROUTER_BASE_URL && !providerName) {
+          aiProvider = createAIProvider({
+            provider: '9router',
+            modelName: options.model ?? 'default',
+            baseUrl: options.baseUrl,
           });
         }
 
@@ -377,4 +409,51 @@ export function registerBotCommands(program: Command): void {
         process.exitCode = 1;
       }
     });
+
+  bot
+    .command('models')
+    .description('List available AI models across 9router, OpenRouter (:free), and Gemini')
+    .option('--provider <provider>', 'Filter by provider ("9router" | "openrouter" | "gemini" | "all")', 'all')
+    .option('--base-url <url>', 'Custom 9router base URL')
+    .option('--no-live', 'Skip live HTTP discovery and show built-in catalog only')
+    .option('--json', 'Output model list as JSON')
+    .action(
+      async (options: {
+        provider?: string;
+        baseUrl?: string;
+        live?: boolean;
+        json?: boolean;
+      }) => {
+        try {
+          const providerFilter = (options.provider?.toLowerCase() ?? 'all') as
+            | CatalogProviderId
+            | 'all';
+          if (!['all', '9router', 'openrouter', 'gemini'].includes(providerFilter)) {
+            throw new ValidationError(
+              `Unknown provider filter "${options.provider}". Valid: "all", "9router", "openrouter", "gemini".`
+            );
+          }
+
+          const models = await discoverModels({
+            provider: providerFilter,
+            nineRouterBaseUrl: options.baseUrl,
+            includeLiveDiscovery: options.live !== false,
+          });
+
+          if (options.json) {
+            console.log(JSON.stringify(models, null, 2));
+            return;
+          }
+
+          console.log(`Available AI Models (${models.length}):`);
+          for (const m of models) {
+            const keyInfo = m.requiresApiKey ? 'API Key' : 'No Key';
+            console.log(`  [${m.provider}] ${m.id} — ${m.name} (${m.tier}, ${keyInfo})`);
+          }
+        } catch (error: unknown) {
+          console.error(`Error listing models: ${(error as Error).message}`);
+          process.exitCode = 1;
+        }
+      }
+    );
 }

@@ -3,3 +3,5 @@ export * from './credentials.js';
 export * from './prompts.js';
 export * from './mock-provider.js';
 export * from './gemini.js';
+export * from './openai-compatible.js';
+export * from './catalog.js';

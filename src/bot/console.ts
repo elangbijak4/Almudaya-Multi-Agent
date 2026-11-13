@@ -4,6 +4,12 @@ import type { IBlackboardStorage } from '../blackboard/interface.js';
 import type { BotRuntime } from './runtime.js';
 import type { AutonomousAgentLoop } from './agent-loop.js';
 import type { IAIModelProvider } from '../ai/provider.js';
+import {
+  createAIProvider,
+  discoverModels,
+  inferProviderForModel,
+  type CatalogProviderId,
+} from '../ai/catalog.js';
 import { ExecutionModeController } from './execution-mode.js';
 import { BotService } from './service.js';
 import { MessagingService } from '../messaging/service.js';
@@ -35,7 +41,7 @@ export class BotConsole {
   public readonly agentLoop?: AutonomousAgentLoop;
   public readonly storage: IBlackboardStorage;
   public readonly executionModeController: ExecutionModeController;
-  public readonly aiProvider?: IAIModelProvider;
+  public aiProvider?: IAIModelProvider;
   public readonly inputStream: NodeJS.ReadableStream;
   public readonly outputStream: NodeJS.WritableStream;
   public readonly isTTY: boolean;
@@ -465,6 +471,57 @@ export class BotConsole {
         break;
       }
 
+      case '/model': {
+        if (argTokens.length === 0 || argTokens[0]?.toLowerCase() === 'list' || argTokens[0]?.toLowerCase() === 'refresh') {
+          const includeLive = argTokens[0]?.toLowerCase() === 'refresh' || argTokens.length === 0;
+          const models = await discoverModels({ includeLiveDiscovery: includeLive });
+          const currentProvider = this.aiProvider?.providerId ?? 'none';
+          const currentModel = this.aiProvider?.modelName ?? 'none';
+
+          this.writeLine(`[Console] Model AI Aktif: ${currentProvider}:${currentModel}`);
+          this.writeLine(`[Console] Daftar Model Tersedia (${models.length}):`);
+          for (const m of models.slice(0, 25)) {
+            const isCurrent =
+              this.aiProvider?.providerId === m.provider &&
+              this.aiProvider?.modelName === m.id;
+            const marker = isCurrent ? '*' : ' ';
+            const keyTag = m.requiresApiKey ? 'Key' : 'No-Key';
+            this.writeLine(`  ${marker} [${m.provider}] ${m.id} (${m.tier}, ${keyTag})`);
+          }
+          if (models.length > 25) {
+            this.writeLine(`  ... (${models.length - 25} model lainnya; jalankan 'almudaya bot models' untuk daftar penuh)`);
+          }
+          this.writeLine(`[Console] Gunakan: /model <modelId> [9router|openrouter|gemini]`);
+          return;
+        }
+
+        const targetModelId = argTokens[0]!;
+        const explicitProvider = argTokens[1]?.toLowerCase() as CatalogProviderId | undefined;
+        if (explicitProvider && !['9router', 'openrouter', 'gemini'].includes(explicitProvider)) {
+          this.writeLine(
+            `[Console] Provider "${argTokens[1]}" tidak dikenal. Pilihan: 9router, openrouter, gemini.`
+          );
+          return;
+        }
+
+        const providerChoice: CatalogProviderId =
+          explicitProvider ?? inferProviderForModel(targetModelId);
+
+        const nextProvider = createAIProvider({
+          provider: providerChoice,
+          modelName: targetModelId,
+        });
+
+        this.aiProvider = nextProvider;
+        if (this.agentLoop) {
+          this.agentLoop.setProvider(nextProvider);
+        }
+        this.writeLine(
+          `[Console] Model bot "${this.botDisplayName}" diganti ke: ${nextProvider.providerId}:${nextProvider.modelName}`
+        );
+        return;
+      }
+
       case '/help': {
         this.writeLine(`[Console] Daftar Perintah Interaktif:`);
         this.writeLine(`  /msg <targetBot> <pesan>  Kirim pesan langsung ke rekan bot`);
@@ -473,6 +530,7 @@ export class BotConsole {
         this.writeLine(`  /roots                    Tampilkan daftar project roots terdaftar`);
         this.writeLine(`  /log [limit] [root]       Tampilkan linimasa memori kerja sesi`);
         this.writeLine(`  /mode [review|turbo]      Tampilkan atau ubah mode eksekusi keamanan`);
+        this.writeLine(`  /model [id] [provider]    Lihat daftar model AI (9router/OpenRouter/Gemini) atau ganti model bot`);
         this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
         this.writeLine(`  /status                   Tampilkan ringkasan status bot lokal`);
         this.writeLine(`  /clear                    Bersihkan tampilan layar terminal`);

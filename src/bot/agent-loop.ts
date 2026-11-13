@@ -72,7 +72,7 @@ export class AutonomousAgentLoop {
   public readonly sessionId: string;
   public readonly botId: string;
   private readonly storage: IBlackboardStorage;
-  private readonly provider: IAIModelProvider;
+  private provider: IAIModelProvider;
   private readonly executionModeController: ExecutionModeController;
   private readonly maxIterations: number;
 
@@ -83,6 +83,7 @@ export class AutonomousAgentLoop {
   private readonly skillService: SkillService;
   private readonly memoryRuntime?: MemoryRuntime;
   private readonly codebaseIndexer?: ProjectCodebaseIndexer;
+  private readonly syncedRoots = new Set<string>();
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -114,6 +115,15 @@ export class AutonomousAgentLoop {
     this.onStatusCallback = options.onStatus;
   }
 
+  public getProvider(): IAIModelProvider {
+    return this.provider;
+  }
+
+  public setProvider(nextProvider: IAIModelProvider): void {
+    this.provider.dispose?.();
+    this.provider = nextProvider;
+  }
+
   public stop(): void {
     this.abortController.abort();
     this.provider.dispose?.();
@@ -134,9 +144,11 @@ export class AutonomousAgentLoop {
     const projectRoots = await this.sharedContextService.listProjectRoots(this.sessionId);
     const projectRootPaths = projectRoots.map((r) => r.path);
 
-    // Ensure PKU codebase index is incrementally up-to-date before bot reads (fail-open)
+    // Ensure PKU codebase index is incrementally up-to-date on first turn per root (fail-open)
     if (this.codebaseIndexer && this.memoryRuntime?.enabled) {
       for (const root of projectRoots) {
+        if (this.syncedRoots.has(root.root_id)) continue;
+        this.syncedRoots.add(root.root_id);
         try {
           await this.codebaseIndexer.syncProjectRoot(this.sessionId, root);
         } catch {

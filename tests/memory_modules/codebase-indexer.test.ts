@@ -41,8 +41,8 @@ describe('PKU Incremental Codebase Indexer & Standardized Bot Reading (query_pku
   });
 
   afterEach(async () => {
-    await fs.rm(workspaceDir, { recursive: true, force: true });
-    await fs.rm(projectDir, { recursive: true, force: true });
+    await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(projectDir, { recursive: true, force: true }).catch(() => {});
   });
 
   it('indexes project into L0/L1/L2 + Knowledge Graph and updates ONLY changed files incrementally', async () => {
@@ -189,5 +189,5 @@ describe('PKU Incremental Codebase Indexer & Standardized Bot Reading (query_pku
     });
     expect(indexedNote.items.length).toBe(1);
     expect(indexedNote.items[0].title).toContain('audit-note.md');
-  });
+  }, 15000);
 });

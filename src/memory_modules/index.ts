@@ -13,6 +13,7 @@ export * from './bridges/legacy-blackboard-bridge.js';
 export * from './bridges/legacy-individual-bridge.js';
 export * from './pku/local-store.js';
 export * from './pku/shadow-ingestion.js';
+export * from './pku/codebase-indexer.js';
 export * from './registers/memory-client.js';
 export * from './registers/global-register.js';
 export * from './registers/individual-register.js';

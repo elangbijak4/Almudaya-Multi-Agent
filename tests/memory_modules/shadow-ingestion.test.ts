@@ -35,10 +35,10 @@ describe('PKU Phase 3 — Local PKU Store, Shadow Ingestion, Outbox Replay & Rec
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'almudaya-pku-phase3-'));
     pkuDir = path.join(tempRoot, 'pku');
     storage = new FilesystemSessionStorage(tempRoot);
-    sessionService = new SessionService(storage);
+    sessionService = new SessionService(storage, { enablePkuSync: false });
     botService = new BotService(storage);
     messagingService = new MessagingService(storage);
-    sharedContextService = new SharedContextService(storage);
+    sharedContextService = new SharedContextService(storage, { enablePkuSync: false });
     workLogService = new WorkLogService(storage);
   });
 

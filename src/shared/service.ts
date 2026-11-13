@@ -23,12 +23,30 @@ import {
   ProjectRootAlreadyExistsError,
   ProjectRootNotFoundError,
 } from '../core/errors.js';
+import {
+  createCodebaseIndexerForStorage,
+  createWorkspaceMemoryRuntime,
+  type MemoryRuntime,
+  type ProjectCodebaseIndexer,
+} from '../memory_modules/index.js';
+
+export interface SharedContextServiceOptions {
+  memoryRuntime?: MemoryRuntime;
+  enablePkuSync?: boolean;
+}
 
 export class SharedContextService {
   private readonly storage: IBlackboardStorage;
+  private readonly memoryRuntime?: MemoryRuntime;
+  private readonly codebaseIndexer?: ProjectCodebaseIndexer;
 
-  constructor(storage: IBlackboardStorage) {
+  constructor(storage: IBlackboardStorage, options: SharedContextServiceOptions = {}) {
     this.storage = storage;
+    this.memoryRuntime =
+      options.memoryRuntime ??
+      (options.enablePkuSync !== false ? createWorkspaceMemoryRuntime(storage) ?? undefined : undefined);
+    this.codebaseIndexer =
+      createCodebaseIndexerForStorage(storage, this.memoryRuntime?.pkuStore) ?? undefined;
   }
 
   // --- Project Roots ---
@@ -45,7 +63,7 @@ export class SharedContextService {
           'Root ID'
         );
 
-    return await this.storage.withSessionLock(sessionId, async () => {
+    const record = await this.storage.withSessionLock(sessionId, async () => {
       const registry = await this.storage.getProjectRootsRegistry(sessionId);
 
       if (registry.roots.some((r) => r.root_id === rootId)) {
@@ -53,7 +71,7 @@ export class SharedContextService {
       }
 
       const now = new Date().toISOString();
-      const record: ProjectRootRecord = {
+      const created: ProjectRootRecord = {
         root_id: rootId,
         name: input.name.trim(),
         path: normalizedPath,
@@ -63,12 +81,22 @@ export class SharedContextService {
         updated_at: now,
       };
 
-      registry.roots.push(record);
+      registry.roots.push(created);
       registry.updated_at = now;
 
       await this.storage.saveProjectRootsRegistry(sessionId, registry);
-      return record;
+      return created;
     });
+
+    // Incrementally index project root files into PKU (fail-open)
+    try {
+      await this.codebaseIndexer?.syncProjectRoot(sessionId, record);
+      await this.memoryRuntime?.captureSessionSafely(sessionId);
+    } catch {
+      // Fail-open: PKU indexing errors never block root registration
+    }
+
+    return record;
   }
 
   public async listProjectRoots(sessionId: string): Promise<ProjectRootRecord[]> {

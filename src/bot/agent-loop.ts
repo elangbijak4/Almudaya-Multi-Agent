@@ -22,6 +22,7 @@ import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../too
 import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js';
 import { SEND_MESSAGE_TOOL, executeSendMessage } from '../tools/messaging-tools.js';
 import { USE_SKILL_TOOL, executeUseSkill } from '../tools/skill-tools.js';
+import { QUERY_PKU_MEMORY_TOOL, executeQueryPkuMemory } from '../tools/pku-tools.js';
 import { SkillService } from '../skills/service.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
@@ -29,10 +30,12 @@ import { ExecutionModeController } from './execution-mode.js';
 import {
   CURRENT_PKU_SCHEMA_VERSION,
   computeContentHash,
+  createCodebaseIndexerForStorage,
   createWorkspaceMemoryRuntime,
   deriveIdempotencyKey,
   deriveProjectUniverseId,
   type MemoryRuntime,
+  type ProjectCodebaseIndexer,
 } from '../memory_modules/index.js';
 
 export interface AgentStepEvent {
@@ -79,6 +82,7 @@ export class AutonomousAgentLoop {
   private readonly workLogService: WorkLogService;
   private readonly skillService: SkillService;
   private readonly memoryRuntime?: MemoryRuntime;
+  private readonly codebaseIndexer?: ProjectCodebaseIndexer;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -101,6 +105,8 @@ export class AutonomousAgentLoop {
     this.memoryRuntime =
       options.memoryRuntime ??
       (options.enablePkuSync !== false ? createWorkspaceMemoryRuntime(this.storage) ?? undefined : undefined);
+    this.codebaseIndexer =
+      createCodebaseIndexerForStorage(this.storage, this.memoryRuntime?.pkuStore) ?? undefined;
     this.skillService =
       options.skillService ??
       new SkillService({ storage: this.storage, pkuStore: this.memoryRuntime?.pkuStore });
@@ -127,6 +133,17 @@ export class AutonomousAgentLoop {
     const peerBots = await this.botService.listBots(this.sessionId);
     const projectRoots = await this.sharedContextService.listProjectRoots(this.sessionId);
     const projectRootPaths = projectRoots.map((r) => r.path);
+
+    // Ensure PKU codebase index is incrementally up-to-date before bot reads (fail-open)
+    if (this.codebaseIndexer && this.memoryRuntime?.enabled) {
+      for (const root of projectRoots) {
+        try {
+          await this.codebaseIndexer.syncProjectRoot(this.sessionId, root);
+        } catch {
+          // Fail-open: never block agent turn
+        }
+      }
+    }
     const recentWorkLogsMarkdown = await this.workLogService.getRecentSummaryMarkdown(
       this.sessionId,
       10
@@ -151,6 +168,7 @@ export class AutonomousAgentLoop {
 
     // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool + Native Send Message Tool + Skill Tool)
     const availableTools: ToolDefinition[] = [
+      QUERY_PKU_MEMORY_TOOL,
       ...FILE_TOOLS,
       RUN_COMMAND_TOOL,
       GET_WORK_LOG_TOOL,
@@ -281,7 +299,14 @@ export class AutonomousAgentLoop {
           try {
             let result: unknown;
 
-            if (toolCall.name === 'send_message') {
+            if (toolCall.name === 'query_pku_memory') {
+              result = await executeQueryPkuMemory(
+                this.memoryRuntime,
+                this.sessionId,
+                this.botId,
+                toolCall.arguments
+              );
+            } else if (toolCall.name === 'send_message') {
               result = await executeSendMessage(
                 this.messagingService,
                 this.sessionId,
@@ -348,7 +373,7 @@ export class AutonomousAgentLoop {
                 }
               );
 
-              // Automatic Work Log Recording for file mutations (FR-313, ADR-302)
+              // Automatic Work Log Recording + Single-File Incremental PKU Index Update
               if (toolCall.name === 'write_file') {
                 const filePath = String(toolCall.arguments['path'] ?? '');
                 await this.recordToolExecutionWorkLog(
@@ -362,6 +387,7 @@ export class AutonomousAgentLoop {
                     bytes: String(toolCall.arguments['content'] ?? '').length,
                   }
                 );
+                await this.indexSingleFileSafely(projectRoots, filePath);
               } else if (toolCall.name === 'edit_file') {
                 const filePath = String(toolCall.arguments['path'] ?? '');
                 await this.recordToolExecutionWorkLog(
@@ -374,6 +400,7 @@ export class AutonomousAgentLoop {
                     path: filePath,
                   }
                 );
+                await this.indexSingleFileSafely(projectRoots, filePath);
               }
             }
 
@@ -537,6 +564,32 @@ export class AutonomousAgentLoop {
       );
     } catch {
       // Fail-open: never allow PKU persistence errors to break agent turn completion
+    }
+  }
+
+  /**
+   * Incrementally re-indexes ONLY the single modified file into PKU without touching
+   * unchanged project files.
+   */
+  private async indexSingleFileSafely(
+    projectRoots: ProjectRootRecord[],
+    targetPath: string
+  ): Promise<void> {
+    if (!this.codebaseIndexer || !this.memoryRuntime?.enabled || !targetPath) {
+      return;
+    }
+    try {
+      for (const root of projectRoots) {
+        const candidate = path.isAbsolute(targetPath)
+          ? path.resolve(targetPath)
+          : path.resolve(root.path, targetPath);
+        if (isPathInsideRoot(root.path, candidate)) {
+          await this.codebaseIndexer.indexSingleFile(this.sessionId, root, candidate);
+          break;
+        }
+      }
+    } catch {
+      // Fail-open: incremental index failure never interrupts tool execution
     }
   }
 

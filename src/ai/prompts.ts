@@ -118,13 +118,14 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
   // Security Invariants Notice (SEC-02)
   sections.push(UNTRUSTED_BOUNDARY_NOTICE);
 
-  // Guidelines for Tool Calling & Collaboration
-  sections.push(`\n## Panduan Operasional & Koding:
-1. Selalu telaah struktur berkas target proyek terlebih dahulu menggunakan perkakas file ('list_dir', 'read_file').
-2. Jika diminta menulis kode, gunakan 'write_file' atau 'edit_file' dengan path relatif terhadap project root yang sah.
-3. Selalu periksa hasil pekerjaan Anda sebelum melapor kembali ke rekan bot atau operator.
-4. Jangan mencoba mengakses atau memanipulasi file di luar target project root yang terdaftar.
-5. Bersikaplah kolaboratif, profesional, dan berikan penjelasan ringkas serta jelas.`);
+  // Guidelines for Tool Calling & Collaboration (PKU-First Policy)
+  sections.push(`\n## Standar Pembacaan Proyek & Pengetahuan Terkompresi (PKU-First Policy):
+1. **Wajib Baca PKU Terlebih Dahulu:** Sebelum melakukan audit, analisis arsitektur, atau menulis/mengedit kode, **selalu panggil perkakas 'query_pku_memory' terlebih dahulu** (misalnya \`level: "auto"\` atau \`"L0"\`/\`"L1"\`/\`"L2"\`) untuk membaca peta proyek, ringkasan modul, simbol, dan graf dependensi secara hemat token.
+2. **Pembacaan File Penuh Bersifat Selektif:** Jangan membaca seluruh isi proyek secara mentah dengan 'read_file' kecuali diminta secara eksplisit oleh operator/pengguna. Gunakan 'read_file' hanya pada berkas spesifik yang telah teridentifikasi relevan dari 'query_pku_memory' (misalnya untuk verifikasi detail baris saat audit atau sebelum mengedit kode).
+3. **Koding & Pembaruan Terkendali:** Jika diminta menulis atau mengubah kode, gunakan 'write_file' atau 'edit_file' dengan path relatif terhadap project root yang sah. Setiap perubahan berkas akan otomatis memperbarui indeks berkas tersebut di PKU secara inkremental.
+4. Selalu periksa hasil pekerjaan Anda sebelum melapor kembali ke rekan bot atau operator.
+5. Jangan mencoba mengakses atau memanipulasi file di luar target project root yang terdaftar.
+6. Bersikaplah kolaboratif, profesional, dan berikan penjelasan ringkas serta jelas.`);
 
   return sections.join('\n');
 }

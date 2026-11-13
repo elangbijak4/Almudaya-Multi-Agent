@@ -1,4 +1,8 @@
-import type { ISessionStorage } from '../blackboard/interface.js';
+import type { IBlackboardStorage, ISessionStorage } from '../blackboard/interface.js';
+import {
+  createWorkspaceMemoryRuntime,
+  type MemoryRuntime,
+} from '../memory_modules/index.js';
 import type {
   CreateSessionInput,
   SessionMetadata,
@@ -11,11 +15,26 @@ import {
 } from './schema.js';
 import crypto from 'node:crypto';
 
+export interface SessionServiceOptions {
+  memoryRuntime?: MemoryRuntime;
+  enablePkuSync?: boolean;
+}
+
 export class SessionService {
   private readonly storage: ISessionStorage;
+  private readonly memoryRuntime?: MemoryRuntime;
 
-  constructor(storage: ISessionStorage) {
+  constructor(storage: ISessionStorage, options: SessionServiceOptions = {}) {
     this.storage = storage;
+    if (options.memoryRuntime) {
+      this.memoryRuntime = options.memoryRuntime;
+    } else if (
+      options.enablePkuSync !== false &&
+      'listBots' in storage &&
+      typeof (storage as Partial<IBlackboardStorage>).listBots === 'function'
+    ) {
+      this.memoryRuntime = createWorkspaceMemoryRuntime(storage as IBlackboardStorage) ?? undefined;
+    }
   }
 
   /**
@@ -46,6 +65,7 @@ export class SessionService {
     };
 
     await this.storage.createSession(metadata);
+    await this.memoryRuntime?.captureSessionSafely(sessionId);
     return metadata;
   }
 
@@ -63,7 +83,7 @@ export class SessionService {
     sessionId: string,
     input: UpdateSessionInput
   ): Promise<SessionMetadata> {
-    return await this.storage.updateSession(sessionId, (current) => {
+    const updated = await this.storage.updateSession(sessionId, (current) => {
       return {
         ...current,
         session_name: input.sessionName !== undefined ? input.sessionName.trim() : current.session_name,
@@ -72,6 +92,8 @@ export class SessionService {
         metadata: input.metadata !== undefined ? { ...current.metadata, ...input.metadata } : current.metadata,
       };
     });
+    await this.memoryRuntime?.captureSessionSafely(sessionId);
+    return updated;
   }
 
   /**

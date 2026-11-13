@@ -12,6 +12,7 @@ import { MockAIProvider } from '../../ai/mock-provider.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
 import { ValidationError } from '../../core/errors.js';
 import { registerSecret } from '../../execution/environment.js';
+import { createWorkspaceMemoryRuntime } from '../../memory_modules/index.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -168,6 +169,7 @@ export function registerBotCommands(program: Command): void {
 
         let agentLoop: AutonomousAgentLoop | undefined;
         let consoleInstance: BotConsole | undefined;
+        const memoryRuntime = createWorkspaceMemoryRuntime(storage) ?? undefined;
 
         const runtime = new BotRuntime(storage, {
           sessionId: options.session,
@@ -176,6 +178,7 @@ export function registerBotCommands(program: Command): void {
           description: botDescription,
           heartbeatIntervalMs,
           autoAcknowledge: options.autoAck ?? true,
+          memoryRuntime,
           onMessage: async (msg, signal) => {
             const notif = `📨 [BOT ${runtime.botId}] Pesan masuk dari ${msg.sender_bot_id}: "${msg.content}"`;
             if (consoleInstance) {
@@ -232,6 +235,7 @@ export function registerBotCommands(program: Command): void {
             provider: aiProvider,
             executionModeController,
             maxIterations: maxIter,
+            memoryRuntime,
             onStatus: (msg) => {
               if (consoleInstance) {
                 consoleInstance.printNotification(msg);

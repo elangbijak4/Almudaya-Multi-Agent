@@ -4,6 +4,11 @@ import { BotService } from './service.js';
 import { MessagingService } from '../messaging/service.js';
 import type { BotRecord, RegisterBotInput } from './schema.js';
 import type { BroadcastEvent, DirectMessage } from '../messaging/schema.js';
+import {
+  createWorkspaceMemoryRuntime,
+  type MemoryRuntime,
+  type ScopedMemoryClient,
+} from '../memory_modules/index.js';
 
 export interface BotRuntimeOptions {
   sessionId: string;
@@ -13,6 +18,8 @@ export interface BotRuntimeOptions {
   heartbeatIntervalMs?: number;
   pollIntervalMs?: number;
   autoAcknowledge?: boolean;
+  memoryRuntime?: MemoryRuntime;
+  enablePkuSync?: boolean;
   onMessage?: (message: DirectMessage, signal?: AbortSignal) => Promise<void>;
   onBroadcast?: (event: BroadcastEvent) => Promise<void>;
 }
@@ -28,6 +35,8 @@ export class BotRuntime {
 
   private readonly botService: BotService;
   private readonly messagingService: MessagingService;
+  private readonly memoryRuntime?: MemoryRuntime;
+  private memoryClient?: ScopedMemoryClient;
 
   private isRunning: boolean = false;
   private pollInFlight: boolean = false;
@@ -50,9 +59,20 @@ export class BotRuntime {
 
     this.botService = new BotService(storage);
     this.messagingService = new MessagingService(storage, this.botService);
+    this.memoryRuntime =
+      options.memoryRuntime ??
+      (options.enablePkuSync !== false ? createWorkspaceMemoryRuntime(storage) ?? undefined : undefined);
 
     this.onMessageCallback = options.onMessage;
     this.onBroadcastCallback = options.onBroadcast;
+  }
+
+  public getScopedMemoryClient(): ScopedMemoryClient | undefined {
+    return this.memoryClient;
+  }
+
+  public getMemoryRuntime(): MemoryRuntime | undefined {
+    return this.memoryRuntime;
   }
 
   public get running(): boolean {
@@ -108,6 +128,25 @@ export class BotRuntime {
 
     this.isRunning = true;
 
+    // Initialize scoped PKU memory client and capture initial bot registration (fail-open)
+    if (this.memoryRuntime) {
+      try {
+        this.memoryClient = this.memoryRuntime.createScopedClientForBot({
+          sessionId: this.sessionId,
+          botId: this.botId,
+          capabilities: ['memory:read', 'memory:write', 'memory:handoff'],
+        });
+        await this.memoryRuntime.observeBotRegistryMutation(
+          this.sessionId,
+          existing ?? undefined,
+          record
+        );
+      } catch {
+        // Fail-open: PKU initialization errors must not block bot runtime
+      }
+      await this.memoryRuntime.captureSessionSafely(this.sessionId);
+    }
+
     // Start periodic heartbeat
     this.heartbeatTimer = setInterval(async () => {
       if (!this.isRunning) return;
@@ -158,6 +197,7 @@ export class BotRuntime {
         botId: this.botId,
         autoAdvanceCursor: false,
       });
+      let activityOccurred = broadcasts.length > 0;
 
       if (broadcasts.length > 0) {
         if (this.onBroadcastCallback) {
@@ -194,6 +234,7 @@ export class BotRuntime {
           processedInThisCycle
         );
         if (!msg) break;
+        activityOccurred = true;
         processedInThisCycle.push(msg.message_id);
 
         try {
@@ -221,6 +262,10 @@ export class BotRuntime {
             msg.fence_token
           );
         }
+      }
+
+      if (activityOccurred) {
+        await this.memoryRuntime?.captureSessionSafely(this.sessionId);
       }
     } catch {
       // Polling errors are absorbed to keep runtime alive
@@ -253,7 +298,11 @@ export class BotRuntime {
     }
 
     try {
-      await this.botService.updateStatus(this.sessionId, this.botId, 'stopped');
+      const stoppedRecord = await this.botService.updateStatus(this.sessionId, this.botId, 'stopped');
+      if (this.memoryRuntime) {
+        await this.memoryRuntime.observeBotRegistryMutation(this.sessionId, undefined, stoppedRecord);
+        await this.memoryRuntime.captureSessionSafely(this.sessionId);
+      }
     } catch {
       // Ignore if session already closed
     }

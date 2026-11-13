@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { IBlackboardStorage } from '../../blackboard/interface.js';
 import type { BotRecord } from '../../bot/schema.js';
 import {
@@ -13,6 +14,7 @@ import type {
   MemoryPermissionContext,
   ProjectUniverseId,
 } from '../contracts/types.js';
+import { LocalFilesystemPKUStore } from '../pku/local-store.js';
 import { DurableOutboxQueue } from '../pku/shadow-ingestion.js';
 import type { IPKUStore } from '../ports/pku-store.js';
 import type { IRegisterPersistence } from '../ports/registers.js';
@@ -246,4 +248,50 @@ export class MemoryRuntime implements IUnifiedMemoryInterface {
 
     return true;
   }
+
+  /**
+   * Synchronizes the current Blackboard session state into PKU in fail-open mode.
+   * Never throws on PKU errors so legacy coordination remains unaffected (PKU-004).
+   */
+  public async captureSessionSafely(sessionId: string): Promise<boolean> {
+    if (!this.isEnabled) {
+      return false;
+    }
+    try {
+      const res = await this.globalBridge.syncSessionToPKU(sessionId);
+      return res !== null;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Creates a workspace-backed `MemoryRuntime` in capture mode when the provided
+ * `IBlackboardStorage` exposes a `workspaceRoot` (such as `FilesystemSessionStorage`)
+ * or when an explicit `pkuRootDir` is supplied. Returns `null` for in-memory/mock
+ * storages without a filesystem root.
+ */
+export function createWorkspaceMemoryRuntime(
+  storage: IBlackboardStorage,
+  options: MemoryRuntimeOptions & { pkuRootDir?: string } = {}
+): MemoryRuntime | null {
+  const workspaceRoot = (storage as { workspaceRoot?: unknown }).workspaceRoot;
+  const pkuRootDir =
+    options.pkuRootDir ??
+    (typeof workspaceRoot === 'string' && workspaceRoot.trim().length > 0
+      ? path.join(workspaceRoot, 'pku')
+      : undefined);
+
+  if (!pkuRootDir) {
+    return null;
+  }
+
+  const pkuStore = new LocalFilesystemPKUStore(pkuRootDir);
+  const outbox = options.outbox ?? new DurableOutboxQueue(path.join(pkuRootDir, 'outbox.json'));
+  return new MemoryRuntime(storage, pkuStore, {
+    mode: 'capture',
+    ...options,
+    outbox,
+  });
 }

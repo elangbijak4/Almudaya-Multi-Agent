@@ -26,6 +26,14 @@ import { SkillService } from '../skills/service.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
 import { ExecutionModeController } from './execution-mode.js';
+import {
+  CURRENT_PKU_SCHEMA_VERSION,
+  computeContentHash,
+  createWorkspaceMemoryRuntime,
+  deriveIdempotencyKey,
+  deriveProjectUniverseId,
+  type MemoryRuntime,
+} from '../memory_modules/index.js';
 
 export interface AgentStepEvent {
   iteration: number;
@@ -45,6 +53,8 @@ export interface AgentLoopOptions {
   messagingService?: MessagingService;
   sharedContextService?: SharedContextService;
   skillService?: SkillService;
+  memoryRuntime?: MemoryRuntime;
+  enablePkuSync?: boolean;
   onStep?: (event: AgentStepEvent) => Promise<void> | void;
   onStatus?: (statusMessage: string) => Promise<void> | void;
 }
@@ -68,6 +78,7 @@ export class AutonomousAgentLoop {
   private readonly sharedContextService: SharedContextService;
   private readonly workLogService: WorkLogService;
   private readonly skillService: SkillService;
+  private readonly memoryRuntime?: MemoryRuntime;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -87,7 +98,12 @@ export class AutonomousAgentLoop {
     this.sharedContextService =
       options.sharedContextService ?? new SharedContextService(this.storage);
     this.workLogService = new WorkLogService(this.storage);
-    this.skillService = options.skillService ?? new SkillService({ storage: this.storage });
+    this.memoryRuntime =
+      options.memoryRuntime ??
+      (options.enablePkuSync !== false ? createWorkspaceMemoryRuntime(this.storage) ?? undefined : undefined);
+    this.skillService =
+      options.skillService ??
+      new SkillService({ storage: this.storage, pkuStore: this.memoryRuntime?.pkuStore });
     this.onStepCallback = options.onStep;
     this.onStatusCallback = options.onStatus;
   }
@@ -454,7 +470,74 @@ export class AutonomousAgentLoop {
       }
     }
 
+    await this.captureTurnMemorySafely(message, iteration, finalResponseText);
+
     return finalResponseText;
+  }
+
+  /**
+   * Captures the completed ReAct turn into PKU (session state + individual bot checkpoint)
+   * in fail-open mode so PKU outages never disrupt bot execution.
+   */
+  private async captureTurnMemorySafely(
+    message: DirectMessage,
+    iteration: number,
+    finalResponseText: string
+  ): Promise<void> {
+    if (!this.memoryRuntime || !this.memoryRuntime.enabled) {
+      return;
+    }
+
+    try {
+      await this.memoryRuntime.captureSessionSafely(this.sessionId);
+
+      const nowIso = new Date().toISOString();
+      const projectUniverseId = deriveProjectUniverseId(
+        `session_${this.sessionId.toLowerCase()}`
+      );
+      const checkpointId = `ckpt_${message.message_id}_${iteration}`;
+      const summary = (finalResponseText || '(Tugas telah diselesaikan.)').slice(0, 280);
+      const idemKey = deriveIdempotencyKey({
+        sourceSystem: 'almudaya.acma',
+        scopeId: `${this.sessionId}:${this.botId}`,
+        sourceType: 'ExecutionCheckpoint',
+        sourceRecordId: checkpointId,
+        contentHash: computeContentHash({
+          messageId: message.message_id,
+          iteration,
+          summary,
+        }),
+      });
+
+      await this.memoryRuntime.individualBridge.saveCheckpoint(
+        {
+          checkpointId,
+          identity: {
+            principalId: this.botId,
+            registerKind: 'individual',
+            projectUniverseId,
+            sessionId: this.sessionId,
+            botId: this.botId,
+          },
+          sourceMessageId: message.message_id,
+          iteration,
+          maxIterations: this.maxIterations,
+          status: 'completed',
+          summary,
+          workingContext: {
+            senderBotId: message.sender_bot_id,
+            replyLength: finalResponseText.length,
+          },
+          knowledgeRefs: [],
+          schemaVersion: CURRENT_PKU_SCHEMA_VERSION,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        },
+        idemKey
+      );
+    } catch {
+      // Fail-open: never allow PKU persistence errors to break agent turn completion
+    }
   }
 
   /**

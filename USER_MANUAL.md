@@ -2,9 +2,10 @@
 
 Dokumentasi manual teknis resmi untuk executable CLI `almudaya` dan runtime multi-agent **Almudaya Multi-Agent v0.3.3**, mencakup:
 - Sintaks perintah CLI lengkap (`session`, `bot`, `broadcast`, `message`, `context`, `capability`, dan `skill`),
-- **Interactive Bot Console REPL** (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/skill`, `/status`, `/clear`, `/help`, `/exit`),
+- **Interactive Bot Console REPL** (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/status`, `/clear`, `/help`, `/exit`),
+- **Multi-Provider AI & Model Catalog** (`gemini`, `openrouter`, `9router`, `mock`, `almudaya bot models`),
 - **Agent Capability Governance (ACG)** & isolasi eksekusi OS (`windows` Job Objects / `linux` bwrap),
-- **PKU Unified Persistent Memory Architecture (Spec v0.2)** (Project Memory Universe, Global & Individual Registers, Knowledge-Aware Messaging, KOE L0–L3 Retrieval, Memory Lifecycle, serta UMI & External Adapter Gateway),
+- **PKU Unified Persistent Memory Architecture (Spec v0.2)** (Project Memory Universe, Global & Individual Registers, Incremental Codebase Indexer, `query_pku_memory`, KOE L0–L3 Retrieval, Memory Lifecycle, serta UMI & External Adapter Gateway),
 - **Almudaya Visual Design Skills (AVDS v1.0.1)** (40 profil gaya visual, 13 profil platform, 10 modalitas interaksi, UI Composition Engine, Cross-Platform QA Engine, Design-to-Code Contract, dan perkakas otonom `use_skill`).
 
 ---
@@ -116,8 +117,10 @@ almudaya bot run --session <id> --bot <id> [options...]
 ```
 Menjalankan proses bot dengan **Autonomous ReAct Agent Loop** dan **Interactive Bot Console REPL (`<BotName>> `)**:
 - **Options:**
-  - `--provider <gemini|mock>`: Provider AI untuk bot ini (default: otomatis menggunakan `gemini` jika `GEMINI_API_KEY` tersedia).
-  - `--model <modelName>`: Nama model LLM spesifik (default: `gemini-2.5-flash`).
+  - `--provider <gemini|openrouter|9router|mock>`: Provider AI untuk bot ini (jika dikosongkan, otomatis memilih `gemini` bila `GEMINI_API_KEY` ada, `openrouter` bila `OPENROUTER_API_KEY` ada, atau `9router` bila `NINEROUTER_BASE_URL` diset).
+  - `--model <modelName>`: Nama model LLM spesifik (misal `gemini-2.5-flash`, `deepseek/deepseek-chat-v3-0324:free`, `mycombo`).
+  - `--base-url <url>`: Base URL OpenAI-compatible kustom (misal `http://localhost:20128/v1` untuk 9router).
+  - `--api-key <key>`: *(Deprecated / Tidak disarankan)* API key eksplisit via CLI; gunakan environment variable (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NINEROUTER_API_KEY`).
   - `-m, --mode <review|turbo>`: Mode keamanan eksekusi (`review` untuk Human-in-the-Loop, `turbo` untuk otonom).
   - `--max-iterations <count>`: Batas maksimal iterasi ReAct loop per pesan (default: `10`).
   - `--interval <ms>`: Interval detak heartbeat dalam milidetik (default: `2000`).
@@ -131,12 +134,29 @@ Menjalankan proses bot dengan **Autonomous ReAct Agent Loop** dan **Interactive 
   | `/roots` | Menampilkan daftar *project roots* terdaftar di session. |
   | `/log [limit] [root]` | Menampilkan linimasa riwayat kerja lintas-root (`work_log.jsonl`). |
   | `/mode [review\|turbo]` | Menampilkan atau mengubah mode eksekusi keamanan secara *on-the-fly*. |
+  | `/model [modelId] [provider]` | Menampilkan daftar model yang tersedia (`9router` live + preset `openrouter` + `gemini`), atau mengganti model/provider aktif saat runtime. |
   | `/skill [subcommand]` | Mengelola skill & AVDS (`list`, `styles [family]`, `platforms`, `modalities`, `enable [skillId] [style] [platform]`, `disable [skillId]`). |
   | `/status` | Menampilkan ringkasan status bot lokal, PID, mode, dan AI provider. |
   | `/clear` | Membersihkan layar terminal. |
   | `/help` | Menampilkan daftar perintah interaktif. |
   | `/exit`, `/quit` | Menghentikan bot dengan aman (*graceful shutdown*) dan keluar. |
   | `<instruksi teks biasa>` | Mengirim instruksi bahasa alami langsung ke penalaran ReAct AI bot lokal. |
+
+#### F. Menjelajahi Katalog Model AI (`models`)
+```bash
+almudaya bot models [options...]
+```
+Menampilkan daftar model AI dari **9router** (query langsung ke `/v1/models`), preset gratis/populer **OpenRouter**, dan **Google Gemini**:
+- **Options:**
+  - `--provider <9router|openrouter|gemini>`: Filter daftar model berdasarkan provider tertentu.
+  - `--base-url <url>`: Base URL kustom untuk 9router (default `http://localhost:20128/v1`).
+  - `--json`: Keluaran JSON terstruktur.
+- **Contoh:**
+  ```bash
+  almudaya bot models
+  almudaya bot models --provider 9router
+  almudaya bot models --provider openrouter --json
+  ```
 
 ---
 
@@ -343,15 +363,16 @@ almudaya skill validate <filePath> [--type <design-contract|composition-plan|han
 
 ## 3. Mesin Perkakas Otonom Bot (Autonomous Agent Tools)
 
-Setiap bot dengan AI provider aktif (`--provider gemini` atau `--provider mock`) memiliki akses ke **9 perkakas otonom**:
+Setiap bot dengan AI provider aktif (`--provider gemini`, `--provider openrouter`, `--provider 9router`, atau `--provider mock`) memiliki akses ke **10 perkakas otonom**:
 
 | Nama Perkakas | Kategori | Perlu Review di Mode `REQUEST_REVIEW`? | Fungsi Utama |
 |---|---|---|---|
+| `query_pku_memory` | PKU Memory (RAG & Graph) | Tidak (Read-Only) | Membaca pengetahuan proyek terindeks (L0–L2) dan graf relasi sebelum membaca berkas penuh (*PKU-First Reading Policy*). |
 | `read_file` | File Sandbox | Tidak (Read-Only) | Membaca isi berkas di dalam *project root* terdaftar (batas aman 10 MB). |
 | `list_dir` | File Sandbox | Tidak (Read-Only) | Menjelajahi isi direktori di dalam *project root*. |
 | `search_files` | File Sandbox | Tidak (Read-Only) | Mencari pola teks atau nama berkas di dalam *project root*. |
-| `write_file` | File Sandbox | **Ya (Mutasi)** | Menulis berkas secara atomik di dalam *project root* dan mencatat ke `work_log.jsonl`. |
-| `edit_file` | File Sandbox | **Ya (Mutasi)** | Mengganti blok teks eksak pada berkas dan mencatat ke `work_log.jsonl`. |
+| `write_file` | File Sandbox | **Ya (Mutasi)** | Menulis berkas secara atomik di dalam *project root*, mencatat ke `work_log.jsonl`, dan memperbarui indeks PKU **hanya untuk berkas yang berubah**. |
+| `edit_file` | File Sandbox | **Ya (Mutasi)** | Mengganti blok teks eksak pada berkas, mencatat ke `work_log.jsonl`, dan memperbarui indeks PKU **hanya untuk berkas yang berubah**. |
 | `run_command` | Execution Controller | **Ya (Mutasi)** | Mengeksekusi perintah shell melalui `ExecutionController` dengan redaksi kredensial dan isolasi OS. |
 | `get_work_log` | Shared Memory | Tidak (Read-Only) | Membaca riwayat kerja lintas-root (`work_log.jsonl`) dari rekan bot lain. |
 | `send_message` | Blackboard Messaging | Tidak | Mengirim pesan langsung secara native ke rekan bot lain di tengah siklus ReAct. |
@@ -377,5 +398,9 @@ Modul memori kanonis di [`src/memory_modules/`](file:///d:/almudaya_multiagent_v
 | Variabel | Keterangan | Nilai Standar |
 |---|---|---|
 | `GEMINI_API_KEY` | Kunci API Google Gemini untuk mengaktifkan penalaran LLM pada bot. Disimpan murni dalam memori proses lokal (*Invariant 7*). | - |
+| `OPENROUTER_API_KEY` | Kunci API OpenRouter untuk mengakses katalog model gratis maupun berbayar melalui `--provider openrouter`. | - |
+| `NINEROUTER_API_KEY` | Kunci API opsional untuk router lokal **9router** jika server lokal Anda mengaktifkan autentikasi Bearer token. | - |
+| `NINEROUTER_BASE_URL` | Endpoint OpenAI-compatible untuk **9router** lokal. | `http://localhost:20128/v1` |
+| `OPENAI_API_KEY` | Kunci API opsional untuk endpoint OpenAI-compatible kustom via `--base-url`. | - |
 | `ALMUDAYA_WORKSPACE` | Menentukan lokasi root folder penyimpanan Blackboard session & PKU store. | Direktori AppData sistem. |
 | `ALMUDAYA_WORKSPACE_ROOT` | Alias untuk `ALMUDAYA_WORKSPACE`. | Sama dengan `ALMUDAYA_WORKSPACE`. |

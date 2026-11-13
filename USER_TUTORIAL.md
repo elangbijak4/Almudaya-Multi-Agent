@@ -2,9 +2,10 @@
 
 Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**, termasuk:
 1. Orkestrasi multi-proses lintas-terminal dengan **Interactive Bot Console REPL**,
-2. Tata kelola keamanan **Agent Capability Governance (ACG)**,
-3. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
-4. Sinkronisasi memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory Architecture (Spec v0.2)**.
+2. Pemilihan model AI fleksibel melalui **9router**, **OpenRouter**, atau **Google Gemini** (`almudaya bot models` & `/model`),
+3. Tata kelola keamanan **Agent Capability Governance (ACG)**,
+4. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
+5. Sinkronisasi memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory Architecture (Spec v0.2)** dengan kebijakan **PKU-First Reading** (`query_pku_memory`).
 
 ---
 
@@ -141,9 +142,20 @@ Di dalam prompt `Architect> `, coba jalankan perintah slash berikut:
 ```text
 Architect> /peers
 Architect> /roots
+Architect> /model
 Architect> /skill list
 Architect> /skill styles futuristic
 ```
+> **Tips Multi-Provider (`/model` & 9router):** Anda juga bisa langsung menjalankan bot dengan **9router** lokal atau **OpenRouter** tanpa bergantung pada satu API key:
+> ```powershell
+> # Lihat daftar model aktif di 9router & preset OpenRouter
+> almudaya bot models --provider 9router
+>
+> # Jalankan bot langsung memakai 9router (set NINEROUTER_API_KEY jika router memakai key)
+> $env:NINEROUTER_API_KEY="<NINEROUTER_API_KEY_JIKA_ADA>"
+> almudaya bot run --session S002 --bot BOT001 --provider 9router --model mycombo --mode review
+> ```
+> Di dalam REPL kapan saja, ketik `/model mycombo 9router` atau `/model deepseek/deepseek-chat-v3-0324:free openrouter` untuk mengganti model tanpa me-restart bot.
 
 ---
 
@@ -169,11 +181,12 @@ Architect> /msg Coder Tolong gunakan tool use_skill untuk membaca profil gaya 'q
 
 ### Apa yang Terjadi Secara Otonom di Terminal 2 (`Coder> `)?
 1. Bot **Coder** langsung menerima pesan dengan *non-destructive TTY rendering* (tanpa merusak baris prompt).
-2. `AutonomousAgentLoop` secara otomatis menyuntikkan konfigurasi aktif **AVDS (`quantum-futurism`, `web`, `keyboard`, `mouse-pointer`)** ke dalam System Prompt Coder.
-3. Coder memanggil perkakas **`use_skill`** (`action: "get_style", target_id: "quantum-futurism"` dan `action: "get_platform", target_id: "web"`) untuk membaca spesifikasi desain resmi AVDS.
-4. Coder memanggil **`write_file`** untuk menulis `src/theme-tokens.json` dan `src/math.js` di dalam `D:\testingbot`.
-5. Coder memanggil **`run_command`** untuk memverifikasi kode dengan `node`.
-6. Seluruh mutasi berkas dan eksekusi perintah otomatis tercatat ke `work_log.jsonl`, serta Coder mengirim balasan langsung kembali ke `Architect`!
+2. `AutonomousAgentLoop` secara otomatis menyuntikkan **PKU-First Reading Policy** dan konfigurasi aktif **AVDS (`quantum-futurism`, `web`, `keyboard`, `mouse-pointer`)** ke dalam System Prompt Coder.
+3. Coder terlebih dahulu memanggil **`query_pku_memory`** untuk memeriksa ringkasan kode/graf pengetahuan proyek di PKU sebelum membaca atau menulis berkas penuh.
+4. Coder memanggil perkakas **`use_skill`** (`action: "get_style", target_id: "quantum-futurism"` dan `action: "get_platform", target_id: "web"`) untuk membaca spesifikasi desain resmi AVDS.
+5. Coder memanggil **`write_file`** untuk menulis `src/theme-tokens.json` dan `src/math.js` di dalam `D:\testingbot`—sistem otomatis memperbarui indeks PKU **hanya untuk berkas yang baru ditulis/diubah** tanpa mengindeks ulang seluruh proyek.
+6. Coder memanggil **`run_command`** untuk memverifikasi kode dengan `node`.
+7. Seluruh mutasi berkas dan eksekusi perintah otomatis tercatat ke `work_log.jsonl`, serta Coder mengirim balasan langsung kembali ke `Architect`!
 
 ---
 

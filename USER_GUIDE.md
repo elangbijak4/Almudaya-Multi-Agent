@@ -44,17 +44,18 @@ Almudaya mengadopsi arsitektur **Session-Centric**, **Multi-Process**, **Persist
                        │    Target Project Roots & AVDS Design Contracts       │
                        │  - File Tools: read_file, write_file, edit_file       │
                        │  - ExecutionController: run_command (ACG + OS JobObj) │
-                       │  - Collaboration Tools: send_message, get_work_log    │
+                       │  - Collaboration & Memory: send_message,              │
+                       │    get_work_log, query_pku_memory                     │
                        │  - Skill Engine Tool: use_skill (AVDS v1.0.1)         │
                        └───────────────────────────────────────────────────────┘
 ```
 
 ### Enam Pilar Arsitektur Almudaya v0.3.3:
 1. **Session Boundary & Multi-Root Orchestration:** Setiap sesi kolaborasi mengisolasi state dan dapat mengelola banyak direktori proyek (*project roots* seperti `backend`, `frontend`, `mobile`, `docs`) secara simultan dengan pelacakan lokasi presisi di `work_log.jsonl`.
-2. **Process Isolation & Interactive Bot Console REPL:** Setiap bot berjalan di proses OS independen dengan konsol interaktif *non-blocking* (`<BotName>> `) yang mendukung perintah slash (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/skill`, `/status`) dan instruksi bahasa alami.
+2. **Process Isolation & Interactive Bot Console REPL:** Setiap bot berjalan di proses OS independen dengan konsol interaktif *non-blocking* (`<BotName>> `) yang mendukung perintah slash (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/status`) dan instruksi bahasa alami.
 3. **Blackboard Durability & Lease/Fencing Delivery:** Pengiriman pesan dilindungi oleh *atomic write*, *cooperative lock* dengan *fencing token* monotonik, serta *inbox delivery state machine* (`PENDING` $\rightarrow$ `PROCESSING` $\rightarrow$ `ACKED` / `FAILED` / `DEAD_LETTER`).
 4. **Agent Capability Governance (ACG) & Defense-in-Depth:** Eksekusi perintah eksternal dikendalikan oleh kebijakan *fail-closed*, *prompt-injection boundary delimiters* (`<<<UNTRUSTED_*>>>`), sanitasi *environment variables*, serta *automatic secret redaction*.
-5. **PKU Unified Persistent Memory Architecture (Spec v0.2):** Menyatukan memori operasional Blackboard dan memori kognitif individual bot (ACMA) ke dalam penyimpanan pengetahuan jangka panjang yang deterministik, terisolasi per proyek (*PMU*), hemat token via *Knowledge Optimization Engine* (`KOE` L0–L3), dan mendukung *graceful degradation* (`PKU-001` s/d `PKU-020`).
+5. **PKU Unified Persistent Memory & PKU-First Policy (Spec v0.2):** Menyatukan memori operasional Blackboard, memori kognitif individual bot (ACMA), dan **Incremental Codebase Indexer** ke dalam penyimpanan pengetahuan jangka panjang yang deterministik, terisolasi per proyek (*PMU*), hemat token via *Knowledge Optimization Engine* (`KOE` L0–L3), penangkapan memori otomatis *fail-open*, serta kewajiban **PKU-First Reading** (`query_pku_memory`) sebelum membaca berkas penuh (`PKU-001` s/d `PKU-020`).
 6. **Almudaya Visual Design Skills (AVDS v1.0.1):** Kerangka kerja desain dan rekayasa UI/UX adaptif lintas-platform yang memisahkan **Identitas Visual (40 gaya)**, **Konvensi Platform (13 platform)**, dan **Modalitas Interaksi (10 modalitas)** agar agen AI menghasilkan antarmuka yang khas, kontekstual, dan bebas dari jebakan desain generik.
 
 ---
@@ -105,6 +106,12 @@ Agar jendela konteks (*context window*) LLM tetap efisien dan hemat biaya token:
 - **Level `L2` (Full Object)**: Memuat isi objek pengetahuan terstruktur beserta relasinya.
 - **Level `L3` (Raw Evidence)**: Memuat jejak bukti mentah dan *provenance* lengkap (`PKU-012`, `PKU-013`).
 
+### 3.4 Kebijakan PKU-First Reading & Incremental Codebase Indexing
+Untuk menjaga efisiensi token dan akurasi audit lintas-bot:
+1. **Standardized PKU-First Reading Policy**: Setiap bot yang berjalan melalui `AutonomousAgentLoop` diinstruksikan secara default untuk memanggil perkakas **`query_pku_memory`** (RAG/Knowledge Graph PKU) terlebih dahulu saat mengaudit atau menelusuri kode, kecuali jika user secara eksplisit meminta pembacaan berkas penuh.
+2. **Incremental Single-File Re-Indexing**: `ProjectCodebaseIndexer` mengindeks *project root* ke dalam objek L0/L1/L2 dan relasi graf. Setiap kali `write_file` atau `edit_file` mengubah suatu berkas, sistem hanya memperbarui indeks milik berkas yang berubah tersebut—tanpa mengindeks ulang seluruh repositori.
+3. **Automatic Fail-Open PKU Capture**: `SessionService`, `BotRuntime`, dan `AutonomousAgentLoop` secara otomatis menangkap konteks sesi, pesan, dan hasil giliran (*turn*) ke PKU Store secara *fail-open* (jika store tidak tersedia, eksekusi bot tidak terhenti).
+
 ---
 
 ## 4. Almudaya Visual Design Skills (AVDS v1.0.1)
@@ -148,3 +155,24 @@ almudaya skill validate <path-ke-kontrak.json>
    ```
 2. Ketika bot memproses pesan tugas, `AutonomousAgentLoop` secara otomatis menyuntikkan konfigurasi skill aktif ke dalam System Prompt bot dan menyediakan perkakas otonom **`use_skill`**.
 3. Bot dapat memanggil `use_skill` kapan saja untuk mengambil spesifikasi YAML gaya visual, aturan adaptasi platform, tata bahasa komposisi (`LAYOUT_GRAMMAR.md`), maupun protokol audit QA (`ACCESSIBILITY_AUDIT_PROTOCOL.md`).
+
+---
+
+## 5. Dukungan Multi-Provider AI (Gemini, OpenRouter, 9router) & `/model`
+
+Almudaya v0.3.3 mendukung pemilihan model AI secara fleksibel tanpa bergantung pada satu penyedia atau model lokal berukuran besar:
+
+1. **9router (`--provider 9router`, default `http://localhost:20128/v1`):**
+   - Menghubungkan bot ke router lokal/pribadi yang menampung beragam model (termasuk model gratis atau *combo routing* seperti `mycombo`).
+   - Dapat mendeteksi model aktif secara dinamis dari endpoint `/v1/models` melalui `almudaya bot models --provider 9router`.
+   - Jika 9router Anda memerlukan autentikasi, set `$env:NINEROUTER_API_KEY` di memori proses lokal sebelum menjalankan bot.
+2. **OpenRouter (`--provider openrouter`, default `https://openrouter.ai/api/v1`):**
+   - Menyediakan katalog model gratis dan berbayar (seperti `deepseek/deepseek-chat-v3-0324:free`, `qwen/qwen3-coder:free`, dan lainnya) menggunakan `$env:OPENROUTER_API_KEY`.
+3. **Google Gemini (`--provider gemini`) & Mock (`--provider mock`):**
+   - Menggunakan `$env:GEMINI_API_KEY` (default `gemini-2.5-flash`) dengan adaptive 429 retry latch.
+4. **Pergantian Model Saat Runtime (`/model`):**
+   - Di dalam konsol REPL bot, operator dapat mengetik `/model` untuk melihat daftar model gabungan (live 9router + preset OpenRouter + Gemini), lalu berpindah model secara langsung tanpa me-restart proses bot:
+     ```text
+     Architect> /model mycombo 9router
+     Architect> /model qwen/qwen3-coder:free openrouter
+     ```

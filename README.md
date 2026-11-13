@@ -3,12 +3,29 @@
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 379 Passed](https://img.shields.io/badge/Tests-379%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
-[![AI Engine: Google Gemini](https://img.shields.io/badge/AI%20Engine-Google%20Gemini-orange.svg)](https://deepmind.google/technologies/gemini/)
+[![Tests: 432 Passed](https://img.shields.io/badge/Tests-432%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
+[![AI Engines: Gemini | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, and **Cross-Root Location-Aware Session Work Memory**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, OpenRouter, 9router)**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.3+ (Multi-Provider AI, PKU-First Memory & AVDS v1.0.1)
+
+1. **Multi-Provider AI (`Gemini`, `OpenRouter`, `9router`) & Runtime `/model` Switching:**
+   - Added `OpenAICompatibleProvider` supporting **OpenRouter** (`https://openrouter.ai/api/v1`) and local **9router** (`http://localhost:20128/v1`), including `stream: false`, JSON with trailing `data: [DONE]`, and SSE delta chunk parsing.
+   - Added `ModelCatalog` discovery (`almudaya bot models`) combining live 9router `/v1/models`, free/popular OpenRouter presets, and Gemini models.
+   - Added `/model` and `/model <modelId> [9router|openrouter|gemini]` inside `BotConsole` REPL for live model switching without restarting the bot.
+
+2. **PKU Unified Persistent Memory (Spec v0.2), PKU-First Reading & Incremental Indexing:**
+   - Automatic fail-open PKU capture wired into `SessionService`, `BotRuntime`, and `AutonomousAgentLoop`.
+   - Added `ProjectCodebaseIndexer` (L0–L2 + Knowledge Graph) and native `query_pku_memory` tool.
+   - Enforced **PKU-First Reading Policy** in `buildDynamicSystemPrompt`: bots query PKU RAG / Knowledge Graph before reading full files (unless explicitly instructed), and `write_file` / `edit_file` incrementally re-index only the changed file.
+
+3. **Almudaya Visual Design Skills (`AVDS v1.0.1`):**
+   - Integrated 40 visual styles, 13 platform profiles, 10 interaction modalities, contract validation (`almudaya skill validate`), REPL `/skill` commands, and autonomous `use_skill` tool.
 
 ---
 
@@ -195,12 +212,16 @@ almudaya bot run --session S001 --bot BOT001 --name "Architect" --role "System A
 # Architect> /msg Coder Buatkan REST endpoint di backend/src/server.js
 ```
 
-**Terminal 2 (Coder Console with Gemini AI & Turbo Mode):**
+**Terminal 2 (Coder Console with Gemini, OpenRouter, or 9router & Turbo Mode):**
 ```powershell
+# Option A: Google Gemini
 $env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 almudaya bot run --session S001 --bot BOT002 --name "Coder" --role "Software Engineer" --provider gemini --mode turbo
-# Coder automatically handles incoming messages, executes tools, and logs to work_log.jsonl:
-# Coder> /log
+
+# Option B: Local 9router (discover models first with `almudaya bot models --provider 9router`)
+$env:NINEROUTER_API_KEY="<OPTIONAL_NINEROUTER_API_KEY>"
+almudaya bot run --session S001 --bot BOT002 --name "Coder" --role "Software Engineer" --provider 9router --model mycombo --mode turbo
+# Switch models anytime inside REPL with: /model
 ```
 
 ### 3. Discover Peers
@@ -255,7 +276,8 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 | `almudaya bot list --session <id>` | List all bots with PID and liveness status |
 | `almudaya bot inspect --session <id> --bot <id>` | Inspect detailed bot record |
 | `almudaya bot rename --session <id> --bot <id> --new-name <name>` | Rename bot display name preserving stable ID |
-| `almudaya bot run --session <id> --bot <id>` | Start bot runtime daemon with periodic heartbeat loop |
+| `almudaya bot run --session <id> --bot <id>` | Start bot runtime daemon with periodic heartbeat loop & `--provider gemini\|openrouter\|9router\|mock` |
+| `almudaya bot models [--provider <id>]` | Discover available AI models (9router live + OpenRouter presets + Gemini) |
 | `almudaya broadcast publish --session <id> --bot <id>` | Publish a broadcast event to `events.jsonl` |
 | `almudaya broadcast read --session <id> --bot <id>` | Read broadcast events with cursor tracking |
 | `almudaya message send --session <id> --sender <id>` | Send direct message by Bot ID or recipient display name |
@@ -270,6 +292,8 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 | `almudaya capability revoke <grantId>` | Revoke an active capability grant |
 | `almudaya capability history --session <id>` | View structured append-only capability audit events |
 | `almudaya capability preset list\|show\|apply` | Inspect and apply pre-packaged capability security presets |
+| `almudaya skill list\|inspect\|styles\|platforms\|modalities` | Explore AVDS v1.0.1 visual styles (40), platforms (13), and modalities (10) |
+| `almudaya skill enable\|disable\|validate` | Bind AVDS skill configs to sessions/bots and validate design contracts |
 
 All commands accept `--json` for machine readability and `--workspace <path>` to override the storage root.
 
@@ -290,7 +314,7 @@ npm run build
 npm pack --dry-run
 ```
 
-- **44 Test Suites / 295 Tests:** 100% passing across all modules (201 baseline + 94 v0.3.2 hardening tests).
+- **60 Test Files / 432 Tests:** 100% passing across all modules (`npm test`), covering SRP-1 security, PKU Spec v0.2, incremental codebase indexing, AVDS v1.0.1, OpenRouter/9router providers, and REPL `/model` switching.
 - **Independent Multi-Process Testing:** Validated with real spawned Node.js child processes for concurrent joins, message appends, and process crash recovery.
 - **Two-Terminal E2E Acceptance:** Validates the complete 12-step Proof of Concept specified in `MASTER_PROMPT.md` Section 10.
 

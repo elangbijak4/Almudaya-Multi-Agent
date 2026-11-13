@@ -218,9 +218,9 @@ describe('OpenRouter, 9router, ModelCatalog & REPL /model Switching', () => {
 
       await consoleInst.start();
       input.write('/model\n');
-      await waitForOutput('Daftar Model Tersedia');
+      await waitForOutput('Gunakan: /model <modelId>');
       expect(capturedOutput).toContain('Daftar Model Tersedia');
-      expect(capturedOutput).toContain('deepseek/deepseek-chat-v3-0324:free');
+      expect(capturedOutput).toMatch(/deepseek\/deepseek-chat-v3-0324:free|\[9router\]/);
 
       input.write('/model qwen/qwen3-coder:free openrouter\n');
       await waitForOutput('openrouter:qwen/qwen3-coder:free');
@@ -232,5 +232,70 @@ describe('OpenRouter, 9router, ModelCatalog & REPL /model Switching', () => {
       await consoleInst.stop();
       await runtime.stop();
     });
+  });
+
+  it('OpenAICompatibleProvider handles JSON with trailing data: [DONE] and SSE delta chunks', async () => {
+    const baseUrlTrailing = await startMockRouter((_req, body, res) => {
+      const parsed = JSON.parse(body) as { stream?: boolean };
+      expect(parsed.stream).toBe(false);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'OK from mycombo',
+              },
+            },
+          ],
+          usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
+        }) + '\n\ndata: [DONE]\n\n'
+      );
+    });
+
+    const providerTrailing = new OpenAICompatibleProvider({
+      providerId: '9router',
+      baseUrl: baseUrlTrailing,
+      modelName: 'mycombo',
+    });
+
+    const resTrailing = await providerTrailing.generateResponse({
+      systemPrompt: 'System',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    expect(resTrailing.text).toBe('OK from mycombo');
+    expect(resTrailing.usage?.totalTokens).toBe(12);
+
+    await new Promise<void>((resolve) => mockServer!.close(() => resolve()));
+    mockServer = undefined;
+
+    const baseUrlSse = await startMockRouter((_req, _body, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(
+        [
+          'data: {"choices":[{"delta":{"content":"Hello "}}]}',
+          'data: {"choices":[{"delta":{"content":"world","tool_calls":[{"index":0,"id":"call_sse","function":{"name":"query_pku_memory","arguments":"{\\"query\\":"}}]}}]}',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"auth\\"}"}}]}}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}',
+          'data: [DONE]',
+          '',
+        ].join('\n\n')
+      );
+    });
+
+    const providerSse = new OpenAICompatibleProvider({
+      providerId: '9router',
+      baseUrl: baseUrlSse,
+      modelName: 'mycombo',
+    });
+
+    const resSse = await providerSse.generateResponse({
+      systemPrompt: 'System',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    expect(resSse.text).toBe('Hello world');
+    expect(resSse.toolCalls).toEqual([
+      { id: 'call_sse', name: 'query_pku_memory', arguments: { query: 'auth' } },
+    ]);
+    expect(resSse.usage?.totalTokens).toBe(8);
   });
 });

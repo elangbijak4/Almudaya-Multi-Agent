@@ -122,6 +122,122 @@ function toOpenAITools(tools?: ToolDefinition[]): unknown[] | undefined {
  * OpenAI-Compatible AI Provider supporting OpenRouter, 9router, and custom
  * `/v1/chat/completions` gateways with tool-calling, AbortSignal, and 429 handling.
  */
+interface OpenAIToolCallPayload {
+  index?: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+interface OpenAIChatCompletionPayload {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+      tool_calls?: OpenAIToolCallPayload[];
+    };
+    delta?: {
+      content?: string | null;
+      tool_calls?: OpenAIToolCallPayload[];
+    };
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+/**
+ * Parses a chat completion HTTP body that may be standard JSON, JSON with a
+ * trailing `data: [DONE]` marker (as returned by some 9router upstreams), or
+ * SSE `data: {...}` chunks.
+ */
+function parseChatCompletionPayload(rawText: string): OpenAIChatCompletionPayload {
+  const trimmed = rawText.trim();
+  const withoutTrailingDone = trimmed.replace(/(?:\r?\n)*data:\s*\[DONE\]\s*$/i, '').trim();
+
+  if (withoutTrailingDone && !withoutTrailingDone.startsWith('data:')) {
+    try {
+      return JSON.parse(withoutTrailingDone) as OpenAIChatCompletionPayload;
+    } catch {
+      // Fall through to SSE line parsing if the body contains multiple data: chunks
+    }
+  }
+
+  let content = '';
+  let hasContent = false;
+  const toolCallsByIndex = new Map<number, { id?: string; name: string; arguments: string }>();
+  let usage: OpenAIChatCompletionPayload['usage'];
+  let parsedAnyChunk = false;
+
+  for (const rawLine of trimmed.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line.startsWith('data:')) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') continue;
+
+    let chunk: OpenAIChatCompletionPayload;
+    try {
+      chunk = JSON.parse(payload) as OpenAIChatCompletionPayload;
+    } catch {
+      continue;
+    }
+    parsedAnyChunk = true;
+
+    if (chunk.usage) {
+      usage = chunk.usage;
+    }
+
+    const choice = chunk.choices?.[0];
+    if (choice?.message) {
+      return {
+        choices: [{ message: choice.message }],
+        usage: chunk.usage ?? usage,
+      };
+    }
+
+    const delta = choice?.delta;
+    if (!delta) continue;
+    if (typeof delta.content === 'string') {
+      content += delta.content;
+      hasContent = true;
+    }
+    if (Array.isArray(delta.tool_calls)) {
+      for (let i = 0; i < delta.tool_calls.length; i++) {
+        const tc = delta.tool_calls[i];
+        const idx = tc?.index ?? i;
+        const existing = toolCallsByIndex.get(idx) ?? { name: '', arguments: '' };
+        if (tc?.id) existing.id = tc.id;
+        if (tc?.function?.name) existing.name += tc.function.name;
+        if (tc?.function?.arguments) existing.arguments += tc.function.arguments;
+        toolCallsByIndex.set(idx, existing);
+      }
+    }
+  }
+
+  if (!parsedAnyChunk) {
+    throw new SyntaxError(`Unexpected chat completion payload: ${trimmed.slice(0, 120)}`);
+  }
+
+  const mergedToolCalls: OpenAIToolCallPayload[] = Array.from(toolCallsByIndex.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, tc]) => ({
+      id: tc.id,
+      function: { name: tc.name, arguments: tc.arguments },
+    }));
+
+  return {
+    choices: [
+      {
+        message: {
+          content: hasContent ? content : null,
+          tool_calls: mergedToolCalls.length > 0 ? mergedToolCalls : undefined,
+        },
+      },
+    ],
+    usage,
+  };
+}
+
 export class OpenAICompatibleProvider implements IAIModelProvider {
   public readonly providerId: OpenAICompatibleProviderId;
   public readonly modelName: string;
@@ -189,6 +305,7 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
       const body: Record<string, unknown> = {
         model: this.modelName,
         messages: toOpenAIMessages(request),
+        stream: false,
       };
       const tools = toOpenAITools(request.tools);
       if (tools) {
@@ -223,22 +340,8 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
         );
       }
 
-      const json = (await response.json()) as {
-        choices?: Array<{
-          message?: {
-            content?: string | null;
-            tool_calls?: Array<{
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-        }>;
-        usage?: {
-          prompt_tokens?: number;
-          completion_tokens?: number;
-          total_tokens?: number;
-        };
-      };
+      const rawText = await response.text();
+      const json = parseChatCompletionPayload(rawText);
 
       const message = json.choices?.[0]?.message;
       const toolCalls: ToolCallRequest[] = [];

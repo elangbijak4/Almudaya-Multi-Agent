@@ -606,7 +606,7 @@ export class SkillService {
     const obj = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
     const inferredType: 'design-contract' | 'composition-plan' | 'handoff-envelope' =
       typeHint ??
-      ('contract_id' in obj
+      ('contract_id' in obj || 'avdsVersion' in obj
         ? 'design-contract'
         : 'plan_id' in obj
           ? 'composition-plan'
@@ -621,7 +621,7 @@ export class SkillService {
         for (const issue of parsed.error.issues) {
           errors.push(`${issue.path.join('.') || 'root'}: ${issue.message}`);
         }
-      } else {
+      } else if ('artifacts' in parsed.data) {
         const data = parsed.data;
         const artifactIds = new Set<string>();
         for (const art of data.artifacts) {

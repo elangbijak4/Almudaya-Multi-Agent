@@ -107,7 +107,7 @@ export const AVDSDesignContractArtifactSchema = z.object({
   depends_on: z.array(z.string()).optional(),
 });
 
-export const AVDSDesignContractSchema = z.object({
+export const AVDSDesignContractWorkflowSchema = z.object({
   contract_id: z.string().min(1),
   version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must follow semver X.Y.Z'),
   status: z.enum([
@@ -138,6 +138,34 @@ export const AVDSDesignContractSchema = z.object({
     assigned_agent_role: z.string().optional(),
   }),
 });
+
+export const AVDSDesignTokenContractSchema = z.object({
+  avdsVersion: z.string().regex(/^\d+\.\d+\.\d+$/, 'avdsVersion must follow semver X.Y.Z'),
+  project: z.string().min(1),
+  platform: z.union([
+    z.string().min(1),
+    z.object({
+      primary: z.string().min(1),
+      dependencies: z.array(z.string()).optional(),
+    }),
+  ]),
+  modalities: z.array(z.string().min(1)).min(1),
+  style: z.object({
+    primary: z.string().min(1),
+    secondary: z.array(z.string()).optional(),
+  }),
+  tokens: z.record(z.string(), z.unknown()),
+  components: z.record(z.string(), z.unknown()).optional(),
+  layout: z.record(z.string(), z.unknown()).optional(),
+  motion: z.record(z.string(), z.unknown()).optional(),
+  accessibility: z.record(z.string(), z.unknown()).optional(),
+  qa: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const AVDSDesignContractSchema = z.union([
+  AVDSDesignContractWorkflowSchema,
+  AVDSDesignTokenContractSchema,
+]);
 
 export const AVDSCompositionPlanSchema = z.object({
   plan_id: z.string().min(1),

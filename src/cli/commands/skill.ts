@@ -448,6 +448,7 @@ export function registerSkillCommands(program: Command): void {
       '-t, --type <type>',
       'Artifact type hint (design-contract | composition-plan | handoff-envelope)'
     )
+    .option('-w, --workspace <path>', 'Workspace directory path')
     .option('--json', 'Output validation result as JSON')
     .action(
       async (

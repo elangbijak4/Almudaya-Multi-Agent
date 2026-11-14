@@ -10,6 +10,13 @@ import {
   inferProviderForModel,
   type CatalogProviderId,
 } from '../ai/catalog.js';
+import {
+  detectHardwareProfile,
+  formatHardwareAdvisorReport,
+  formatPullProgress,
+  pullOllamaModel,
+  recommendModelsForHardware,
+} from '../ai/hardware-advisor.js';
 import { ExecutionModeController } from './execution-mode.js';
 import { BotService } from './service.js';
 import { MessagingService } from '../messaging/service.js';
@@ -121,7 +128,17 @@ export class BotConsole {
       this.isProcessingInput = true;
       try {
         while (this.inputQueue.length > 0 && !this.closed && !this.isAskingQuestion) {
-          const nextLine = this.inputQueue.shift()!;
+          let nextLine = this.inputQueue.shift()!;
+          // Coalesce rapid multi-line pasted natural-language instructions (APP-BUG-07)
+          if (!nextLine.trim().startsWith('/')) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 25));
+            while (
+              this.inputQueue.length > 0 &&
+              !this.inputQueue[0]!.trim().startsWith('/')
+            ) {
+              nextLine += '\n' + this.inputQueue.shift()!;
+            }
+          }
           await this.handleInput(nextLine);
         }
       } finally {
@@ -472,15 +489,71 @@ export class BotConsole {
       }
 
       case '/model': {
-        if (argTokens.length === 0 || argTokens[0]?.toLowerCase() === 'list' || argTokens[0]?.toLowerCase() === 'refresh') {
-          const includeLive = argTokens[0]?.toLowerCase() === 'refresh' || argTokens.length === 0;
-          const models = await discoverModels({ includeLiveDiscovery: includeLive });
+        const firstArg = argTokens[0]?.toLowerCase();
+        if (firstArg === 'recommend' || firstArg === 'advisor') {
+          this.writeLine('[Console] Memeriksa spesifikasi hardware & mencari rekomendasi model...');
+          try {
+            const profile = await detectHardwareProfile();
+            const report = await recommendModelsForHardware(profile);
+            for (const reportLine of formatHardwareAdvisorReport(report)) {
+              this.writeLine(reportLine);
+            }
+          } catch (err: unknown) {
+            this.writeLine(`[Console] Gagal menganalisis hardware/model: ${(err as Error).message}`);
+          }
+          return;
+        }
+
+        if (firstArg === 'pull') {
+          const pullModelId = argTokens[1];
+          if (!pullModelId) {
+            this.writeLine('[Console] Penggunaan: /model pull <modelId> (contoh: /model pull qwen2.5-coder:7b)');
+            return;
+          }
+          this.writeLine(`[Console] Mengunduh model "${pullModelId}" melalui Ollama...`);
+          let lastPrinted = '';
+          try {
+            const res = await pullOllamaModel(pullModelId, {
+              onProgress: (status, completed, total) => {
+                const formatted = formatPullProgress(status, completed, total);
+                if (formatted !== lastPrinted) {
+                  lastPrinted = formatted;
+                  this.writeLine(`  [Ollama] ${formatted}`);
+                }
+              },
+            });
+            this.writeLine(`[Console] Model "${res.modelId}" selesai diunduh (${res.status}).`);
+            this.writeLine(`[Console] Aktifkan sekarang dengan: /model ${res.modelId} ollama`);
+          } catch (err: unknown) {
+            this.writeLine(`[Console] Gagal mengunduh model "${pullModelId}": ${(err as Error).message}`);
+          }
+          return;
+        }
+
+        if (argTokens.length === 0 || firstArg === 'list' || firstArg === 'refresh') {
+          const includeLive = firstArg === 'refresh' || argTokens.length === 0 || firstArg === 'list';
+          let filterProvider: CatalogProviderId | 'all' = 'all';
+          if (argTokens[1]) {
+            const candidate = argTokens[1].toLowerCase();
+            if (!['all', 'ollama', 'nvidia', '9router', 'openrouter', 'gemini'].includes(candidate)) {
+              this.writeLine(
+                `[Console] Provider "${argTokens[1]}" tidak dikenal. Pilihan: all, ollama, nvidia, 9router, openrouter, gemini.`
+              );
+              return;
+            }
+            filterProvider = candidate as CatalogProviderId | 'all';
+          }
+          const models = await discoverModels({
+            provider: filterProvider,
+            includeLiveDiscovery: includeLive,
+          });
           const currentProvider = this.aiProvider?.providerId ?? 'none';
           const currentModel = this.aiProvider?.modelName ?? 'none';
+          const displayLimit = filterProvider === 'all' ? 25 : 50;
 
           this.writeLine(`[Console] Model AI Aktif: ${currentProvider}:${currentModel}`);
           this.writeLine(`[Console] Daftar Model Tersedia (${models.length}):`);
-          for (const m of models.slice(0, 25)) {
+          for (const m of models.slice(0, displayLimit)) {
             const isCurrent =
               this.aiProvider?.providerId === m.provider &&
               this.aiProvider?.modelName === m.id;
@@ -488,18 +561,22 @@ export class BotConsole {
             const keyTag = m.requiresApiKey ? 'Key' : 'No-Key';
             this.writeLine(`  ${marker} [${m.provider}] ${m.id} (${m.tier}, ${keyTag})`);
           }
-          if (models.length > 25) {
-            this.writeLine(`  ... (${models.length - 25} model lainnya; jalankan 'almudaya bot models' untuk daftar penuh)`);
+          if (models.length > displayLimit) {
+            this.writeLine(
+              `  ... (${models.length - displayLimit} model lainnya; jalankan 'almudaya bot models' untuk daftar penuh)`
+            );
           }
-          this.writeLine(`[Console] Gunakan: /model <modelId> [9router|openrouter|gemini]`);
+          this.writeLine(
+            `[Console] Gunakan: /model <modelId> [ollama|nvidia|9router|openrouter|gemini] | /model list [provider] | /model recommend | /model pull <modelId>`
+          );
           return;
         }
 
         const targetModelId = argTokens[0]!;
         const explicitProvider = argTokens[1]?.toLowerCase() as CatalogProviderId | undefined;
-        if (explicitProvider && !['9router', 'openrouter', 'gemini'].includes(explicitProvider)) {
+        if (explicitProvider && !['ollama', '9router', 'openrouter', 'nvidia', 'gemini'].includes(explicitProvider)) {
           this.writeLine(
-            `[Console] Provider "${argTokens[1]}" tidak dikenal. Pilihan: 9router, openrouter, gemini.`
+            `[Console] Provider "${argTokens[1]}" tidak dikenal. Pilihan: ollama, nvidia, 9router, openrouter, gemini.`
           );
           return;
         }
@@ -530,7 +607,7 @@ export class BotConsole {
         this.writeLine(`  /roots                    Tampilkan daftar project roots terdaftar`);
         this.writeLine(`  /log [limit] [root]       Tampilkan linimasa memori kerja sesi`);
         this.writeLine(`  /mode [review|turbo]      Tampilkan atau ubah mode eksekusi keamanan`);
-        this.writeLine(`  /model [id] [provider]    Lihat daftar model AI (9router/OpenRouter/Gemini) atau ganti model bot`);
+        this.writeLine(`  /model [id] [provider]    Lihat daftar model (Ollama/NVIDIA/9router/OpenRouter/Gemini), ganti model, /model recommend, atau /model pull <id>`);
         this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
         this.writeLine(`  /status                   Tampilkan ringkasan status bot lokal`);
         this.writeLine(`  /clear                    Bersihkan tampilan layar terminal`);

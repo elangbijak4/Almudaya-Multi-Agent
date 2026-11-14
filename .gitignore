@@ -10,6 +10,7 @@ coverage/
 
 # Runtime and local workspace data
 .almudaya/
+.almudaya_workspace/
 sessions/
 workspace/
 

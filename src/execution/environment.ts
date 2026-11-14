@@ -141,6 +141,8 @@ export function redactSecrets(text: string, customSecrets: string[] = []): strin
     .replace(/sk-ant-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_API_KEY]')
     // OpenAI API keys
     .replace(/sk-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_API_KEY]')
+    // NVIDIA NIM API keys
+    .replace(/nvapi-[a-zA-Z0-9_\-]{20,}/g, '[REDACTED_API_KEY]')
     // GitHub Personal Access Tokens and OAuth
     .replace(/ghp_[a-zA-Z0-9]{30,}/g, '[REDACTED_TOKEN]')
     .replace(/github_pat_[a-zA-Z0-9_]{30,}/g, '[REDACTED_TOKEN]')

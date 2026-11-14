@@ -60,7 +60,26 @@ export class DurableOutboxQueue {
   public async flushToDisk(): Promise<void> {
     if (!this.filePath) return;
     await ensureDir(path.dirname(this.filePath));
-    await atomicWriteJson(this.filePath, Array.from(this.entries.values()));
+    // Compact completed entries: drop heavy payload and keep only the latest 200 completed records (APP-BUG-06)
+    const active: OutboxEntry[] = [];
+    const completed: OutboxEntry[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.status === 'completed') {
+        completed.push({ ...entry, payload: null });
+      } else {
+        active.push(entry);
+      }
+    }
+    const trimmedCompleted = completed.slice(-200);
+    if (completed.length > 200) {
+      const keepSet = new Set(trimmedCompleted.map((e) => e.idempotencyKey));
+      for (const entry of completed) {
+        if (!keepSet.has(entry.idempotencyKey)) {
+          this.entries.delete(entry.idempotencyKey);
+        }
+      }
+    }
+    await atomicWriteJson(this.filePath, [...active, ...trimmedCompleted]);
   }
 
   public enqueue(idempotencyKey: string, operation: OutboxOperationKind, payload: unknown): void {
@@ -91,6 +110,7 @@ export class DurableOutboxQueue {
     const entry = this.entries.get(idempotencyKey);
     if (entry) {
       entry.status = 'completed';
+      entry.payload = null;
       entry.attempts += 1;
       entry.lastError = undefined;
       entry.updatedAt = new Date().toISOString();

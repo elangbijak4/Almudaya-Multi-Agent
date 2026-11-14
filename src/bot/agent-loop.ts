@@ -16,7 +16,11 @@ import type {
 } from '../ai/provider.js';
 import { RateLimitPauseError } from '../ai/provider.js';
 import { sleepWithSignal } from '../ai/gemini.js';
-import { buildDynamicSystemPrompt, formatUntrustedDirectMessage } from '../ai/prompts.js';
+import {
+  buildDynamicSystemPrompt,
+  formatOperatorInstruction,
+  formatUntrustedDirectMessage,
+} from '../ai/prompts.js';
 import { FILE_TOOLS, executeFileTool } from '../tools/file-tools.js';
 import { RUN_COMMAND_TOOL, executeRunCommand, type RunCommandArgs } from '../tools/command-tools.js';
 import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js';
@@ -197,21 +201,29 @@ export class AutonomousAgentLoop {
       // Retain raw ID if sender bot is not in active registry
     }
 
-    // Initialize conversation messages with untrusted boundary delimiter (SEC-02, §18, §5.20)
+    const isOperator = message.sender_bot_id === 'OPERATOR';
+    const isIncomingAutoReply = Boolean(
+      message.metadata && (message.metadata as Record<string, unknown>)['isAutoReply']
+    );
+
+    // Initialize conversation messages cleanly for OPERATOR or with untrusted boundary delimiter for peers (SEC-02, APP-BUG-09)
     const conversation: AIMessage[] = [
       {
         role: 'user',
-        content: formatUntrustedDirectMessage(
-          senderDisplayName,
-          message.sender_bot_id,
-          message.timestamp,
-          message.content
-        ),
+        content: isOperator
+          ? formatOperatorInstruction(message.timestamp, message.content)
+          : formatUntrustedDirectMessage(
+              senderDisplayName,
+              message.sender_bot_id,
+              message.timestamp,
+              message.content
+            ),
       },
     ];
 
     let finalResponseText = '';
     let iteration = 0;
+    let explicitlyMessagedSender = false;
 
     // 4. Bounded ReAct Iteration Loop (Max 10 steps per ADR-204, AUD-20, REQ-12)
     const effectiveSignal = signal ?? this.abortController.signal;
@@ -319,6 +331,16 @@ export class AutonomousAgentLoop {
                 toolCall.arguments
               );
             } else if (toolCall.name === 'send_message') {
+              const targetRecipient = String(
+                toolCall.arguments['recipient'] ?? toolCall.arguments['to'] ?? ''
+              ).trim();
+              if (
+                targetRecipient &&
+                (targetRecipient === message.sender_bot_id ||
+                  targetRecipient.toLowerCase() === senderDisplayName.toLowerCase())
+              ) {
+                explicitlyMessagedSender = true;
+              }
               result = await executeSendMessage(
                 this.messagingService,
                 this.sessionId,
@@ -480,15 +502,19 @@ export class AutonomousAgentLoop {
       finalResponseText = `[Peringatan: Mencapai batas maksimal ${this.maxIterations} iterasi tool.]`;
     }
 
-    // 5. Send automated reply back to sender bot (FR-216)
+    // 5. Send automated reply back to sender bot (FR-216, bounded by APP-BUG-04 anti-ping-pong guard)
     if (message.sender_bot_id && message.sender_bot_id !== this.botId) {
       try {
-        if (message.sender_bot_id !== 'OPERATOR') {
+        if (
+          message.sender_bot_id !== 'OPERATOR' &&
+          !explicitlyMessagedSender &&
+          !isIncomingAutoReply
+        ) {
           await this.messagingService.sendDirectMessage(this.sessionId, {
             senderBotId: this.botId,
             recipient: message.sender_bot_id,
             content: finalResponseText || '(Tugas telah diselesaikan.)',
-            metadata: { correlationId: message.message_id }
+            metadata: { correlationId: message.message_id, isAutoReply: true }
           });
         }
 

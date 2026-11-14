@@ -1,14 +1,30 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.4)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 432 Passed](https://img.shields.io/badge/Tests-432%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
-[![AI Engines: Gemini | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
+[![Tests: 437 Passed](https://img.shields.io/badge/Tests-437%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
+[![AI Engines: Gemini | NVIDIA NIM | Ollama | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20NVIDIA%20NIM%20%7C%20Ollama%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, OpenRouter, 9router)**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.4
+
+1. **Direct NVIDIA NIM Support & Live Catalog (`NVIDIA_API_KEY`):**
+   - Connect directly to NVIDIA NIM (`https://integrate.api.nvidia.com/v1`) using `--provider nvidia` without an intermediate router, with live `/v1/models` discovery and verified default model `nvidia/nemotron-3-super-120b-a12b`.
+2. **Ollama Local & Cloud Integration + Hardware Advisor:**
+   - Added `--provider ollama` support (default `http://localhost:11434/v1`) for both local pulled models and Ollama cloud models, plus live model discovery via `/v1/models` and `/api/tags`.
+   - Added **Hardware Spec Inspector & Model Advisor** (`almudaya bot advisor`, `almudaya bot models --recommend`, `/advisor`, `almudaya bot pull <modelId>`, `/pull <modelId>`) that checks local CPU/RAM/GPU/VRAM and recommends compatible local Ollama and online free models.
+3. **Reliability, Collaboration & UX Fixes (`APP-BUG-01` .. `APP-BUG-09`):**
+   - **Anti-Ping-Pong Peer Auto-Reply Guard (`APP-BUG-04`):** Suppresses duplicate/recursive auto-replies via `isAutoReply` metadata and `explicitlyMessagedSender` tracking in `AutonomousAgentLoop`.
+   - **PKU Outbox & Ledger Auto-Compaction (`APP-BUG-06`):** Clears payloads on completed `DurableOutboxQueue` items and caps completed outbox history (`200`) and idempotency ledger (`1,500` most recent beyond `2,000` keys).
+   - **Trusted `OPERATOR` Console Prompting (`APP-BUG-09`):** Formats direct local console `OPERATOR` commands via `formatOperatorInstruction` without peer untrusted boundary tags while keeping peer-to-peer messages sandboxed.
+   - **Extended AI Timeout & Billing Clarity (`APP-BUG-08`):** Increased default request timeout to `180000ms` (configurable via `ALMUDAYA_AI_TIMEOUT_MS` and `--timeout <ms>`), with clear non-retryable HTTP `402`/`401`/`403` and timeout diagnostics.
+   - **CLI & Console Polishing (`APP-BUG-01`, `-02`, `-03`, `-07`):** Added `-w/--workspace` to `bot models`/`bot advisor`, added `'qa'` to `SkillEntryPointSchema`, reported dynamic active `providerId/modelName` after `/model` switch, added ACG `DENY` built-in tool hints, and added 25ms multi-line paste coalescing in `BotConsole`.
 
 ---
 

@@ -60,6 +60,19 @@ export function formatUntrustedDirectMessage(
 }
 
 /**
+ * Formats a direct instruction from the local console OPERATOR without peer untrusted delimiters (APP-BUG-09).
+ */
+export function formatOperatorInstruction(
+  timestamp: string,
+  content: string
+): string {
+  return [
+    `[Instruksi Langsung dari OPERATOR Konsol Lokal pada ${timestamp}]:`,
+    content,
+  ].join('\n');
+}
+
+/**
  * Builds a dynamic, comprehensive system prompt grounded in the current Session Blackboard state.
  */
 export function buildDynamicSystemPrompt(context: PromptContext): string {

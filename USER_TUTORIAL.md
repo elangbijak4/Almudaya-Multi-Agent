@@ -2,7 +2,7 @@
 
 Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**, termasuk:
 1. Orkestrasi multi-proses lintas-terminal dengan **Interactive Bot Console REPL**,
-2. Pemilihan model AI fleksibel melalui **9router**, **OpenRouter**, atau **Google Gemini** (`almudaya bot models` & `/model`),
+2. Pemilihan model AI fleksibel secara langsung melalui **Ollama (Lokal)**, **NVIDIA NIM**, **Google Gemini**, **OpenRouter**, atau **9router** — lengkap dengan **Hardware Spec Advisor** (`almudaya bot advisor`) dan pengunduh model Ollama (`almudaya bot pull` & `/model pull`),
 3. Tata kelola keamanan **Agent Capability Governance (ACG)**,
 4. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
 5. Sinkronisasi memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory Architecture (Spec v0.2)** dengan kebijakan **PKU-First Reading** (`query_pku_memory`).
@@ -146,16 +146,28 @@ Architect> /model
 Architect> /skill list
 Architect> /skill styles futuristic
 ```
-> **Tips Multi-Provider (`/model` & 9router):** Anda juga bisa langsung menjalankan bot dengan **9router** lokal atau **OpenRouter** tanpa bergantung pada satu API key:
+> **Tips Multi-Provider Langsung (`--provider ollama`, `nvidia`, `9router`, & `openrouter`) + Hardware Advisor:** Anda dapat memeriksa kecocokan spek komputer Anda, mengunduh model lokal via Ollama, atau langsung memakai NVIDIA NIM / 9router / OpenRouter:
 > ```powershell
-> # Lihat daftar model aktif di 9router & preset OpenRouter
-> almudaya bot models --provider 9router
+> # 1. Periksa spek laptop/PC (CPU, RAM, GPU/VRAM) & dapatkan rekomendasi model lokal + cloud gratis
+> almudaya bot advisor
+> # (atau: almudaya bot models --recommend)
 >
-> # Jalankan bot langsung memakai 9router (set NINEROUTER_API_KEY jika router memakai key)
+> # 2. Unduh & jalankan model lokal Ollama yang cocok dengan spek Anda (tanpa API key)
+> almudaya bot pull qwen2.5-coder:7b
+> almudaya bot models --provider ollama
+> almudaya bot run --session S002 --bot BOT001 --provider ollama --model qwen2.5-coder:7b --mode review
+>
+> # 3. Menggunakan NVIDIA NIM secara langsung
+> $env:NVIDIA_API_KEY="nvapi-xxxxxxxxxxxxxxxxxxxxxxxx"
+> almudaya bot models --provider nvidia
+> almudaya bot run --session S002 --bot BOT001 --provider nvidia --model meta/llama-3.3-70b-instruct --mode review
+>
+> # 4. Atau menggunakan 9router lokal (set NINEROUTER_API_KEY jika router memakai key)
+> almudaya bot models --provider 9router
 > $env:NINEROUTER_API_KEY="<NINEROUTER_API_KEY_JIKA_ADA>"
 > almudaya bot run --session S002 --bot BOT001 --provider 9router --model mycombo --mode review
 > ```
-> Di dalam REPL kapan saja, ketik `/model mycombo 9router` atau `/model deepseek/deepseek-chat-v3-0324:free openrouter` untuk mengganti model tanpa me-restart bot.
+> Di dalam REPL kapan saja, ketik `/model recommend` untuk analisis hardware, `/model pull qwen2.5-coder:7b` untuk mengunduh model Ollama, `/model list ollama` atau `/model list nvidia` untuk melihat daftar model, lalu `/model qwen2.5-coder:7b ollama`, `/model deepseek-ai/deepseek-r1 nvidia`, `/model mycombo 9router`, atau `/model deepseek/deepseek-chat-v3-0324:free openrouter` untuk mengganti model tanpa me-restart bot.
 
 ---
 

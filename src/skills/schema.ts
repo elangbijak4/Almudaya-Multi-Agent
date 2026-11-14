@@ -5,6 +5,7 @@ export const SkillEntryPointSchema = z.enum([
   'compose',
   'implement',
   'audit',
+  'qa',
   'full-cycle',
   'change',
 ]);

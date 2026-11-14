@@ -28,6 +28,9 @@ export function getDefaultEnvVarName(providerId: string): string {
     case 'anthropic':
     case 'claude':
       return 'ANTHROPIC_API_KEY';
+    case 'nvidia':
+    case 'nim':
+      return 'NVIDIA_API_KEY';
     default:
       return `${providerId.toUpperCase()}_API_KEY`;
   }

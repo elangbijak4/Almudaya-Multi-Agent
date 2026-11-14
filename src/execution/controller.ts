@@ -160,7 +160,7 @@ export class ExecutionController {
         command: rawCmd,
         exitCode,
         stdout: '',
-        stderr: `Access denied by ACG policy: ${evalResult.reason}`,
+        stderr: `Access denied by ACG policy: ${evalResult.reason}. Tip: Use built-in tools (write_file, edit_file, read_file, list_dir) for file/directory operations instead of shell redirection or blocked shell commands.`,
         durationMs: 0,
         timedOut: false,
         deniedByPolicy: true,

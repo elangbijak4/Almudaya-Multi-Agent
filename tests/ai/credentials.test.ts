@@ -25,6 +25,8 @@ describe('AI Credentials Resolution', () => {
     expect(getDefaultEnvVarName('google')).toBe('GEMINI_API_KEY');
     expect(getDefaultEnvVarName('openai')).toBe('OPENAI_API_KEY');
     expect(getDefaultEnvVarName('anthropic')).toBe('ANTHROPIC_API_KEY');
+    expect(getDefaultEnvVarName('nvidia')).toBe('NVIDIA_API_KEY');
+    expect(getDefaultEnvVarName('nim')).toBe('NVIDIA_API_KEY');
     expect(getDefaultEnvVarName('ollama')).toBe('OLLAMA_API_KEY');
   });
 

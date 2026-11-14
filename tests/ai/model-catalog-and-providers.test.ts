@@ -7,9 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   OpenAICompatibleProvider,
   RateLimitPauseError,
+  classifyHardwareTier,
   createAIProvider,
+  detectHardwareProfile,
   discoverModels,
   inferProviderForModel,
+  pullOllamaModel,
+  recommendModelsForHardware,
 } from '../../src/ai/index.js';
 import { MockAIProvider } from '../../src/ai/mock-provider.js';
 import { FilesystemSessionStorage } from '../../src/blackboard/filesystem.js';
@@ -156,9 +160,261 @@ describe('OpenRouter, 9router, ModelCatalog & REPL /model Switching', () => {
 
     expect(inferProviderForModel('deepseek/deepseek-chat-v3-0324:free')).toBe('openrouter');
     expect(inferProviderForModel('gemini-2.5-pro')).toBe('gemini');
+    expect(inferProviderForModel('meta/llama-3.3-70b-instruct')).toBe('nvidia');
+    expect(inferProviderForModel('nvidia/llama-3.1-nemotron-ultra-253b-v1')).toBe('nvidia');
     const created = createAIProvider({ provider: '9router', modelName: '9router/free-coder', baseUrl });
     expect(created.providerId).toBe('9router');
     expect(created.modelName).toBe('9router/free-coder');
+  });
+
+  it('OpenAICompatibleProvider supports direct NVIDIA NIM chat/completions with Bearer auth and errors when key is missing', async () => {
+    const prevNvidiaKey = process.env['NVIDIA_API_KEY'];
+    delete process.env['NVIDIA_API_KEY'];
+    try {
+      const noKeyProvider = new OpenAICompatibleProvider({
+        providerId: 'nvidia',
+        modelName: 'meta/llama-3.3-70b-instruct',
+      });
+      await expect(
+        noKeyProvider.generateResponse({
+          messages: [{ role: 'user', content: 'Hello' }],
+        })
+      ).rejects.toThrow(/NVIDIA API key is missing/);
+    } finally {
+      if (prevNvidiaKey !== undefined) {
+        process.env['NVIDIA_API_KEY'] = prevNvidiaKey;
+      }
+    }
+
+    const baseUrl = await startMockRouter((req, body, res) => {
+      expect(req.url).toBe('/v1/chat/completions');
+      expect(req.headers['authorization']).toBe('Bearer nvapi-test-direct-key-12345');
+      const parsed = JSON.parse(body) as { model: string };
+      expect(parsed.model).toBe('meta/llama-3.3-70b-instruct');
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content: 'Direct NVIDIA reply' } }],
+          usage: { prompt_tokens: 4, completion_tokens: 3, total_tokens: 7 },
+        })
+      );
+    });
+
+    const provider = createAIProvider({
+      provider: 'nvidia',
+      modelName: 'meta/llama-3.3-70b-instruct',
+      apiKey: 'nvapi-test-direct-key-12345',
+      baseUrl,
+    });
+
+    try {
+      const response = await provider.generateResponse({
+        messages: [{ role: 'user', content: 'Hello NVIDIA' }],
+      });
+      expect(response.text).toBe('Direct NVIDIA reply');
+      expect(response.usage?.totalTokens).toBe(7);
+    } finally {
+      provider.dispose?.();
+    }
+  });
+
+  it('discovers live NVIDIA NIM models with Authorization header and merges built-in catalog', async () => {
+    const baseUrl = await startMockRouter((req, _body, res) => {
+      if (req.url === '/v1/models') {
+        expect(req.headers['authorization']).toBe('Bearer nvapi-live-list-key-99999');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            data: [
+              { id: 'nvidia/nemotron-4-340b-instruct' },
+              { id: 'meta/llama-3.3-70b-instruct' },
+            ],
+          })
+        );
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+
+    const models = await discoverModels({
+      provider: 'nvidia',
+      nvidiaBaseUrl: baseUrl,
+      nvidiaApiKey: 'nvapi-live-list-key-99999',
+      timeoutMs: 1000,
+    });
+
+    expect(models.every((m) => m.provider === 'nvidia')).toBe(true);
+    expect(models.some((m) => m.id === 'nvidia/nemotron-4-340b-instruct')).toBe(true);
+    expect(models.filter((m) => m.id === 'meta/llama-3.3-70b-instruct')).toHaveLength(1);
+    expect(models.some((m) => m.id === 'deepseek-ai/deepseek-r1')).toBe(true);
+  });
+
+  it('supports Ollama local provider chat/completions, /api/tags & /v1/models discovery, and model inference', async () => {
+    const baseUrl = await startMockRouter((req, body, res) => {
+      if (req.url === '/v1/models') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            data: [
+              { id: 'qwen2.5-coder:7b' },
+              { id: 'llama3.2:3b' },
+            ],
+          })
+        );
+        return;
+      }
+      if (req.url === '/v1/chat/completions') {
+        const parsed = JSON.parse(body) as { model: string };
+        expect(parsed.model).toBe('qwen2.5-coder:7b');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            choices: [{ message: { content: 'Local Ollama response' } }],
+            usage: { prompt_tokens: 6, completion_tokens: 4, total_tokens: 10 },
+          })
+        );
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+
+    const models = await discoverModels({
+      provider: 'ollama',
+      ollamaBaseUrl: baseUrl,
+      timeoutMs: 1000,
+    });
+    expect(models.every((m) => m.provider === 'ollama' && !m.requiresApiKey)).toBe(true);
+    expect(models.some((m) => m.id === 'qwen2.5-coder:7b')).toBe(true);
+    expect(models.some((m) => m.id === 'llama3.2:3b')).toBe(true);
+    expect(inferProviderForModel('qwen2.5-coder:7b')).toBe('ollama');
+    expect(inferProviderForModel('ollama/llama3.2')).toBe('ollama');
+
+    const provider = createAIProvider({
+      provider: 'ollama',
+      modelName: 'qwen2.5-coder:7b',
+      baseUrl,
+    });
+    const reply = await provider.generateResponse({
+      messages: [{ role: 'user', content: 'Hi local Ollama' }],
+    });
+    expect(reply.text).toBe('Local Ollama response');
+    expect(reply.usage?.totalTokens).toBe(10);
+  });
+
+  it('classifies hardware tiers and recommends matching local Ollama & free cloud models across low/medium/high/workstation specs', async () => {
+    expect(classifyHardwareTier(4, 0)).toBe('low');
+    expect(classifyHardwareTier(8, 0)).toBe('medium');
+    expect(classifyHardwareTier(16, 8)).toBe('high');
+    expect(classifyHardwareTier(64, 24)).toBe('workstation');
+
+    const baseUrl = await startMockRouter((req, _body, res) => {
+      if (req.url === '/api/tags') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ models: [{ name: 'qwen2.5-coder:7b' }] }));
+        return;
+      }
+      if (req.url === '/v1/models') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ data: [{ id: 'qwen2.5-coder:7b' }] }));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+
+    const lowProfile = await detectHardwareProfile({
+      ollamaBaseUrl: 'http://127.0.0.1:1/unreachable',
+      skipSystemProbe: true,
+      overrideRamGB: 4,
+      overrideVramGB: 0,
+      timeoutMs: 300,
+    });
+    expect(lowProfile.tier).toBe('low');
+    const lowReport = await recommendModelsForHardware(lowProfile, {
+      includeOnlineFree: false,
+    });
+    expect(lowReport.bestLocalModel?.modelId).toBe('qwen2.5-coder:1.5b');
+    expect(
+      lowReport.recommendedLocalModels.find((m) => m.modelId === 'qwen2.5-coder:32b')?.fitStatus
+    ).toBe('too_heavy');
+    expect(lowReport.onlineFreeModels.some((m) => m.provider === 'openrouter')).toBe(true);
+    expect(lowReport.onlineFreeModels.some((m) => m.provider === 'nvidia')).toBe(true);
+
+    const medProfile = await detectHardwareProfile({
+      ollamaBaseUrl: baseUrl,
+      skipSystemProbe: true,
+      overrideRamGB: 16,
+      overrideVramGB: 6,
+      timeoutMs: 500,
+    });
+    expect(medProfile.ollamaRunning).toBe(true);
+    expect(medProfile.installedOllamaModels).toContain('qwen2.5-coder:7b');
+    const medReport = await recommendModelsForHardware(medProfile, { includeOnlineFree: false });
+    const sevenB = medReport.recommendedLocalModels.find((m) => m.modelId === 'qwen2.5-coder:7b');
+    expect(sevenB?.fitStatus).toBe('optimal');
+    expect(sevenB?.installed).toBe(true);
+
+    const highProfile = await detectHardwareProfile({
+      ollamaBaseUrl: baseUrl,
+      skipSystemProbe: true,
+      overrideRamGB: 16,
+      overrideVramGB: 10,
+      timeoutMs: 500,
+    });
+    expect(highProfile.tier).toBe('high');
+    const highReport = await recommendModelsForHardware(highProfile, { includeOnlineFree: false });
+    expect(highReport.bestLocalModel?.modelId).toBe('qwen2.5-coder:14b');
+
+    const wsProfile = await detectHardwareProfile({
+      ollamaBaseUrl: baseUrl,
+      skipSystemProbe: true,
+      overrideRamGB: 64,
+      overrideVramGB: 24,
+      timeoutMs: 500,
+    });
+    expect(wsProfile.tier).toBe('workstation');
+    const wsReport = await recommendModelsForHardware(wsProfile, { includeOnlineFree: false });
+    expect(wsReport.bestLocalModel?.modelId).toBe('qwen2.5-coder:32b');
+  });
+
+  it('pulls an Ollama model via streaming /api/pull NDJSON chunks and reports progress', async () => {
+    const baseUrl = await startMockRouter((req, body, res) => {
+      if (req.url === '/api/pull') {
+        const parsed = JSON.parse(body) as { name: string; stream: boolean };
+        expect(parsed.name).toBe('qwen2.5-coder:7b');
+        expect(parsed.stream).toBe(true);
+
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        res.write(JSON.stringify({ status: 'pulling manifest' }) + '\n');
+        res.write(
+          JSON.stringify({ status: 'downloading', completed: 512 * 1024, total: 1024 * 1024 }) + '\n'
+        );
+        res.end(JSON.stringify({ status: 'success' }) + '\n');
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+
+    const progressEvents: Array<{ status: string; completed?: number; total?: number }> = [];
+    const result = await pullOllamaModel('qwen2.5-coder:7b', {
+      ollamaBaseUrl: baseUrl,
+      onProgress: (status, completed, total) => {
+        progressEvents.push({ status, completed, total });
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.modelId).toBe('qwen2.5-coder:7b');
+    expect(result.status).toBe('success');
+    expect(progressEvents.map((e) => e.status)).toEqual([
+      'pulling manifest',
+      'downloading',
+      'success',
+    ]);
   });
 
   describe('BotConsole /model slash command', () => {
@@ -210,27 +466,85 @@ describe('OpenRouter, 9router, ModelCatalog & REPL /model Switching', () => {
       });
 
       const waitForOutput = async (needle: string) => {
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 100; i++) {
           if (capturedOutput.includes(needle)) return;
           await new Promise((r) => setTimeout(r, 50));
         }
       };
 
-      await consoleInst.start();
-      input.write('/model\n');
-      await waitForOutput('Gunakan: /model <modelId>');
-      expect(capturedOutput).toContain('Daftar Model Tersedia');
-      expect(capturedOutput).toMatch(/deepseek\/deepseek-chat-v3-0324:free|\[9router\]/);
+      const prevOllamaUrl = process.env['OLLAMA_BASE_URL'];
+      const prevOpenRouterUrl = process.env['OPENROUTER_BASE_URL'];
+      const ollamaMockUrl = await startMockRouter((req, _body, res) => {
+        if (req.url === '/api/tags') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ models: [{ name: 'qwen2.5-coder:7b' }] }));
+          return;
+        }
+        if (req.url === '/v1/models') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ data: [{ id: 'qwen2.5-coder:7b' }] }));
+          return;
+        }
+        if (req.url === '/api/pull') {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+          res.write(JSON.stringify({ status: 'pulling manifest' }) + '\n');
+          res.end(JSON.stringify({ status: 'success' }) + '\n');
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+      process.env['OLLAMA_BASE_URL'] = ollamaMockUrl;
+      process.env['OPENROUTER_BASE_URL'] = 'http://127.0.0.1:1/unreachable';
 
-      input.write('/model qwen/qwen3-coder:free openrouter\n');
-      await waitForOutput('openrouter:qwen/qwen3-coder:free');
-      expect(capturedOutput).toContain('openrouter:qwen/qwen3-coder:free');
-      expect(agentLoop.getProvider().providerId).toBe('openrouter');
-      expect(agentLoop.getProvider().modelName).toBe('qwen/qwen3-coder:free');
+      try {
+        await consoleInst.start();
+        input.write('/model\n');
+        await waitForOutput('Gunakan: /model <modelId>');
+        expect(capturedOutput).toContain('Daftar Model Tersedia');
+        expect(capturedOutput).toMatch(/deepseek\/deepseek-chat-v3-0324:free|\[9router\]|\[ollama\]/);
 
-      input.end();
-      await consoleInst.stop();
-      await runtime.stop();
+        input.write('/model qwen/qwen3-coder:free openrouter\n');
+        await waitForOutput('openrouter:qwen/qwen3-coder:free');
+        expect(capturedOutput).toContain('openrouter:qwen/qwen3-coder:free');
+        expect(agentLoop.getProvider().providerId).toBe('openrouter');
+        expect(agentLoop.getProvider().modelName).toBe('qwen/qwen3-coder:free');
+
+        input.write('/model meta/llama-3.3-70b-instruct nvidia\n');
+        await waitForOutput('nvidia:meta/llama-3.3-70b-instruct');
+        expect(capturedOutput).toContain('nvidia:meta/llama-3.3-70b-instruct');
+        expect(agentLoop.getProvider().providerId).toBe('nvidia');
+        expect(agentLoop.getProvider().modelName).toBe('meta/llama-3.3-70b-instruct');
+
+        input.write('/model recommend\n');
+        await waitForOutput('=== Hardware Spec & AI Model Advisor ===');
+        expect(capturedOutput).toContain('=== Hardware Spec & AI Model Advisor ===');
+        expect(capturedOutput).toContain('Rekomendasi Model Lokal (Ollama):');
+
+        input.write('/model pull qwen2.5-coder:7b\n');
+        await waitForOutput('Model "qwen2.5-coder:7b" selesai diunduh');
+        expect(capturedOutput).toContain('Model "qwen2.5-coder:7b" selesai diunduh');
+
+        input.write('/model qwen2.5-coder:7b ollama\n');
+        await waitForOutput('ollama:qwen2.5-coder:7b');
+        expect(capturedOutput).toContain('ollama:qwen2.5-coder:7b');
+        expect(agentLoop.getProvider().providerId).toBe('ollama');
+        expect(agentLoop.getProvider().modelName).toBe('qwen2.5-coder:7b');
+      } finally {
+        if (prevOllamaUrl === undefined) {
+          delete process.env['OLLAMA_BASE_URL'];
+        } else {
+          process.env['OLLAMA_BASE_URL'] = prevOllamaUrl;
+        }
+        if (prevOpenRouterUrl === undefined) {
+          delete process.env['OPENROUTER_BASE_URL'];
+        } else {
+          process.env['OPENROUTER_BASE_URL'] = prevOpenRouterUrl;
+        }
+        input.end();
+        await consoleInst.stop();
+        await runtime.stop();
+      }
     });
   });
 

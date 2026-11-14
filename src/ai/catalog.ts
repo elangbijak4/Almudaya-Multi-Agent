@@ -5,7 +5,7 @@ import {
 } from './openai-compatible.js';
 import type { IAIModelProvider } from './provider.js';
 
-export type CatalogProviderId = '9router' | 'openrouter' | 'gemini';
+export type CatalogProviderId = '9router' | 'openrouter' | 'nvidia' | 'ollama' | 'gemini';
 
 export interface ModelCatalogEntry {
   id: string;
@@ -21,6 +21,9 @@ export interface DiscoverModelsOptions {
   provider?: CatalogProviderId | 'all';
   nineRouterBaseUrl?: string;
   openRouterBaseUrl?: string;
+  nvidiaBaseUrl?: string;
+  nvidiaApiKey?: string;
+  ollamaBaseUrl?: string;
   includeLiveDiscovery?: boolean;
   timeoutMs?: number;
 }
@@ -100,17 +103,74 @@ export const BUILTIN_MODEL_CATALOG: ModelCatalogEntry[] = [
     requiresApiKey: true,
     description: 'Lightweight Gemini Flash model',
   },
+  // NVIDIA NIM models
+  {
+    id: 'nvidia/nemotron-3-super-120b-a12b',
+    name: 'Nemotron 3 Super 120B (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM verified primary coding, reasoning & agentic model',
+  },
+  {
+    id: 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
+    name: 'Llama 3.3 Nemotron Super 49B v1.5 (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM fast general & coding instruction model',
+  },
+  {
+    id: 'qwen/qwen2.5-coder-32b-instruct',
+    name: 'Qwen 2.5 Coder 32B Instruct (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM code generation & analysis model',
+  },
+  {
+    id: 'deepseek-ai/deepseek-r1',
+    name: 'DeepSeek R1 (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM deep reasoning model',
+  },
+  {
+    id: 'mistralai/mistral-nemotron',
+    name: 'Mistral Nemotron (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM instruction & tool-calling model',
+  },
+  {
+    id: 'meta/llama-3.3-70b-instruct',
+    name: 'Llama 3.3 70B Instruct (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM general instruction model (legacy fallback)',
+  },
 ];
 
-async function fetchOpenAIModelsEndpoint(
-  baseUrl: string,
-  timeoutMs: number
-): Promise<Array<{ id: string; name?: string; pricing?: { prompt?: string; completion?: string } }>> {
+type DiscoveredModelRecord = {
+  id: string;
+  name?: string;
+  pricing?: { prompt?: string; completion?: string };
+};
+
+async function fetchModelsFromEndpoint(
+  endpointUrl: string,
+  timeoutMs: number,
+  apiKey?: string
+): Promise<DiscoveredModelRecord[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
+    const res = await fetch(endpointUrl, {
       method: 'GET',
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal: controller.signal,
     });
     if (!res.ok) return [];
@@ -120,12 +180,26 @@ async function fetchOpenAIModelsEndpoint(
         name?: string;
         pricing?: { prompt?: string; completion?: string };
       }>;
+      models?: Array<{
+        name?: string;
+        model?: string;
+      }>;
     };
-    if (!Array.isArray(payload.data)) return [];
-    return payload.data
-      .filter((m): m is { id: string; name?: string; pricing?: { prompt?: string; completion?: string } } =>
-        typeof m.id === 'string' && m.id.trim().length > 0
+    if (Array.isArray(payload.data)) {
+      return payload.data.filter(
+        (m): m is DiscoveredModelRecord => typeof m.id === 'string' && m.id.trim().length > 0
       );
+    }
+    if (Array.isArray(payload.models)) {
+      return payload.models.flatMap((m): DiscoveredModelRecord[] => {
+        const id = m.name ?? m.model;
+        if (typeof id === 'string' && id.trim().length > 0) {
+          return [{ id: id.trim(), name: id.trim() }];
+        }
+        return [];
+      });
+    }
+    return [];
   } catch {
     return [];
   } finally {
@@ -133,9 +207,18 @@ async function fetchOpenAIModelsEndpoint(
   }
 }
 
+async function fetchOpenAIModelsEndpoint(
+  baseUrl: string,
+  timeoutMs: number,
+  apiKey?: string
+): Promise<DiscoveredModelRecord[]> {
+  return fetchModelsFromEndpoint(`${baseUrl.replace(/\/+$/, '')}/models`, timeoutMs, apiKey);
+}
+
 /**
  * Discovers available AI models across 9router (live local/remote router),
- * OpenRouter (`:free` models), and Gemini. Never throws if remote/local endpoints are offline.
+ * OpenRouter (`:free` models), NVIDIA NIM, Ollama (local models), and Gemini.
+ * Never throws if remote/local endpoints are offline.
  */
 export async function discoverModels(
   options: DiscoverModelsOptions = {}
@@ -199,7 +282,64 @@ export async function discoverModels(
     }
   }
 
-  // 3. Gemini models
+  // 3. NVIDIA NIM models (live discovery when filtered to nvidia or NVIDIA_API_KEY / NVIDIA_BASE_URL configured)
+  if (filter === 'all' || filter === 'nvidia') {
+    const nvidiaKey = options.nvidiaApiKey ?? process.env['NVIDIA_API_KEY'];
+    const shouldQueryNvidiaLive =
+      includeLive &&
+      (filter === 'nvidia' ||
+        Boolean(nvidiaKey) ||
+        Boolean(options.nvidiaBaseUrl) ||
+        Boolean(process.env['NVIDIA_BASE_URL']));
+    if (shouldQueryNvidiaLive) {
+      const nvidiaUrl = resolveProviderBaseUrl('nvidia', options.nvidiaBaseUrl);
+      const liveNvidia = await fetchOpenAIModelsEndpoint(
+        nvidiaUrl,
+        options.timeoutMs ?? 3500,
+        nvidiaKey
+      );
+      for (const m of liveNvidia) {
+        pushUnique({
+          id: m.id,
+          name: m.name ?? m.id,
+          provider: 'nvidia',
+          tier: 'byok',
+          requiresApiKey: true,
+          baseUrl: nvidiaUrl,
+          description: 'NVIDIA NIM live model',
+        });
+      }
+    }
+
+    for (const item of BUILTIN_MODEL_CATALOG) {
+      if (item.provider === 'nvidia') {
+        pushUnique(item);
+      }
+    }
+  }
+
+  // 4. Ollama local models (no API key required)
+  if ((filter === 'all' || filter === 'ollama') && includeLive) {
+    const ollamaUrl = resolveProviderBaseUrl('ollama', options.ollamaBaseUrl);
+    let liveOllama = await fetchOpenAIModelsEndpoint(ollamaUrl, timeoutMs);
+    if (liveOllama.length === 0) {
+      const ollamaRoot = ollamaUrl.replace(/\/v1\/?$/i, '').replace(/\/+$/, '');
+      liveOllama = await fetchModelsFromEndpoint(`${ollamaRoot}/api/tags`, timeoutMs);
+    }
+    for (const m of liveOllama) {
+      pushUnique({
+        id: m.id,
+        name: m.name ?? m.id,
+        provider: 'ollama',
+        tier: 'free',
+        requiresApiKey: false,
+        baseUrl: ollamaUrl,
+        description: `Ollama local model (${ollamaUrl})`,
+      });
+    }
+  }
+
+  // 5. Gemini models
   if (filter === 'all' || filter === 'gemini') {
     for (const item of BUILTIN_MODEL_CATALOG) {
       if (item.provider === 'gemini') {
@@ -222,7 +362,23 @@ export function inferProviderForModel(
   if (modelId.startsWith('gemini-')) {
     return 'gemini';
   }
-  if (modelId.includes(':free') || modelId.includes('/')) {
+  if (modelId.includes(':free')) {
+    return 'openrouter';
+  }
+  if (
+    modelId.startsWith('nvidia/') ||
+    modelId.startsWith('deepseek-ai/') ||
+    modelId.startsWith('meta/')
+  ) {
+    return 'nvidia';
+  }
+  if (modelId.startsWith('ollama/') || (modelId.includes(':') && !modelId.includes('/'))) {
+    return 'ollama';
+  }
+  if (modelId.includes('/')) {
+    if (process.env['NVIDIA_API_KEY'] && !process.env['OPENROUTER_API_KEY']) {
+      return 'nvidia';
+    }
     return 'openrouter';
   }
   return '9router';
@@ -233,6 +389,7 @@ export function createAIProvider(params: {
   modelName: string;
   apiKey?: string;
   baseUrl?: string;
+  timeoutMs?: number;
 }): IAIModelProvider {
   if (params.provider === 'gemini') {
     return new GeminiProvider({
@@ -246,5 +403,6 @@ export function createAIProvider(params: {
     modelName: params.modelName,
     apiKey: params.apiKey,
     baseUrl: params.baseUrl,
+    timeoutMs: params.timeoutMs,
   });
 }

@@ -584,7 +584,18 @@ export class LocalFilesystemPKUStore implements IPKUStore, IRegisterPersistence 
   private async writeIdempotencyLedger(ledger: Record<string, IdempotencyRecord>): Promise<void> {
     const file = this.getIdempotencyFile();
     await ensureDir(path.dirname(file));
-    await atomicWriteJson(file, ledger);
+    const keys = Object.keys(ledger);
+    let ledgerToWrite = ledger;
+    if (keys.length > 2000) {
+      const sorted = Object.values(ledger).sort((a, b) =>
+        b.recordedAt.localeCompare(a.recordedAt)
+      );
+      ledgerToWrite = {};
+      for (const rec of sorted.slice(0, 1500)) {
+        ledgerToWrite[rec.key] = rec;
+      }
+    }
+    await atomicWriteJson(file, ledgerToWrite);
   }
 
   public async createUniverse(universe: ProjectMemoryUniverse): Promise<void> {

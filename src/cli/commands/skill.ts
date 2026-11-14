@@ -320,7 +320,7 @@ export function registerSkillCommands(program: Command): void {
     .option('--modalities <modalities...>', 'Target AVDS interaction modalities (e.g. keyboard, mouse-pointer, touch)')
     .option(
       '--entry-point <entryPoint>',
-      'AVDS orchestrator entry point (design | compose | implement | audit | full-cycle | change)'
+      'AVDS orchestrator entry point (design | compose | implement | audit | qa | full-cycle | change)'
     )
     .option('--notes <notes>', 'Additional design constraints or notes for the bot')
     .option('-w, --workspace <path>', 'Workspace directory path')

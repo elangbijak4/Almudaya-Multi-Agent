@@ -8,7 +8,12 @@ import type {
 } from './provider.js';
 import { registerSecret, unregisterSecret } from '../execution/environment.js';
 
-export type OpenAICompatibleProviderId = 'openrouter' | '9router' | 'openai-compatible';
+export type OpenAICompatibleProviderId =
+  | 'openrouter'
+  | '9router'
+  | 'nvidia'
+  | 'ollama'
+  | 'openai-compatible';
 
 export interface OpenAICompatibleOptions {
   providerId?: OpenAICompatibleProviderId;
@@ -21,6 +26,8 @@ export interface OpenAICompatibleOptions {
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_9ROUTER_BASE_URL = 'http://localhost:20128/v1';
+const DEFAULT_NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434/v1';
 
 export function resolveProviderBaseUrl(
   providerId: OpenAICompatibleProviderId,
@@ -31,6 +38,12 @@ export function resolveProviderBaseUrl(
   }
   if (providerId === 'openrouter') {
     return (process.env['OPENROUTER_BASE_URL'] ?? DEFAULT_OPENROUTER_BASE_URL).replace(/\/+$/, '');
+  }
+  if (providerId === 'nvidia') {
+    return (process.env['NVIDIA_BASE_URL'] ?? DEFAULT_NVIDIA_BASE_URL).replace(/\/+$/, '');
+  }
+  if (providerId === 'ollama') {
+    return (process.env['OLLAMA_BASE_URL'] ?? DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
   }
   if (providerId === '9router') {
     return (process.env['NINEROUTER_BASE_URL'] ?? DEFAULT_9ROUTER_BASE_URL).replace(/\/+$/, '');
@@ -250,16 +263,24 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
     this.providerId = options.providerId ?? 'openrouter';
     this.modelName = options.modelName;
     this.baseUrl = resolveProviderBaseUrl(this.providerId, options.baseUrl);
-    this.timeoutMs = options.timeoutMs ?? 60000;
+    const envTimeout = process.env['ALMUDAYA_AI_TIMEOUT_MS']
+      ? parseInt(process.env['ALMUDAYA_AI_TIMEOUT_MS'], 10)
+      : NaN;
+    this.timeoutMs =
+      options.timeoutMs ?? (!Number.isNaN(envTimeout) && envTimeout > 0 ? envTimeout : 180000);
     this.extraHeaders = options.headers ?? {};
 
     const resolvedKey =
       options.apiKey ??
       (this.providerId === 'openrouter'
         ? process.env['OPENROUTER_API_KEY']
-        : this.providerId === '9router'
-          ? process.env['NINEROUTER_API_KEY']
-          : process.env['OPENAI_API_KEY']);
+        : this.providerId === 'nvidia'
+          ? process.env['NVIDIA_API_KEY']
+          : this.providerId === 'ollama'
+            ? process.env['OLLAMA_API_KEY']
+            : this.providerId === '9router'
+              ? process.env['NINEROUTER_API_KEY']
+              : process.env['OPENAI_API_KEY']);
 
     if (resolvedKey && resolvedKey.trim().length > 0) {
       this.apiKey = resolvedKey.trim();
@@ -281,6 +302,11 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
     if (this.providerId === 'openrouter' && !this.apiKey) {
       throw new Error(
         'OpenRouter API key is missing. Set OPENROUTER_API_KEY or switch to 9router / gemini.'
+      );
+    }
+    if (this.providerId === 'nvidia' && !this.apiKey) {
+      throw new Error(
+        'NVIDIA API key is missing. Set NVIDIA_API_KEY or switch to 9router / openrouter / gemini.'
       );
     }
 
@@ -335,6 +361,16 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
+        if (response.status === 402) {
+          throw new Error(
+            `${this.providerId} HTTP 402 Payment Required / Quota Exhausted for model ${this.modelName} (non-retryable; switch model or provider): ${errBody.slice(0, 300)}`
+          );
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            `${this.providerId} HTTP ${response.status} Authentication/Permission error for model ${this.modelName} (non-retryable; verify API key): ${errBody.slice(0, 300)}`
+          );
+        }
         throw new Error(
           `${this.providerId} request failed (${response.status}): ${errBody.slice(0, 300)}`
         );
@@ -377,6 +413,13 @@ export class OpenAICompatibleProvider implements IAIModelProvider {
             }
           : undefined,
       };
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError' && !request.signal?.aborted) {
+        throw new Error(
+          `${this.providerId} (${this.modelName}) request timed out after ${this.timeoutMs}ms. Increase timeout via --timeout or ALMUDAYA_AI_TIMEOUT_MS.`
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timeoutHandle);
       request.signal?.removeEventListener('abort', onExternalAbort);

@@ -14,6 +14,13 @@ import {
   discoverModels,
   type CatalogProviderId,
 } from '../../ai/catalog.js';
+import {
+  detectHardwareProfile,
+  formatHardwareAdvisorReport,
+  formatPullProgress,
+  pullOllamaModel,
+  recommendModelsForHardware,
+} from '../../ai/hardware-advisor.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
 import { ValidationError } from '../../core/errors.js';
 import { registerSecret } from '../../execution/environment.js';
@@ -86,12 +93,13 @@ export function registerBotCommands(program: Command): void {
     .option('--interval <ms>', 'Heartbeat interval in ms (default: 2000)')
     .option('--auto-ack', 'Automatically acknowledge incoming direct messages', true)
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
-    .option('--provider <provider>', 'AI model provider ("gemini" | "openrouter" | "9router" | "mock")')
-    .option('--model <model>', 'AI model name (e.g. "gemini-2.5-flash", "deepseek/deepseek-chat-v3-0324:free")')
-    .option('--base-url <url>', 'Custom OpenAI-compatible base URL (e.g. 9router endpoint)')
-    .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY / OPENROUTER_API_KEY env var)')
+    .option('--provider <provider>', 'AI model provider ("gemini" | "nvidia" | "openrouter" | "9router" | "ollama" | "mock")')
+    .option('--model <model>', 'AI model name (e.g. "gemini-2.5-flash", "qwen2.5-coder:7b", "nvidia/nemotron-3-super-120b-a12b")')
+    .option('--base-url <url>', 'Custom OpenAI-compatible base URL (e.g. Ollama, 9router, or NVIDIA NIM endpoint)')
+    .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY / NVIDIA_API_KEY / OPENROUTER_API_KEY env var)')
     .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
     .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
+    .option('--timeout <ms>', 'AI request timeout in milliseconds (default: 180000)')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .action(async (options: {
       session: string;
@@ -108,6 +116,7 @@ export function registerBotCommands(program: Command): void {
       apiKey?: string;
       mode?: string;
       maxIterations?: string;
+      timeout?: string;
       workspace?: string;
     }) => {
       try {
@@ -127,6 +136,11 @@ export function registerBotCommands(program: Command): void {
           throw new ValidationError(`Invalid max-iterations "${options.maxIterations}". Must be a positive integer.`);
         }
 
+        const aiTimeoutMs = options.timeout ? parseInt(options.timeout, 10) : undefined;
+        if (options.timeout && (isNaN(aiTimeoutMs!) || aiTimeoutMs! <= 0)) {
+          throw new ValidationError(`Invalid timeout "${options.timeout}". Must be a positive integer in milliseconds.`);
+        }
+
         // Secret sanitization audit warning (NT-02, REQ-CLI-SECRET-01, REQ-07)
         if (options.apiKey) {
           registerSecret(options.apiKey);
@@ -140,9 +154,9 @@ export function registerBotCommands(program: Command): void {
         const providerName = options.provider?.toLowerCase();
 
         if (providerName) {
-          if (!['gemini', 'openrouter', '9router', 'mock'].includes(providerName)) {
+          if (!['gemini', 'nvidia', 'openrouter', '9router', 'ollama', 'mock'].includes(providerName)) {
             throw new ValidationError(
-              `Unknown provider "${options.provider}". Valid providers: "gemini", "openrouter", "9router", "mock".`
+              `Unknown provider "${options.provider}". Valid providers: "gemini", "nvidia", "openrouter", "9router", "ollama", "mock".`
             );
           }
         }
@@ -152,16 +166,26 @@ export function registerBotCommands(program: Command): void {
             apiKey: options.apiKey,
             modelName: options.model ?? 'gemini-2.5-flash',
           });
-        } else if (providerName === 'openrouter' || providerName === '9router') {
+        } else if (
+          providerName === 'nvidia' ||
+          providerName === 'openrouter' ||
+          providerName === '9router' ||
+          providerName === 'ollama'
+        ) {
           const defaultModel =
-            providerName === 'openrouter'
-              ? 'deepseek/deepseek-chat-v3-0324:free'
-              : options.model ?? 'default';
+            providerName === 'nvidia'
+              ? 'nvidia/nemotron-3-super-120b-a12b'
+              : providerName === 'ollama'
+                ? 'qwen2.5-coder:7b'
+                : providerName === 'openrouter'
+                  ? 'deepseek/deepseek-chat-v3-0324:free'
+                  : options.model ?? 'default';
           aiProvider = createAIProvider({
             provider: providerName as CatalogProviderId,
             modelName: options.model ?? defaultModel,
             apiKey: options.apiKey,
             baseUrl: options.baseUrl,
+            timeoutMs: aiTimeoutMs,
           });
         } else if (providerName === 'mock') {
           aiProvider = new MockAIProvider('mock-model', [
@@ -173,17 +197,33 @@ export function registerBotCommands(program: Command): void {
             apiKey: options.apiKey,
             modelName: options.model ?? 'gemini-2.5-flash',
           });
+        } else if (process.env.NVIDIA_API_KEY && !providerName) {
+          aiProvider = createAIProvider({
+            provider: 'nvidia',
+            modelName: options.model ?? 'nvidia/nemotron-3-super-120b-a12b',
+            baseUrl: options.baseUrl,
+            timeoutMs: aiTimeoutMs,
+          });
         } else if (process.env.OPENROUTER_API_KEY && !providerName) {
           aiProvider = createAIProvider({
             provider: 'openrouter',
             modelName: options.model ?? 'deepseek/deepseek-chat-v3-0324:free',
             baseUrl: options.baseUrl,
+            timeoutMs: aiTimeoutMs,
+          });
+        } else if (process.env.OLLAMA_BASE_URL && !providerName) {
+          aiProvider = createAIProvider({
+            provider: 'ollama',
+            modelName: options.model ?? 'qwen2.5-coder:7b',
+            baseUrl: options.baseUrl,
+            timeoutMs: aiTimeoutMs,
           });
         } else if (process.env.NINEROUTER_BASE_URL && !providerName) {
           aiProvider = createAIProvider({
             provider: '9router',
             modelName: options.model ?? 'default',
             baseUrl: options.baseUrl,
+            timeoutMs: aiTimeoutMs,
           });
         }
 
@@ -220,7 +260,8 @@ export function registerBotCommands(program: Command): void {
             }
 
             if (agentLoop && aiProvider) {
-              const startMsg = `🤖 Menjalankan ReAct Agent Loop (${aiProvider.providerId} | Mode: ${executionModeController.getMode()})...`;
+              const activeProvider = agentLoop.getProvider();
+              const startMsg = `🤖 Menjalankan ReAct Agent Loop (${activeProvider.providerId}/${activeProvider.modelName} | Mode: ${executionModeController.getMode()})...`;
               if (consoleInstance) {
                 consoleInstance.printNotification(startMsg);
               } else {
@@ -410,33 +451,69 @@ export function registerBotCommands(program: Command): void {
       }
     });
 
+  async function runAndPrintHardwareAdvisor(options: {
+    baseUrl?: string;
+    includeOnlineFree?: boolean;
+    json?: boolean;
+  }): Promise<void> {
+    const profile = await detectHardwareProfile({
+      ollamaBaseUrl: options.baseUrl,
+    });
+    const report = await recommendModelsForHardware(profile, {
+      includeOnlineFree: options.includeOnlineFree ?? true,
+    });
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    for (const line of formatHardwareAdvisorReport(report)) {
+      console.log(line);
+    }
+  }
+
   bot
     .command('models')
-    .description('List available AI models across 9router, OpenRouter (:free), and Gemini')
-    .option('--provider <provider>', 'Filter by provider ("9router" | "openrouter" | "gemini" | "all")', 'all')
-    .option('--base-url <url>', 'Custom 9router base URL')
+    .description('List available AI models across Ollama, NVIDIA NIM, 9router, OpenRouter (:free), and Gemini')
+    .option('--provider <provider>', 'Filter by provider ("ollama" | "nvidia" | "9router" | "openrouter" | "gemini" | "all")', 'all')
+    .option('--base-url <url>', 'Custom OpenAI-compatible base URL (Ollama, 9router, or NVIDIA NIM)')
     .option('--no-live', 'Skip live HTTP discovery and show built-in catalog only')
+    .option('--recommend', 'Inspect system hardware specs and recommend suitable local Ollama & online free models')
+    .option('-w, --workspace <path>', 'Path to target workspace directory', process.cwd())
     .option('--json', 'Output model list as JSON')
     .action(
       async (options: {
         provider?: string;
         baseUrl?: string;
         live?: boolean;
+        recommend?: boolean;
+        workspace?: string;
         json?: boolean;
       }) => {
         try {
+          if (options.recommend) {
+            await runAndPrintHardwareAdvisor({
+              baseUrl: options.baseUrl,
+              includeOnlineFree: options.live !== false,
+              json: options.json,
+            });
+            return;
+          }
+
           const providerFilter = (options.provider?.toLowerCase() ?? 'all') as
             | CatalogProviderId
             | 'all';
-          if (!['all', '9router', 'openrouter', 'gemini'].includes(providerFilter)) {
+          if (!['all', 'ollama', 'nvidia', '9router', 'openrouter', 'gemini'].includes(providerFilter)) {
             throw new ValidationError(
-              `Unknown provider filter "${options.provider}". Valid: "all", "9router", "openrouter", "gemini".`
+              `Unknown provider filter "${options.provider}". Valid: "all", "ollama", "nvidia", "9router", "openrouter", "gemini".`
             );
           }
 
           const models = await discoverModels({
             provider: providerFilter,
-            nineRouterBaseUrl: options.baseUrl,
+            nineRouterBaseUrl:
+              providerFilter === '9router' || providerFilter === 'all' ? options.baseUrl : undefined,
+            nvidiaBaseUrl: providerFilter === 'nvidia' ? options.baseUrl : undefined,
+            ollamaBaseUrl: providerFilter === 'ollama' ? options.baseUrl : undefined,
             includeLiveDiscovery: options.live !== false,
           });
 
@@ -456,4 +533,58 @@ export function registerBotCommands(program: Command): void {
         }
       }
     );
+
+  bot
+    .command('advisor')
+    .alias('hardware')
+    .description('Inspect local hardware specs (CPU, RAM, GPU/VRAM) and recommend suitable Ollama & online free models')
+    .option('--base-url <url>', 'Custom Ollama base URL (default: http://localhost:11434/v1)')
+    .option('--no-online', 'Skip live online free model lookup')
+    .option('-w, --workspace <path>', 'Path to target workspace directory', process.cwd())
+    .option('--json', 'Output hardware advisor report as JSON')
+    .action(
+      async (options: {
+        baseUrl?: string;
+        online?: boolean;
+        workspace?: string;
+        json?: boolean;
+      }) => {
+        try {
+          await runAndPrintHardwareAdvisor({
+            baseUrl: options.baseUrl,
+            includeOnlineFree: options.online !== false,
+            json: options.json,
+          });
+        } catch (error: unknown) {
+          console.error(`Error running hardware advisor: ${(error as Error).message}`);
+          process.exitCode = 1;
+        }
+      }
+    );
+
+  bot
+    .command('pull <modelId>')
+    .description('Download (pull) a local model via Ollama')
+    .option('--base-url <url>', 'Custom Ollama base URL (default: http://localhost:11434/v1)')
+    .action(async (modelId: string, options: { baseUrl?: string }) => {
+      try {
+        console.log(`Mengunduh model "${modelId}" melalui Ollama...`);
+        let lastPrinted = '';
+        const res = await pullOllamaModel(modelId, {
+          ollamaBaseUrl: options.baseUrl,
+          onProgress: (status, completed, total) => {
+            const formatted = formatPullProgress(status, completed, total);
+            if (formatted !== lastPrinted) {
+              lastPrinted = formatted;
+              console.log(`  [Ollama] ${formatted}`);
+            }
+          },
+        });
+        console.log(`Model "${res.modelId}" berhasil diunduh (${res.status}).`);
+        console.log(`Jalankan bot: almudaya bot run -s <sessionId> --provider ollama --model ${res.modelId}`);
+      } catch (error: unknown) {
+        console.error(`Error pulling model "${modelId}": ${(error as Error).message}`);
+        process.exitCode = 1;
+      }
+    });
 }

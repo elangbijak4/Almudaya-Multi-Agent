@@ -158,21 +158,33 @@ almudaya skill validate <path-ke-kontrak.json>
 
 ---
 
-## 5. Dukungan Multi-Provider AI (Gemini, OpenRouter, 9router) & `/model`
+## 5. Dukungan Multi-Provider AI (Gemini, NVIDIA NIM, Ollama Lokal, OpenRouter, 9router) & `/model`
 
-Almudaya v0.3.3 mendukung pemilihan model AI secara fleksibel tanpa bergantung pada satu penyedia atau model lokal berukuran besar:
+Almudaya v0.3.3 mendukung pemilihan model AI secara fleksibel baik dari cloud maupun model lokal yang terunduh di komputer Anda:
 
-1. **9router (`--provider 9router`, default `http://localhost:20128/v1`):**
+1. **Ollama Lokal (`--provider ollama`, default `http://localhost:11434/v1`):**
+   - Menjalankan bot menggunakan model lokal yang terunduh di **Ollama** (atau server lokal OpenAI-compatible lain) tanpa API key dan tetap bekerja secara offline.
+   - Mendeteksi model lokal terpasang via `/v1/models` atau `/api/tags` (`almudaya bot models --provider ollama`) dan mendukung pengunduhan langsung via `almudaya bot pull <modelId>` atau `/model pull <modelId>`.
+   - **Hardware Spec Advisor (`almudaya bot advisor` / `almudaya bot models --recommend` / `/model recommend`):** Menganalisis CPU, total & free RAM, GPU/VRAM, dan status Ollama pada komputer Anda, mengklasifikasikan tier (`low`, `medium`, `high`, `workstation`), menandai kecocokan model lokal (`optimal`, `compatible`, `too_heavy`), serta menyajikan referensi model cloud gratis online (`OpenRouter :free` & `NVIDIA NIM`).
+2. **NVIDIA NIM Langsung (`--provider nvidia`, default `https://integrate.api.nvidia.com/v1`):**
+   - Terhubung langsung ke endpoint OpenAI-compatible NVIDIA NIM menggunakan `$env:NVIDIA_API_KEY = "nvapi-..."` tanpa memerlukan router perantara seperti `9router`.
+   - Menyediakan katalog bawaan populer (`meta/llama-3.3-70b-instruct`, `deepseek-ai/deepseek-r1`, `qwen/qwen2.5-coder-32b-instruct`, `nvidia/llama-3.1-nemotron-ultra-253b-v1`, `mistralai/mistral-nemotron`) serta *live discovery* dari `/v1/models` dengan header Bearer token melalui `almudaya bot models --provider nvidia`.
+3. **9router (`--provider 9router`, default `http://localhost:20128/v1`):**
    - Menghubungkan bot ke router lokal/pribadi yang menampung beragam model (termasuk model gratis atau *combo routing* seperti `mycombo`).
    - Dapat mendeteksi model aktif secara dinamis dari endpoint `/v1/models` melalui `almudaya bot models --provider 9router`.
    - Jika 9router Anda memerlukan autentikasi, set `$env:NINEROUTER_API_KEY` di memori proses lokal sebelum menjalankan bot.
-2. **OpenRouter (`--provider openrouter`, default `https://openrouter.ai/api/v1`):**
+4. **OpenRouter (`--provider openrouter`, default `https://openrouter.ai/api/v1`):**
    - Menyediakan katalog model gratis dan berbayar (seperti `deepseek/deepseek-chat-v3-0324:free`, `qwen/qwen3-coder:free`, dan lainnya) menggunakan `$env:OPENROUTER_API_KEY`.
-3. **Google Gemini (`--provider gemini`) & Mock (`--provider mock`):**
+5. **Google Gemini (`--provider gemini`) & Mock (`--provider mock`):**
    - Menggunakan `$env:GEMINI_API_KEY` (default `gemini-2.5-flash`) dengan adaptive 429 retry latch.
-4. **Pergantian Model Saat Runtime (`/model`):**
-   - Di dalam konsol REPL bot, operator dapat mengetik `/model` untuk melihat daftar model gabungan (live 9router + preset OpenRouter + Gemini), lalu berpindah model secara langsung tanpa me-restart proses bot:
+6. **Pergantian Model, Advisor & Pull Saat Runtime (`/model`):**
+   - Di dalam konsol REPL bot, operator dapat memeriksa spek & rekomendasi model, mengunduh model Ollama baru, melihat daftar model, lalu berpindah model secara langsung tanpa me-restart proses bot:
      ```text
+     Architect> /model recommend
+     Architect> /model pull qwen2.5-coder:7b
+     Architect> /model qwen2.5-coder:7b ollama
+     Architect> /model list nvidia
+     Architect> /model meta/llama-3.3-70b-instruct nvidia
      Architect> /model mycombo 9router
      Architect> /model qwen/qwen3-coder:free openrouter
      ```

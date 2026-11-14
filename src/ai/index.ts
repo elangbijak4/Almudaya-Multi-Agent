@@ -5,3 +5,4 @@ export * from './mock-provider.js';
 export * from './gemini.js';
 export * from './openai-compatible.js';
 export * from './catalog.js';
+export * from './hardware-advisor.js';

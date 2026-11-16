@@ -7,6 +7,7 @@ import { registerMessagingCommands } from './commands/messaging.js';
 import { registerContextCommands } from './commands/context.js';
 import { registerCapabilityCommands } from './commands/capability.js';
 import { registerSkillCommands } from './commands/skill.js';
+import { registerUpCommand } from './commands/up.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -16,6 +17,7 @@ export function createProgram(): Command {
     .description('Almudaya Multi-Agent CLI — Session-centric multi-process bot collaboration foundation')
     .version(VERSION, '-v, --version', 'Output the current version');
 
+  registerUpCommand(program);
   registerSessionCommands(program);
   registerBotCommands(program);
   registerMessagingCommands(program);

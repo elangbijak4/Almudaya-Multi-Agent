@@ -27,6 +27,19 @@ import { GET_WORK_LOG_TOOL, executeGetWorkLog } from '../tools/work-log-tool.js'
 import { SEND_MESSAGE_TOOL, executeSendMessage } from '../tools/messaging-tools.js';
 import { USE_SKILL_TOOL, executeUseSkill } from '../tools/skill-tools.js';
 import { QUERY_PKU_MEMORY_TOOL, executeQueryPkuMemory } from '../tools/pku-tools.js';
+import {
+  WORKER_PROTOCOL_TOOLS,
+  executeRequestSpawnBot,
+  executeSubmitTaskHandoff,
+  executeUpdateGoalTask,
+} from '../tools/goal-tools.js';
+import {
+  MASTER_PROTOCOL_TOOLS,
+  executeMasterProtocolTool,
+} from '../tools/master-tools.js';
+import type { TouchedFileStatus } from '../protocol/schema.js';
+import type { SpawnManager } from '../protocol/spawn-manager.js';
+import { ProtocolSupervisor } from '../protocol/supervisor.js';
 import { SkillService } from '../skills/service.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
@@ -62,6 +75,11 @@ export interface AgentLoopOptions {
   skillService?: SkillService;
   memoryRuntime?: MemoryRuntime;
   enablePkuSync?: boolean;
+  protocolSupervisor?: ProtocolSupervisor;
+  spawnManager?: SpawnManager;
+  activeTaskId?: string;
+  activeTokenId?: string;
+  dryRunSpawn?: boolean;
   onStep?: (event: AgentStepEvent) => Promise<void> | void;
   onStatus?: (statusMessage: string) => Promise<void> | void;
 }
@@ -88,6 +106,11 @@ export class AutonomousAgentLoop {
   private readonly memoryRuntime?: MemoryRuntime;
   private readonly codebaseIndexer?: ProjectCodebaseIndexer;
   private readonly syncedRoots = new Set<string>();
+  private readonly protocolSupervisor?: ProtocolSupervisor;
+  private readonly spawnManager?: SpawnManager;
+  private readonly activeTaskId?: string;
+  private readonly activeTokenId?: string;
+  private readonly dryRunSpawn?: boolean;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -115,6 +138,11 @@ export class AutonomousAgentLoop {
     this.skillService =
       options.skillService ??
       new SkillService({ storage: this.storage, pkuStore: this.memoryRuntime?.pkuStore });
+    this.protocolSupervisor = options.protocolSupervisor;
+    this.spawnManager = options.spawnManager;
+    this.activeTaskId = options.activeTaskId;
+    this.activeTokenId = options.activeTokenId;
+    this.dryRunSpawn = options.dryRunSpawn;
     this.onStepCallback = options.onStep;
     this.onStatusCallback = options.onStatus;
   }
@@ -133,6 +161,17 @@ export class AutonomousAgentLoop {
     this.provider.dispose?.();
   }
 
+  private async resolveActiveProtocolSupervisor(): Promise<ProtocolSupervisor | undefined> {
+    if (this.protocolSupervisor) {
+      return this.protocolSupervisor;
+    }
+    const candidate = new ProtocolSupervisor({ storage: this.storage });
+    if (await candidate.isSessionInitialized(this.sessionId)) {
+      return candidate;
+    }
+    return undefined;
+  }
+
   /**
    * Processes an incoming direct message through the iterative ReAct loop.
    */
@@ -147,6 +186,28 @@ export class AutonomousAgentLoop {
     const peerBots = await this.botService.listBots(this.sessionId);
     const projectRoots = await this.sharedContextService.listProjectRoots(this.sessionId);
     const projectRootPaths = projectRoots.map((r) => r.path);
+
+    const activeSupervisor = await this.resolveActiveProtocolSupervisor();
+    const isMasterActor = currentBot.role === 'master' || this.botId === 'BOT000';
+    const currentTaskId = message.task_id ?? this.activeTaskId;
+    const activeTokenId =
+      message.transfer_envelope?.capabilityToken.tokenId ??
+      currentBot.active_capability_token_id ??
+      this.activeTokenId;
+    const activeFenceEpoch = message.transfer_envelope?.capabilityToken.fenceEpoch;
+
+    if (activeSupervisor) {
+      this.executionModeController.setCapabilityValidator(async (req) => {
+        const rawTarget = req.args['path'] ?? req.args['working_dir'];
+        const decision = await activeSupervisor.checkWriteAccess(this.sessionId, {
+          botId: this.botId,
+          tokenId: activeTokenId,
+          fenceEpoch: activeFenceEpoch,
+          targetPath: rawTarget ? String(rawTarget) : undefined,
+        });
+        return { allowed: decision.allowed, reason: decision.reason };
+      });
+    }
 
     // Ensure PKU codebase index is incrementally up-to-date on first turn per root (fail-open)
     if (this.codebaseIndexer && this.memoryRuntime?.enabled) {
@@ -169,6 +230,20 @@ export class AutonomousAgentLoop {
       this.botId
     );
 
+    const [dynamicRulesMarkdown, goalLedgerMarkdown] = activeSupervisor
+      ? await Promise.all([
+          activeSupervisor.rules.formatRulesForPrompt(this.sessionId, this.botId, currentTaskId),
+          activeSupervisor.ledger.formatSummaryMarkdown(
+            this.sessionId,
+            isMasterActor ? undefined : this.botId
+          ),
+        ])
+      : ['', ''];
+
+    const capabilityTokenSummary = activeTokenId
+      ? `TokenId=${activeTokenId}, FenceEpoch=${activeFenceEpoch ?? 'auto'}, TaskId=${currentTaskId ?? 'N/A'}`
+      : undefined;
+
     const systemPrompt = buildDynamicSystemPrompt({
       sessionId: this.sessionId,
       botId: currentBot.bot_id,
@@ -180,9 +255,13 @@ export class AutonomousAgentLoop {
       executionMode: this.executionModeController.getMode(),
       recentWorkLogsMarkdown,
       skillsPromptMarkdown,
+      dynamicRulesMarkdown: dynamicRulesMarkdown || undefined,
+      goalLedgerMarkdown: goalLedgerMarkdown || undefined,
+      capabilityTokenSummary,
+      protocolActive: Boolean(activeSupervisor),
     });
 
-    // 2. Prepare available tools (File Tools + Command Execution Tool + Work Log Tool + Native Send Message Tool + Skill Tool)
+    // 2. Prepare available tools
     const availableTools: ToolDefinition[] = [
       QUERY_PKU_MEMORY_TOOL,
       ...FILE_TOOLS,
@@ -190,6 +269,8 @@ export class AutonomousAgentLoop {
       GET_WORK_LOG_TOOL,
       SEND_MESSAGE_TOOL,
       USE_SKILL_TOOL,
+      ...(activeSupervisor ? WORKER_PROTOCOL_TOOLS : []),
+      ...(activeSupervisor && isMasterActor ? MASTER_PROTOCOL_TOOLS : []),
     ];
 
     // 3. Sender Identity Verification (IDV-01, §18, §5.20)
@@ -224,6 +305,10 @@ export class AutonomousAgentLoop {
     let finalResponseText = '';
     let iteration = 0;
     let explicitlyMessagedSender = false;
+    let explicitlySubmittedHandoff = false;
+    const touchedFiles: TouchedFileStatus[] = [];
+    const turnStartedMs = Date.now();
+    const masterToolNames = new Set(MASTER_PROTOCOL_TOOLS.map((t) => t.name));
 
     // 4. Bounded ReAct Iteration Loop (Max 10 steps per ADR-204, AUD-20, REQ-12)
     const effectiveSignal = signal ?? this.abortController.signal;
@@ -264,6 +349,17 @@ export class AutonomousAgentLoop {
 
       const thought = aiResponse.text;
       const toolCalls = aiResponse.toolCalls;
+
+      if (activeSupervisor && aiResponse.usage?.totalTokens) {
+        const budgetCheck = await activeSupervisor.recordUsageAndCheckBudget(
+          this.sessionId,
+          aiResponse.usage.totalTokens
+        );
+        if (!budgetCheck.allowed) {
+          finalResponseText = `[PrBotGlobal Escalation: ${budgetCheck.reason}]`;
+          break;
+        }
+      }
 
       // Notify step observer
       if (this.onStepCallback) {
@@ -347,6 +443,54 @@ export class AutonomousAgentLoop {
                 this.botId,
                 toolCall.arguments
               );
+            } else if (activeSupervisor && toolCall.name === 'request_spawn_bot') {
+              result = await executeRequestSpawnBot(
+                activeSupervisor,
+                this.messagingService,
+                this.sessionId,
+                this.botId,
+                toolCall.arguments
+              );
+            } else if (activeSupervisor && toolCall.name === 'update_goal_task') {
+              result = await executeUpdateGoalTask(
+                activeSupervisor,
+                this.sessionId,
+                this.botId,
+                toolCall.arguments
+              );
+            } else if (activeSupervisor && toolCall.name === 'submit_task_handoff') {
+              explicitlySubmittedHandoff = true;
+              const targetRec = String(toolCall.arguments['recipient'] ?? '').trim();
+              if (
+                targetRec &&
+                (targetRec === message.sender_bot_id ||
+                  targetRec.toLowerCase() === senderDisplayName.toLowerCase())
+              ) {
+                explicitlyMessagedSender = true;
+              }
+              result = await executeSubmitTaskHandoff(
+                activeSupervisor,
+                this.messagingService,
+                this.sessionId,
+                this.botId,
+                {
+                  ...toolCall.arguments,
+                  existing_token_id:
+                    toolCall.arguments['existing_token_id'] ?? activeTokenId,
+                },
+                { touchedFiles, threadId: message.thread_id }
+              );
+            } else if (activeSupervisor && masterToolNames.has(toolCall.name)) {
+              result = await executeMasterProtocolTool(toolCall.name, toolCall.arguments, {
+                supervisor: activeSupervisor,
+                messagingService: this.messagingService,
+                botService: this.botService,
+                spawnManager: this.spawnManager,
+                workspaceRoots: projectRootPaths,
+                sessionId: this.sessionId,
+                trustedBotId: this.botId,
+                dryRunSpawn: this.dryRunSpawn,
+              });
             } else if (toolCall.name === 'get_work_log') {
               result = await executeGetWorkLog(
                 this.storage,
@@ -395,6 +539,27 @@ export class AutonomousAgentLoop {
                 }
               );
             } else {
+              if (
+                activeSupervisor &&
+                currentTaskId &&
+                (toolCall.name === 'write_file' || toolCall.name === 'edit_file')
+              ) {
+                const filePath = String(toolCall.arguments['path'] ?? '');
+                if (filePath) {
+                  const snap = await activeSupervisor.checkpoints.captureBeforeMutation(
+                    this.sessionId,
+                    currentTaskId,
+                    projectRoots,
+                    filePath
+                  );
+                  touchedFiles.push({
+                    path: filePath,
+                    status: 'CLEAN',
+                    checkpointPath: snap,
+                  });
+                }
+              }
+
               result = await executeFileTool(
                 projectRootPaths,
                 toolCall.name,
@@ -500,9 +665,22 @@ export class AutonomousAgentLoop {
 
     if (!finalResponseText && iteration >= this.maxIterations) {
       finalResponseText = `[Peringatan: Mencapai batas maksimal ${this.maxIterations} iterasi tool.]`;
+      if (activeSupervisor && !isMasterActor) {
+        await activeSupervisor.evaluatePrIterasi({
+          sessionId: this.sessionId,
+          botId: this.botId,
+          taskId: currentTaskId,
+          iteration,
+          elapsedMs: Date.now() - turnStartedMs,
+          currentModel: {
+            provider: this.provider.providerId,
+            model: this.provider.modelName,
+          },
+        });
+      }
     }
 
-    // 5. Send automated reply back to sender bot (FR-216, bounded by APP-BUG-04 anti-ping-pong guard)
+    // 5. Send automated reply back to sender bot (FR-216 + v0.3.5 PrDE / PrMEend)
     if (message.sender_bot_id && message.sender_bot_id !== this.botId) {
       try {
         if (
@@ -514,7 +692,41 @@ export class AutonomousAgentLoop {
             senderBotId: this.botId,
             recipient: message.sender_bot_id,
             content: finalResponseText || '(Tugas telah diselesaikan.)',
-            metadata: { correlationId: message.message_id, isAutoReply: true }
+            threadId: message.thread_id,
+            taskId: currentTaskId,
+            exchangeCount:
+              message.exchange_count !== undefined ? message.exchange_count + 1 : undefined,
+            ccMaster: activeSupervisor ? true : undefined,
+            metadata: { correlationId: message.message_id, isAutoReply: true },
+          });
+        }
+
+        if (activeSupervisor && message.thread_id && message.sender_bot_id !== 'OPERATOR') {
+          await activeSupervisor.evaluatePrDe({
+            sessionId: this.sessionId,
+            threadId: message.thread_id,
+            senderBotId: this.botId,
+            recipientBotId: message.sender_bot_id,
+            exchangeCount:
+              message.exchange_count !== undefined ? message.exchange_count + 1 : undefined,
+            progressDeltaScore: touchedFiles.length,
+          });
+        }
+
+        if (
+          activeSupervisor &&
+          !isMasterActor &&
+          !explicitlySubmittedHandoff &&
+          !explicitlyMessagedSender &&
+          message.sender_bot_id === 'OPERATOR'
+        ) {
+          await activeSupervisor.evaluatePrMeEnd({
+            sessionId: this.sessionId,
+            senderBotId: this.botId,
+            recipientBotId: undefined,
+            recipientExists: false,
+            hasSentLoopMessage: false,
+            messageContent: finalResponseText,
           });
         }
 

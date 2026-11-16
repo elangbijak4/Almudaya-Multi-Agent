@@ -12,6 +12,11 @@ export interface PromptContext {
   executionMode?: 'REQUEST_REVIEW' | 'TURBO';
   recentWorkLogsMarkdown?: string;
   skillsPromptMarkdown?: string;
+  // v0.3.5 Unified Natural Lifecycle context fields
+  dynamicRulesMarkdown?: string;
+  goalLedgerMarkdown?: string;
+  capabilityTokenSummary?: string;
+  protocolActive?: boolean;
 }
 
 /**
@@ -126,6 +131,29 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
   // Active Skill Modules & AVDS Context
   if (context.skillsPromptMarkdown) {
     sections.push(context.skillsPromptMarkdown);
+  }
+
+  // v0.3.5 Dynamic Rules, GoalLedger & CapabilityToken Context
+  if (context.dynamicRulesMarkdown) {
+    sections.push('\n## Aturan Dinamis Aktif (Dynamic Rules — Wajib Dipatuhi):');
+    sections.push(escapePromptDelimiters(context.dynamicRulesMarkdown));
+  }
+
+  if (context.goalLedgerMarkdown) {
+    sections.push('\n## Peta Tugas & Tujuan Aktif (Shared GoalLedger):');
+    sections.push(escapePromptDelimiters(context.goalLedgerMarkdown));
+  }
+
+  if (context.capabilityTokenSummary) {
+    sections.push('\n## Hak Workspace & Fencing Token Aktif (PrModerator):');
+    sections.push(context.capabilityTokenSummary);
+  }
+
+  if (context.protocolActive) {
+    sections.push(`\n## Siklus Kerja Alami Terpadu & Protokol v0.3.5 (Unified Natural Lifecycle):
+1. Jika pekerjaan Anda memerlukan delegasi lanjutan ke rekan bot lain atau serah-terima (handover), panggil 'submit_task_handoff' atau 'send_message' (otomatis disalin ke MASTER dan dibungkus envelope PrTransfer).
+2. Jika tujuan Anda tidak jelas penerima berikutnya, kirim ke 'UNKNOWN' agar PrMEend & Master Bot melakukan migrasi tugas; JANGAN menghentikan pekerjaan secara diam-diam tanpa melapor.
+3. Jika seluruh pekerjaan pada tugas Anda sudah tuntas dan siap ditutup, kirim sinyal 'TASK_0' melalui 'submit_task_handoff' atau laporkan ke MASTER agar PrGate memverifikasi bukti berkas nyata di disk.`);
   }
 
   // Security Invariants Notice (SEC-02)

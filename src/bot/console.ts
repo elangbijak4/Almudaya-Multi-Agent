@@ -25,6 +25,8 @@ import { WorkLogService } from '../shared/work-log.js';
 import { SkillService } from '../skills/service.js';
 import { generateMessageId, type DirectMessage } from '../messaging/schema.js';
 import { VERSION } from '../core/version.js';
+import type { ProtocolSupervisor } from '../protocol/supervisor.js';
+import type { SpawnManager } from '../protocol/spawn-manager.js';
 
 export interface BotConsoleOptions {
   runtime: BotRuntime;
@@ -32,6 +34,9 @@ export interface BotConsoleOptions {
   storage: IBlackboardStorage;
   executionModeController?: ExecutionModeController;
   aiProvider?: IAIModelProvider;
+  protocolSupervisor?: ProtocolSupervisor;
+  spawnManager?: SpawnManager;
+  isMasterConsole?: boolean;
   inputStream?: NodeJS.ReadableStream;
   outputStream?: NodeJS.WritableStream;
   onExit?: () => Promise<void>;
@@ -70,6 +75,9 @@ export class BotConsole {
   private readonly sharedContextService: SharedContextService;
   private readonly workLogService: WorkLogService;
   private readonly skillService: SkillService;
+  private readonly protocolSupervisor?: ProtocolSupervisor;
+  private readonly spawnManager?: SpawnManager;
+  public readonly isMasterConsole: boolean;
 
   private closeResolver?: () => void;
   private closePromise?: Promise<void>;
@@ -81,6 +89,8 @@ export class BotConsole {
     this.executionModeController =
       options.executionModeController ?? new ExecutionModeController('REQUEST_REVIEW');
     this.aiProvider = options.aiProvider;
+    this.protocolSupervisor = options.protocolSupervisor;
+    this.spawnManager = options.spawnManager;
 
     this.inputStream = options.inputStream ?? process.stdin;
     this.outputStream = options.outputStream ?? process.stdout;
@@ -89,7 +99,10 @@ export class BotConsole {
     this.botId = options.runtime.botId;
     this.botDisplayName = options.runtime.displayName || options.runtime.botId || 'Bot';
     this.sessionId = options.runtime.sessionId;
-    this.promptString = `${this.botDisplayName}> `;
+    this.isMasterConsole = Boolean(options.isMasterConsole || this.botId === 'BOT000');
+    this.promptString = this.isMasterConsole
+      ? `HITL [MASTER]> `
+      : `${this.botDisplayName}> `;
 
     this.onExitCallback = options.onExit;
     this.botService = new BotService(this.storage);
@@ -197,6 +210,18 @@ export class BotConsole {
     } else {
       this.outputStream.write(`${text}\n`);
     }
+  }
+
+  /**
+   * Prefixed live stream output helper for `--spawn-mode multiplexed`.
+   */
+  public printMultiplexedWorkerLog(
+    workerBotId: string,
+    stream: 'stdout' | 'stderr',
+    line: string
+  ): void {
+    const tag = stream === 'stderr' ? `!${workerBotId}` : workerBotId;
+    this.printNotification(`[${tag}] ${line}`);
   }
 
   /**
@@ -599,6 +624,120 @@ export class BotConsole {
         return;
       }
 
+      case '/protocol': {
+        if (!this.protocolSupervisor) {
+          this.writeLine('[Protocol] ProtocolSupervisor belum diinisialisasi di konsol ini.');
+          break;
+        }
+        const summary = await this.protocolSupervisor.getStatusSummary(this.sessionId);
+        this.writeLine(`[Protocol v0.3.5 Unified Natural Lifecycle — Session ${this.sessionId}]:`);
+        this.writeLine(`  Status Loop       : ${summary.runtimeState.macroLoopStatus}`);
+        this.writeLine(`  Spawn Mode        : ${summary.config.spawnMode} (maxWindows=${summary.config.maxWindows})`);
+        this.writeLine(`  Active Moderator  : ${summary.activeModeratorBotId} (Fence Epoch=${summary.currentFenceEpoch})`);
+        this.writeLine(`  PrBot / Global    : ${summary.runtimeState.totalSpawnedWorkers}/${summary.config.prBotLimit} | Active=${summary.runtimeState.activeGlobalBotCount}/${summary.runtimeState.resolvedHardwareBotCap}`);
+        this.writeLine(`  Tokens Used       : ${summary.runtimeState.totalTokensUsed} / ${summary.config.tokenBudget}`);
+        this.writeLine(`  GoalLedger Tasks  : ${summary.openTasksCount} open / ${summary.totalTasksCount} total`);
+        this.writeLine(`  Dynamic Rules     : ${summary.activeRulesCount} aktif | Queued Interventions: ${summary.queuedInterventions}`);
+        break;
+      }
+
+      case '/blueprint': {
+        if (!this.protocolSupervisor) {
+          this.writeLine('[Blueprint] ProtocolSupervisor tidak aktif.');
+          break;
+        }
+        const md = await this.protocolSupervisor.ledger.formatSummaryMarkdown(this.sessionId);
+        this.writeLine(md ? `[Blueprint GoalLedger]:\n${md}` : '[Blueprint] GoalLedger masih kosong.');
+        break;
+      }
+
+      case '/rules': {
+        if (!this.protocolSupervisor) {
+          this.writeLine('[Rules] ProtocolSupervisor tidak aktif.');
+          break;
+        }
+        const sub = (argTokens[0] ?? 'list').toLowerCase();
+        if (sub === 'add' && argTokens.length >= 2) {
+          const maybeSev = argTokens[1]?.toUpperCase();
+          const hasExplicitSev = maybeSev === 'ADVISORY' || maybeSev === 'MANDATORY' || maybeSev === 'HARD_STOP';
+          const statement = (hasExplicitSev ? argTokens.slice(2) : argTokens.slice(1)).join(' ');
+          if (!statement.trim()) {
+            this.writeLine('[Rules] Penggunaan: /rules add [HARD_STOP|MANDATORY|ADVISORY] <pernyataan aturan>');
+            break;
+          }
+          const created = await this.protocolSupervisor.rules.addRule(this.sessionId, {
+            statement,
+            severity: hasExplicitSev ? (maybeSev as 'ADVISORY' | 'MANDATORY' | 'HARD_STOP') : 'MANDATORY',
+            createdBy: this.botId,
+          });
+          this.writeLine(`[Rules] Aturan ditambahkan: [${created.ruleId}] (${created.severity}) ${created.statement}`);
+        } else if ((sub === 'rm' || sub === 'remove' || sub === 'deactivate') && argTokens[1]) {
+          const ok = await this.protocolSupervisor.rules.deactivateRule(this.sessionId, argTokens[1]);
+          this.writeLine(ok ? `[Rules] Aturan ${argTokens[1]} dinonaktifkan.` : `[Rules] Aturan ${argTokens[1]} tidak ditemukan.`);
+        } else {
+          const text = await this.protocolSupervisor.rules.formatRulesForPrompt(this.sessionId);
+          this.writeLine(text ? `[Dynamic Rules Aktif]:\n${text}` : '[Rules] Tidak ada Dynamic Rule aktif.');
+        }
+        break;
+      }
+
+      case '/bots': {
+        const bots = await this.botService.reconcileBotLiveness(this.sessionId);
+        this.writeLine(`[Bots] Daftar Bot & Peran (${bots.length}):`);
+        for (const b of bots) {
+          this.writeLine(
+            `  - [${b.bot_id}] "${b.display_name}" status=${b.status} role=${b.role ?? 'worker'} model=${b.model_ref ?? 'default'} pid=${b.pid ?? 'none'}`
+          );
+        }
+        break;
+      }
+
+      case '/spawn-mode': {
+        if (!this.protocolSupervisor) {
+          this.writeLine('[SpawnMode] ProtocolSupervisor tidak aktif.');
+          break;
+        }
+        const nextMode = argTokens[0]?.toLowerCase();
+        if (nextMode === 'windows' || nextMode === 'multiplexed') {
+          const updated = await this.protocolSupervisor.store.updateConfig(this.sessionId, (c) => ({
+            ...c,
+            spawnMode: nextMode,
+          }));
+          this.writeLine(`[SpawnMode] Spawn mode diperbarui ke: ${updated.spawnMode}`);
+        } else {
+          const cfg = await this.protocolSupervisor.store.getConfig(this.sessionId);
+          this.writeLine(`[SpawnMode] Spawn mode aktif: ${cfg.spawnMode} (maxWindows=${cfg.maxWindows}). Ubah: /spawn-mode <windows|multiplexed>`);
+        }
+        break;
+      }
+
+      case '/moderator': {
+        if (!this.protocolSupervisor) {
+          this.writeLine('[Moderator] ProtocolSupervisor tidak aktif.');
+          break;
+        }
+        const sub = argTokens[0]?.toLowerCase();
+        if (sub === 'delegate' && argTokens[1]) {
+          const st = await this.protocolSupervisor.prModerator.delegateModerator(
+            this.sessionId,
+            argTokens[1],
+            this.botId
+          );
+          this.writeLine(`[Moderator] Hak PrModerator didelegasikan ke ${st.activeModeratorBotId}.`);
+        } else if (sub === 'reclaim') {
+          const st = await this.protocolSupervisor.prModerator.reclaimModerator(
+            this.sessionId,
+            this.botId
+          );
+          this.writeLine(`[Moderator] Hak PrModerator ditarik kembali ke ${st.activeModeratorBotId}.`);
+        } else {
+          const st = await this.protocolSupervisor.prModerator.getModeratorState(this.sessionId);
+          const activeToks = Object.values(st.tokens).filter((t) => t.status === 'ACTIVE').length;
+          this.writeLine(`[Moderator] Pemegang: ${st.activeModeratorBotId} | Global Fence Epoch: ${st.globalFenceEpoch} | Token Aktif: ${activeToks}`);
+        }
+        break;
+      }
+
       case '/help': {
         this.writeLine(`[Console] Daftar Perintah Interaktif:`);
         this.writeLine(`  /msg <targetBot> <pesan>  Kirim pesan langsung ke rekan bot`);
@@ -609,6 +748,12 @@ export class BotConsole {
         this.writeLine(`  /mode [review|turbo]      Tampilkan atau ubah mode eksekusi keamanan`);
         this.writeLine(`  /model [id] [provider]    Lihat daftar model (Ollama/NVIDIA/9router/OpenRouter/Gemini), ganti model, /model recommend, atau /model pull <id>`);
         this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
+        this.writeLine(`  /protocol                 Status 10 protokol v0.3.5, kuota token, & GoalLedger`);
+        this.writeLine(`  /blueprint                Tampilkan GoalLedger blueprint tasks aktif`);
+        this.writeLine(`  /rules [add|rm] [...]     Kelola Dynamic Rules sesi saat berjalan`);
+        this.writeLine(`  /bots                     Lihat status & model semua worker/master bot`);
+        this.writeLine(`  /spawn-mode [windows|multiplexed]  Atur mode jendela spawn worker`);
+        this.writeLine(`  /moderator [delegate|reclaim]      Lihat/kelola kursi PrModerator`);
         this.writeLine(`  /status                   Tampilkan ringkasan status bot lokal`);
         this.writeLine(`  /clear                    Bersihkan tampilan layar terminal`);
         this.writeLine(`  /exit, /quit              Hentikan bot dan keluar dari konsol`);
@@ -693,6 +838,8 @@ export class BotConsole {
       await this.runtime.stop();
     }
 
+    this.spawnManager?.reapAll();
+
     if (this.closeResolver) {
       this.closeResolver();
       this.closeResolver = undefined;
@@ -701,10 +848,14 @@ export class BotConsole {
 
   private printBanner(): void {
     this.writeLine(`================================================================`);
-    this.writeLine(` Almudaya Multi-Agent v${VERSION} — Interactive Bot Console REPL`);
+    if (this.isMasterConsole) {
+      this.writeLine(` Almudaya Multi-Agent v${VERSION} — HITL + MASTER (BOT000) Unified Console`);
+    } else {
+      this.writeLine(` Almudaya Multi-Agent v${VERSION} — Interactive Bot Console REPL`);
+    }
     this.writeLine(` Bot: "${this.botDisplayName}" [${this.botId}] | Session: ${this.sessionId}`);
-    this.writeLine(` Mode: ${this.executionModeController.getMode()} | Provider: ${this.aiProvider ? `${this.aiProvider.providerId} (${this.aiProvider.modelName})` : 'Disabled (Messaging only)'}`);
-    this.writeLine(` Ketik /help untuk daftar perintah slash atau ketik instruksi langsung.`);
+    this.writeLine(` Mode: ${this.executionModeController.getMode()} | Provider: ${this.aiProvider ? `${this.aiProvider.providerId} (${this.aiProvider.modelName})` : 'Standby (HITL Ready)'}`);
+    this.writeLine(` Ketik /help untuk daftar perintah (/protocol, /blueprint, /rules, /bots) atau ketik instruksi langsung.`);
     this.writeLine(`================================================================`);
   }
 }

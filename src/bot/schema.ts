@@ -9,7 +9,9 @@ export const BotStatusSchema = z.enum([
   'starting',
   'active',
   'idle',
+  'paused',
   'stopped',
+  'recycled',
   'failed',
   'stale',
 ]);
@@ -29,6 +31,13 @@ export const BotRecordSchema = z.object({
   joined_at: z.string().datetime(),
   last_seen_at: z.string().datetime(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  // v0.3.5 Protocol & Master-Worker orchestration fields (optional; allows custom display roles for v0.3.4 compat)
+  role: z.string().optional(),
+  is_moderator: z.boolean().optional(),
+  spawned_by: z.string().optional(),
+  spawn_mode: z.enum(['windows', 'multiplexed', 'headless']).optional(),
+  model_ref: z.string().optional(),
+  active_capability_token_id: z.string().optional(),
 });
 
 export type BotRecord = z.infer<typeof BotRecordSchema>;
@@ -49,6 +58,12 @@ export const RegisterBotInputSchema = z.object({
   status: BotStatusSchema.optional(),
   pid: z.number().int().positive().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  role: z.string().optional(),
+  isModerator: z.boolean().optional(),
+  spawnedBy: z.string().optional(),
+  spawnMode: z.enum(['windows', 'multiplexed', 'headless']).optional(),
+  modelRef: z.string().optional(),
+  activeCapabilityTokenId: z.string().optional(),
 });
 
 export type RegisterBotInput = z.infer<typeof RegisterBotInputSchema>;

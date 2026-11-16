@@ -1,7 +1,7 @@
-# Almudaya Multi-Agent v0.3.3 — Hands-on Step-by-Step Tutorial
+# Almudaya Multi-Agent v0.3.5 — Hands-on Step-by-Step Tutorial
 
-Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**, termasuk:
-1. Orkestrasi multi-proses lintas-terminal dengan **Interactive Bot Console REPL**,
+Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.5)**, termasuk:
+1. Orkestrasi satu-perintah **Unified HITL + Master Bot (`almudaya up`)** atau multi-proses lintas-terminal dengan **Interactive Bot Console REPL** (*Unified Natural Lifecycle* & **10 Protokol Atomic `IProtocol`**),
 2. Pemilihan model AI fleksibel secara langsung melalui **Ollama (Lokal)**, **NVIDIA NIM**, **Google Gemini**, **OpenRouter**, atau **9router** — lengkap dengan **Hardware Spec Advisor** (`almudaya bot advisor`) dan pengunduh model Ollama (`almudaya bot pull` & `/model pull`),
 3. Tata kelola keamanan **Agent Capability Governance (ACG)**,
 4. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
@@ -38,7 +38,14 @@ npm link
 # 3. Verifikasi versi CLI
 almudaya --version
 ```
-Pastikan output menampilkan **`0.3.3`**.
+Pastikan output menampilkan **`0.3.5`**.
+
+> [!TIP]
+> **Cara Cepat v0.3.5 (`almudaya up`):** Mulai `v0.3.5`, Anda dapat langsung menjalankan konsol HITL + **Master Bot (`BOT000`)** yang otomatis membuka terminal worker dan mengawal *Unified Natural Lifecycle* dalam satu perintah:
+> ```powershell
+> almudaya up --root D:\testingbot --provider gemini --spawn-mode windows
+> ```
+> Jika Anda ingin memahami arsitektur manual proses demi proses, ikuti Langkah 2–8 di bawah ini.
 
 ---
 

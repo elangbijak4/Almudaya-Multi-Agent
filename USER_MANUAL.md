@@ -1,8 +1,9 @@
-# Almudaya Multi-Agent v0.3.3 — Technical & Command Manual
+# Almudaya Multi-Agent v0.3.5 — Technical & Command Manual
 
-Dokumentasi manual teknis resmi untuk executable CLI `almudaya` dan runtime multi-agent **Almudaya Multi-Agent v0.3.3**, mencakup:
-- Sintaks perintah CLI lengkap (`session`, `bot`, `broadcast`, `message`, `context`, `capability`, dan `skill`),
-- **Interactive Bot Console REPL** (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/status`, `/clear`, `/help`, `/exit`),
+Dokumentasi manual teknis resmi untuk executable CLI `almudaya` dan runtime multi-agent **Almudaya Multi-Agent v0.3.5**, mencakup:
+- Sintaks perintah CLI lengkap (`up`/`start`, `session`, `bot`, `broadcast`, `message`, `context`, `capability`, dan `skill`),
+- **Master Bot (`BOT000`) & 10 Protokol Atomic `IProtocol`** (*Unified Natural Lifecycle*: `PrBot`, `PrBotGlobal`, `PrIterasi`, `PrDE`, `PrMEend`, `PrModerator`, `PrTransfer`, `PrMasterFailover`, `PrGate`, `PrReattach`),
+- **Interactive Bot & Master Console REPL** (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/protocol`, `/blueprint`, `/rules`, `/bots`, `/spawn-mode`, `/moderator`, `/status`, `/clear`, `/help`, `/exit`),
 - **Multi-Provider AI, Model Catalog & Local Hardware Advisor** (`gemini`, `nvidia`, `openrouter`, `9router`, `ollama`, `mock`, `almudaya bot models`, `almudaya bot advisor`, `almudaya bot pull`),
 - **Agent Capability Governance (ACG)** & isolasi eksekusi OS (`windows` Job Objects / `linux` bwrap),
 - **PKU Unified Persistent Memory Architecture (Spec v0.2)** (Project Memory Universe, Global & Individual Registers, Incremental Codebase Indexer, `query_pku_memory`, KOE L0–L3 Retrieval, Memory Lifecycle, serta UMI & External Adapter Gateway),
@@ -22,7 +23,7 @@ Semua perintah dirancang fleksibel: dapat menerima **argumen posisi** (*position
 ### Opsi Global
 | Opsi | Tipe | Default | Keterangan |
 |---|---|---|---|
-| `-v, --version` | Flag | - | Menampilkan versi terpasang dari `almudaya-multiagent` (`0.3.3`). |
+| `-v, --version` | Flag | - | Menampilkan versi terpasang dari `almudaya-multiagent` (`0.3.5`). |
 | `-h, --help` | Flag | - | Menampilkan bantuan manual perintah dan sub-perintah yang tersedia. |
 | `-w, --workspace <path>` | String | Platform default | Menimpa (*override*) direktori root penyimpanan session untuk eksekusi saat ini. |
 | `--json` | Flag | `false` | Menghasilkan keluaran dalam format JSON murni terstruktur (ideal untuk scripting & piping). |
@@ -30,6 +31,32 @@ Semua perintah dirancang fleksibel: dapat menerima **argumen posisi** (*position
 ---
 
 ## 2. Referensi Lengkap Sub-Perintah CLI
+
+### 2.0 Unified HITL + Master Bot & 10 Protokol (`almudaya up` / `start`)
+
+Meluncurkan konsol interaktif Human-in-the-Loop dan **Master Bot (`BOT000`)** dalam arsitektur **Unified Natural Lifecycle** (tanpa pemisahan mode klasik vs *macro-loop*; siklus $L=1$ maupun $L>1$ terbentuk secara alami dari rantai pesan tugas dan evaluasi `GoalLedger`):
+
+```bash
+almudaya up [options...]
+almudaya start [options...]
+```
+- **Options Utama:**
+  - `-s, --session <sessionId>`: Membuat atau melanjutkan session ID yang ada (memicu `PrReattach` saat resume).
+  - `-r, --root <paths...>`: Mendaftarkan satu atau beberapa *workspace directory root paths*.
+  - `-w, --workspace <path>`: Direktori root penyimpanan Blackboard.
+  - `--provider <provider>` & `--model <model>` & `--base-url <url>`: Provider & model utama Master Bot (`gemini`, `nvidia`, `openrouter`, `9router`, `ollama`, `mock`).
+  - `--master-failover <specs>`: Rantai model cadangan (`provider:model,...`) untuk `FailoverAIProvider` (`PrMasterFailover`).
+  - `--pool <specs>`: Pool model spesialis untuk worker (`provider:model,...`).
+  - `--spawn-mode <windows|multiplexed>`: Mode jendela worker (`windows` membuka jendela terminal OS terpisah per worker sebagai default; `multiplexed` menampilkan log worker berawalan ID ke konsol Master).
+  - `--max-windows <count>`: Batas maksimum jendela terminal OS serentak sebelum diturunkan ke `multiplexed` (`0` = tanpa batas khusus; default `"0"`).
+  - `--lazy-master`: Menunggu di mode standby HITL sampai ada objektif yang mengaktifkan Master Bot.
+  - `--pr-bot <limit>` (default `"10"`), `--pr-bot-global <limit>` (`auto` atau angka), `--pr-iterasi <limit>` (default `"10"`), `--pr-de <limit>` (default `"10"`).
+  - `--token-budget <tokens>` (default `"1000000"`), `--time-limit <ms>` (`ms` atau `"infinite"`, default `"infinite"`).
+  - `--moderator <botId>`: Pemegang awal kursi arbitrase `PrModerator` (default `"BOT000"`).
+  - `--no-pr-me-end`, `--no-pr-gate`, `--no-reattach`: Menonaktifkan pengaman protokol tertentu bila diperlukan.
+  - `--turbo` / `--mode <review|turbo>` / `--non-interactive`: Mengatur mode eksekusi atau menginisialisasi sesi tanpa masuk ke REPL.
+
+---
 
 ### 2.1 Manajemen Session (`almudaya session`)
 
@@ -136,6 +163,12 @@ Menjalankan proses bot dengan **Autonomous ReAct Agent Loop** dan **Interactive 
   | `/mode [review\|turbo]` | Menampilkan atau mengubah mode eksekusi keamanan secara *on-the-fly*. |
   | `/model [modelId] [provider]` | Menampilkan daftar model (`ollama`, `nvidia`, `9router`, `openrouter`, `gemini`), memfilter via `/model list [provider]`, mengecek spek hardware & rekomendasi (`/model recommend`), mengunduh model Ollama (`/model pull <modelId>`), atau mengganti model saat runtime. |
   | `/skill [subcommand]` | Mengelola skill & AVDS (`list`, `styles [family]`, `platforms`, `modalities`, `enable [skillId] [style] [platform]`, `disable [skillId]`). |
+  | `/protocol` | Menampilkan status **10 protokol v0.3.5**, kuota bot/token, dan ringkasan `GoalLedger`. |
+  | `/blueprint` | Menampilkan daftar tugas `GoalLedger` blueprint yang sedang berjalan. |
+  | `/rules [add\|rm] [...]` | Menambah, menonaktifkan, atau melihat **Dynamic Rules** (`rules.md`) sesi aktif. |
+  | `/bots` | Menampilkan status dan model seluruh worker serta Master Bot (`BOT000`). |
+  | `/spawn-mode [windows\|multiplexed]` | Mengubah mode jendela terminal worker secara langsung pada runtime. |
+  | `/moderator [delegate\|reclaim]` | Melihat, mendelegasikan, atau menarik kembali kursi arbitrase `PrModerator`. |
   | `/status` | Menampilkan ringkasan status bot lokal, PID, mode, dan AI provider. |
   | `/clear` | Membersihkan layar terminal. |
   | `/help` | Menampilkan daftar perintah interaktif. |
@@ -375,7 +408,7 @@ almudaya skill validate <filePath> [--type <design-contract|composition-plan|han
 
 ## 3. Mesin Perkakas Otonom Bot (Autonomous Agent Tools)
 
-Setiap bot dengan AI provider aktif (`--provider gemini`, `--provider nvidia`, `--provider openrouter`, `--provider 9router`, `--provider ollama`, atau `--provider mock`) memiliki akses ke **10 perkakas otonom**:
+Setiap bot dengan AI provider aktif (`--provider gemini`, `--provider nvidia`, `--provider openrouter`, `--provider 9router`, `--provider ollama`, atau `--provider mock`) memiliki akses ke **10 perkakas inti**, **3 Worker Protocol Tools** (saat sesi `v0.3.5` aktif), serta **9 Master Protocol Tools** khusus `BOT000`:
 
 | Nama Perkakas | Kategori | Perlu Review di Mode `REQUEST_REVIEW`? | Fungsi Utama |
 |---|---|---|---|
@@ -383,12 +416,20 @@ Setiap bot dengan AI provider aktif (`--provider gemini`, `--provider nvidia`, `
 | `read_file` | File Sandbox | Tidak (Read-Only) | Membaca isi berkas di dalam *project root* terdaftar (batas aman 10 MB). |
 | `list_dir` | File Sandbox | Tidak (Read-Only) | Menjelajahi isi direktori di dalam *project root*. |
 | `search_files` | File Sandbox | Tidak (Read-Only) | Mencari pola teks atau nama berkas di dalam *project root*. |
-| `write_file` | File Sandbox | **Ya (Mutasi)** | Menulis berkas secara atomik di dalam *project root*, mencatat ke `work_log.jsonl`, dan memperbarui indeks PKU **hanya untuk berkas yang berubah**. |
-| `edit_file` | File Sandbox | **Ya (Mutasi)** | Mengganti blok teks eksak pada berkas, mencatat ke `work_log.jsonl`, dan memperbarui indeks PKU **hanya untuk berkas yang berubah**. |
-| `run_command` | Execution Controller | **Ya (Mutasi)** | Mengeksekusi perintah shell melalui `ExecutionController` dengan redaksi kredensial dan isolasi OS. |
+| `write_file` | File Sandbox | **Ya (Mutasi + Fencing)** | Menulis berkas secara atomik di dalam *project root*, wajib lolos `CapabilityToken` write-fencing (`PrModerator`), mencatat `work_log.jsonl`, dan memperbarui indeks PKU. |
+| `edit_file` | File Sandbox | **Ya (Mutasi + Fencing)** | Mengganti blok teks eksak pada berkas, wajib lolos `CapabilityToken` write-fencing (`PrModerator`), mencatat `work_log.jsonl`, dan memperbarui indeks PKU. |
+| `run_command` | Execution Controller | **Ya (Mutasi + Fencing)** | Mengeksekusi perintah shell melalui `ExecutionController` dengan redaksi kredensial dan isolasi OS. |
 | `get_work_log` | Shared Memory | Tidak (Read-Only) | Membaca riwayat kerja lintas-root (`work_log.jsonl`) dari rekan bot lain. |
 | `send_message` | Blackboard Messaging | Tidak | Mengirim pesan langsung secara native ke rekan bot lain di tengah siklus ReAct. |
 | `use_skill` | Skill & AVDS Engine | Tidak (Read-Only) | Mengakses katalog skill, 40 profil gaya visual AVDS, 13 profil platform, 10 modalitas interaksi, panduan workflow, dan validator kontrak desain. |
+
+### 3.1 Perkakas Protokol v0.3.5 (Worker & Master Bot `BOT000`)
+- **Worker Protocol Tools (semua bot saat protokol aktif):**
+  - `request_spawn_bot`: Mengajukan permintaan ke `BOT000` untuk men-spawn worker spesialis baru (dievaluasi terhadap `PrBot` dan `PrBotGlobal`).
+  - `update_goal_task`: Memperbarui status (`PENDING`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `FAILED`) dan progres tugas di `GoalLedger`.
+  - `submit_task_handoff`: Mengirim pesan handover akhir siklus (`PrTransfer` envelope + `CC: MASTER`) ke rekan bot, `"UNKNOWN"`, atau `"TASK_0"`.
+- **Master Protocol Tools (khusus `BOT000`):**
+  - `manage_dynamic_rule`, `delegate_moderator_role`, `issue_capability_token`, `spawn_worker_bot`, `pause_or_kill_bot`, `resolve_deadend_thread`, `reassign_handover_task`, `migrate_stalled_message`, `mark_goal_achieved`.
 
 ---
 

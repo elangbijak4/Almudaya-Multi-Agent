@@ -1,14 +1,37 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.4)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.5)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 437 Passed](https://img.shields.io/badge/Tests-437%20Passed-brightgreen.svg)](./docs/docs_v0.3.3/docs/remediation/v0.3.3-srp1/reports/FINAL_VERIFICATION_REPORT.md)
+[![Tests: 471 Passed](https://img.shields.io/badge/Tests-471%20Passed-brightgreen.svg)](./docs/ver0.3.5/10_PHASE_GATES/PHASE_STATUS.md)
 [![AI Engines: Gemini | NVIDIA NIM | Ollama | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20NVIDIA%20NIM%20%7C%20Ollama%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Unified Natural Lifecycle Master Bot (`BOT000`) & 10 Atomic `IProtocol` Governance Classes**, **Dual-Mode Startup (`almudaya up`)**, **FailoverAIProvider & Write-Fencing Capability Tokens**, **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.5
+
+1. **Unified Natural Lifecycle (Single-Cycle $L=1$ & Multi-Cycle $L>1$):**
+   - Eliminates any artificial mode switch between "classic mode" and "macro-loop mode". All 10 atomic `IProtocol` classes remain active continuously: simple tasks resolve naturally in a single cycle ($L=1$ with `TASK_0` -> `PrGate` approval), while complex or blocked task chains iterate seamlessly ($L>1$) through Master Bot (`BOT000`) supervision.
+2. **10 Atomic `IProtocol` Classes (`src/protocol/`):**
+   - Modular, independently evaluable governance protocols orchestrated by `ProtocolRegistry` (with `MasterInterventionQueue` `P0..P5` priority levels) and `ProtocolSupervisor`:
+     - `PrBot` (cumulative worker spawn quota per session),
+     - `PrBotGlobal` (hardware spec, concurrent cap, token budget, and wall-clock time ceiling with HITL escalation),
+     - `PrIterasi` (ReAct iteration budget & automatic handover takeover),
+     - `PrDE` (dead-end thread exchange mediation & stalling escalation),
+     - `PrMEend` (2-layer dead-end/`TASK_0`/`UNKNOWN` routing guard with Master CC & migration),
+     - `PrModerator` (delegatable arbitration seat with monotonic `globalFenceEpoch` write fencing),
+     - `PrTransfer` (atomic `CapabilityToken` epoch bump, `LastWorkPositionLog`, and workspace checkpoint restore),
+     - `PrMasterFailover` (`FailoverAIProvider` automatic retry/rotation on `402`/`429`/`5xx` and `PAUSED_MASTER_UNAVAILABLE` HITL pause),
+     - `PrGate` (objective completion gate across `GoalLedger` tasks and non-empty target files before `GOAL_ACHIEVED`),
+     - `PrReattach` (OS PID reconciliation & orphan recovery on session resume).
+3. **One-Command Master Bot & Dual-Mode Worker Spawning (`almudaya up` / `start`):**
+   - Launch `BOT000` (`HITL [MASTER]> `) and interactive REPL directly with `almudaya up`, supporting `--spawn-mode windows` (default separate OS terminal windows per worker, capped via `--max-windows`) or `--spawn-mode multiplexed`, plus `--lazy-master` standby initialization.
+4. **Live Protocol Visibility, Dynamic Rules & Workspace Checkpoints:**
+   - Added Master REPL commands (`/protocol`, `/blueprint`, `/rules`, `/bots`, `/spawn-mode`, `/moderator`), `WorkspaceCheckpointManager` clean restore/rollback, `DynamicRulesService` (`rules.md`), and native worker/master protocol tools (`request_spawn_bot`, `update_goal_task`, `submit_task_handoff`, `manage_dynamic_rule`, `delegate_moderator_role`, `issue_capability_token`, `spawn_worker_bot`, `pause_or_kill_bot`, `resolve_deadend_thread`, `reassign_handover_task`, `migrate_stalled_message`, `mark_goal_achieved`).
 
 ---
 

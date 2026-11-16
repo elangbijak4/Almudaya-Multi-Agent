@@ -1,6 +1,6 @@
-# Almudaya Multi-Agent v0.3.3 — User & Operator Guide
+# Almudaya Multi-Agent v0.3.5 — User & Operator Guide
 
-Panduan konseptual, arsitektural, dan operasional komprehensif untuk pengembang, arsitek sistem, desainer produk, dan operator yang mengelola ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.3)**.
+Panduan konseptual, arsitektural, dan operasional komprehensif untuk pengembang, arsitek sistem, desainer produk, dan operator yang mengelola ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.5)**.
 
 ---
 
@@ -50,13 +50,14 @@ Almudaya mengadopsi arsitektur **Session-Centric**, **Multi-Process**, **Persist
                        └───────────────────────────────────────────────────────┘
 ```
 
-### Enam Pilar Arsitektur Almudaya v0.3.3:
-1. **Session Boundary & Multi-Root Orchestration:** Setiap sesi kolaborasi mengisolasi state dan dapat mengelola banyak direktori proyek (*project roots* seperti `backend`, `frontend`, `mobile`, `docs`) secara simultan dengan pelacakan lokasi presisi di `work_log.jsonl`.
-2. **Process Isolation & Interactive Bot Console REPL:** Setiap bot berjalan di proses OS independen dengan konsol interaktif *non-blocking* (`<BotName>> `) yang mendukung perintah slash (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/status`) dan instruksi bahasa alami.
-3. **Blackboard Durability & Lease/Fencing Delivery:** Pengiriman pesan dilindungi oleh *atomic write*, *cooperative lock* dengan *fencing token* monotonik, serta *inbox delivery state machine* (`PENDING` $\rightarrow$ `PROCESSING` $\rightarrow$ `ACKED` / `FAILED` / `DEAD_LETTER`).
-4. **Agent Capability Governance (ACG) & Defense-in-Depth:** Eksekusi perintah eksternal dikendalikan oleh kebijakan *fail-closed*, *prompt-injection boundary delimiters* (`<<<UNTRUSTED_*>>>`), sanitasi *environment variables*, serta *automatic secret redaction*.
-5. **PKU Unified Persistent Memory & PKU-First Policy (Spec v0.2):** Menyatukan memori operasional Blackboard, memori kognitif individual bot (ACMA), dan **Incremental Codebase Indexer** ke dalam penyimpanan pengetahuan jangka panjang yang deterministik, terisolasi per proyek (*PMU*), hemat token via *Knowledge Optimization Engine* (`KOE` L0–L3), penangkapan memori otomatis *fail-open*, serta kewajiban **PKU-First Reading** (`query_pku_memory`) sebelum membaca berkas penuh (`PKU-001` s/d `PKU-020`).
-6. **Almudaya Visual Design Skills (AVDS v1.0.1):** Kerangka kerja desain dan rekayasa UI/UX adaptif lintas-platform yang memisahkan **Identitas Visual (40 gaya)**, **Konvensi Platform (13 platform)**, dan **Modalitas Interaksi (10 modalitas)** agar agen AI menghasilkan antarmuka yang khas, kontekstual, dan bebas dari jebakan desain generik.
+### Tujuh Pilar Arsitektur Almudaya v0.3.5:
+1. **Master Bot (`BOT000`), Unified Natural Lifecycle & 10 Kelas Protokol Atomic (`IProtocol`):** Tidak memisahkan *classic mode* vs *macro-loop mode*. Tugas sederhana selesai alami dalam satu siklus ($L=1$ via `TASK_0` dan verifikasi `PrGate`), sedangkan tugas berantai atau buntu berlanjut menjadi *macro-loop* ($L>1$) di bawah tata kelola **10 protokol independen**: `PrBot`, `PrBotGlobal`, `PrIterasi`, `PrDE`, `PrMEend`, `PrModerator` (kursi arbitrase & *write-fencing epoch*), `PrTransfer` (*CapabilityToken*, *LastWorkPositionLog*, & *checkpoint restore*), `PrMasterFailover` (`FailoverAIProvider`), `PrGate`, serta `PrReattach`.
+2. **Session Boundary & Multi-Root Orchestration:** Setiap sesi kolaborasi mengisolasi state dan dapat mengelola banyak direktori proyek (*project roots* seperti `backend`, `frontend`, `mobile`, `docs`) secara simultan dengan pelacakan lokasi presisi di `work_log.jsonl`.
+3. **Process Isolation & Interactive Bot Console REPL:** Setiap bot berjalan di proses OS independen (terbuka di jendela terminal masing-masing atau *multiplexed* via `almudaya up`) dengan konsol interaktif *non-blocking* (`<BotName>> ` / `HITL [MASTER]> `) yang mendukung perintah slash (`/msg`, `/broadcast`, `/peers`, `/roots`, `/log`, `/mode`, `/model`, `/skill`, `/protocol`, `/blueprint`, `/rules`, `/bots`, `/spawn-mode`, `/moderator`, `/status`) dan instruksi bahasa alami.
+4. **Blackboard Durability & Lease/Fencing Delivery:** Pengiriman pesan dilindungi oleh *atomic write*, *cooperative lock* dengan *fencing token* monotonik, *inbox delivery state machine* (`RECEIVED` $\rightarrow$ `PROCESSING` $\rightarrow$ `COMPLETED` / `RETRY_PENDING` / `DEAD_LETTER`), serta `WorkspaceCheckpointManager` untuk *rollback* bersih saat alih tugas.
+5. **Agent Capability Governance (ACG) & Defense-in-Depth:** Eksekusi perintah eksternal dan penulisan file dikendalikan oleh kebijakan *fail-closed*, validasi `CapabilityToken` *write fencing*, *prompt-injection boundary delimiters* (`<<<UNTRUSTED_*>>>`), sanitasi *environment variables*, serta *automatic secret redaction*.
+6. **PKU Unified Persistent Memory & PKU-First Policy (Spec v0.2):** Menyatukan memori operasional Blackboard, memori kognitif individual bot (ACMA), dan **Incremental Codebase Indexer** ke dalam penyimpanan pengetahuan jangka panjang yang deterministik, terisolasi per proyek (*PMU*), hemat token via *Knowledge Optimization Engine* (`KOE` L0–L3), penangkapan memori otomatis *fail-open*, serta kewajiban **PKU-First Reading** (`query_pku_memory`) sebelum membaca berkas penuh (`PKU-001` s/d `PKU-020`).
+7. **Almudaya Visual Design Skills (AVDS v1.0.1):** Kerangka kerja desain dan rekayasa UI/UX adaptif lintas-platform yang memisahkan **Identitas Visual (40 gaya)**, **Konvensi Platform (13 platform)**, dan **Modalitas Interaksi (10 modalitas)** agar agen AI menghasilkan antarmuka yang khas, kontekstual, dan bebas dari jebakan desain generik.
 
 ---
 
@@ -160,7 +161,7 @@ almudaya skill validate <path-ke-kontrak.json>
 
 ## 5. Dukungan Multi-Provider AI (Gemini, NVIDIA NIM, Ollama Lokal, OpenRouter, 9router) & `/model`
 
-Almudaya v0.3.3 mendukung pemilihan model AI secara fleksibel baik dari cloud maupun model lokal yang terunduh di komputer Anda:
+Almudaya v0.3.5 mendukung pemilihan model AI secara fleksibel baik dari cloud maupun model lokal yang terunduh di komputer Anda:
 
 1. **Ollama Lokal (`--provider ollama`, default `http://localhost:11434/v1`):**
    - Menjalankan bot menggunakan model lokal yang terunduh di **Ollama** (atau server lokal OpenAI-compatible lain) tanpa API key dan tetap bekerja secara offline.

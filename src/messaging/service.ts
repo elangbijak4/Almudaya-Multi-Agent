@@ -323,6 +323,14 @@ export class MessagingService {
         last_attempt_at: null,
         last_error: null,
         idempotency_key: input.idempotencyKey,
+        ...(input.threadId ? { thread_id: input.threadId } : {}),
+        ...(input.taskId ? { task_id: input.taskId } : {}),
+        ...(input.exchangeCount !== undefined ? { exchange_count: input.exchangeCount } : {}),
+        ...(input.ccMaster !== undefined ? { cc_master: input.ccMaster } : {}),
+        ...(input.isTaskZero !== undefined ? { is_task_zero: input.isTaskZero } : {}),
+        ...(input.recipientStatus ? { recipient_status: input.recipientStatus } : {}),
+        ...(input.messageKind ? { message_kind: input.messageKind } : {}),
+        ...(input.transferEnvelope ? { transfer_envelope: input.transferEnvelope } : {}),
       };
 
       inbox.messages.push(message);

@@ -75,6 +75,14 @@ export class BotService {
         joined_at: now,
         last_seen_at: now,
         metadata: input.metadata ?? {},
+        ...(input.role ? { role: input.role } : {}),
+        ...(input.isModerator !== undefined ? { is_moderator: input.isModerator } : {}),
+        ...(input.spawnedBy ? { spawned_by: input.spawnedBy } : {}),
+        ...(input.spawnMode ? { spawn_mode: input.spawnMode } : {}),
+        ...(input.modelRef ? { model_ref: input.modelRef } : {}),
+        ...(input.activeCapabilityTokenId
+          ? { active_capability_token_id: input.activeCapabilityTokenId }
+          : {}),
       };
 
       registry.bots.push(botRecord);
@@ -185,7 +193,7 @@ export class BotService {
         newMetadata = { ...existing.metadata, ...metadata };
       }
 
-      if (status === 'stopped' || status === 'failed') {
+      if (status === 'stopped' || status === 'failed' || status === 'recycled') {
         newPid = undefined;
       }
 

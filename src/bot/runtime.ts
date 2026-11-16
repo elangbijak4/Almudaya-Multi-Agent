@@ -217,6 +217,16 @@ export class BotRuntime {
 
       if (this.abortController.signal.aborted) return;
 
+      // Skip claiming new work while paused or recycled by PrBotGlobal/Master
+      try {
+        const selfBot = await this.botService.getBot(this.sessionId, this.botId);
+        if (selfBot.status === 'paused' || selfBot.status === 'recycled') {
+          return;
+        }
+      } catch {
+        // Ignore if bot record temporarily unavailable
+      }
+
       // 2. Recover any expired leases from crashed workers
       await this.messagingService.delivery.recoverExpiredLeases(this.sessionId, this.botId);
 

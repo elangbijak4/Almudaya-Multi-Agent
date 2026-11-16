@@ -19,6 +19,10 @@ export type InteractivePromptHandler = (
   message: string
 ) => Promise<string>;
 
+export type CapabilityValidator = (
+  request: ToolExecutionRequest
+) => Promise<{ allowed: boolean; reason?: string }>;
+
 /**
  * Mutating tools that require human approval in REQUEST_REVIEW mode.
  * Read-only inspection tools (read_file, list_dir, search_files) execute safely without prompt.
@@ -32,6 +36,7 @@ const MUTATING_TOOLS = new Set(['write_file', 'edit_file', 'run_command']);
 export class ExecutionModeController {
   private mode: ExecutionMode;
   private promptHandler?: InteractivePromptHandler;
+  private capabilityValidator?: CapabilityValidator;
 
   constructor(
     initialMode: ExecutionMode = 'REQUEST_REVIEW',
@@ -47,6 +52,14 @@ export class ExecutionModeController {
 
   public setMode(mode: ExecutionMode): void {
     this.mode = mode;
+  }
+
+  /**
+   * Registers an optional deterministic PrModerator / CapabilityToken validator
+   * invoked before executing mutating tools.
+   */
+  public setCapabilityValidator(validator?: CapabilityValidator): void {
+    this.capabilityValidator = validator;
   }
 
   /**
@@ -67,12 +80,22 @@ export class ExecutionModeController {
   }
 
   /**
-   * Evaluates tool call. In TURBO mode, automatically approved.
-   * In REQUEST_REVIEW mode, prompts the human operator via terminal.
+   * Evaluates tool call. Checks PrModerator write-fencing first (if registered),
+   * then applies TURBO / REQUEST_REVIEW approval rules.
    */
   public async requestApproval(
     request: ToolExecutionRequest
   ): Promise<ExecutionApprovalDecision> {
+    if (this.capabilityValidator && MUTATING_TOOLS.has(request.toolName)) {
+      const capCheck = await this.capabilityValidator(request);
+      if (!capCheck.allowed) {
+        return {
+          approved: false,
+          reason: capCheck.reason ?? 'Blocked by PrModerator CapabilityToken write fence.',
+        };
+      }
+    }
+
     if (!this.isReviewRequired(request.toolName)) {
       return { approved: true };
     }

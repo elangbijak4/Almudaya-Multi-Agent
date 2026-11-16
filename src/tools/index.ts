@@ -8,5 +8,7 @@ export * from './file-tools.js';
 export * from './command-tools.js';
 export * from './work-log-tool.js';
 export * from './messaging-tools.js';
+export * from './goal-tools.js';
+export * from './master-tools.js';
 export * from './skill-tools.js';
 export * from './pku-tools.js';

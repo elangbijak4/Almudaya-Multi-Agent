@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import crypto from 'node:crypto';
+import {
+  PrTransferEnvelopeSchema,
+  type PrTransferEnvelope,
+} from '../protocol/schema.js';
 
 export const CURRENT_MESSAGING_SCHEMA_VERSION = '1.0.0';
 
@@ -63,6 +67,19 @@ export const MessageStatusSchema = z.enum([
 ]);
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
+export const MessageKindSchema = z.enum([
+  'TASK_LOOP',
+  'HANDOVER',
+  'TASK_0',
+  'DE_ESCALATION',
+  'ME_END_MIGRATION',
+  'RULE_UPDATE',
+  'GOAL_ACHIEVED',
+  'CAPABILITY_TRANSFER',
+  'CHAT',
+]);
+export type MessageKind = z.infer<typeof MessageKindSchema>;
+
 export const DirectMessageSchema = z.object({
   message_id: z.string(),
   session_id: z.string(),
@@ -86,6 +103,16 @@ export const DirectMessageSchema = z.object({
   last_attempt_at: z.string().datetime().nullable().optional().default(null),
   last_error: z.string().nullable().optional().default(null),
   idempotency_key: z.string().optional(),
+
+  // v0.3.5 Protocol & PrMEend/PrDE/PrTransfer fields (all optional for v0.3.4 compat)
+  thread_id: z.string().optional(),
+  task_id: z.string().optional(),
+  exchange_count: z.number().int().nonnegative().optional(),
+  cc_master: z.boolean().optional(),
+  is_task_zero: z.boolean().optional(),
+  recipient_status: z.enum(['RESOLVED', 'UNKNOWN']).optional(),
+  message_kind: MessageKindSchema.optional(),
+  transfer_envelope: PrTransferEnvelopeSchema.optional(),
 });
 export type DirectMessage = z.infer<typeof DirectMessageSchema>;
 
@@ -122,6 +149,14 @@ export interface SendDirectMessageInput {
   metadata?: Record<string, unknown>;
   idempotencyKey?: string;
   maxAttempts?: number;
+  threadId?: string;
+  taskId?: string;
+  exchangeCount?: number;
+  ccMaster?: boolean;
+  isTaskZero?: boolean;
+  recipientStatus?: 'RESOLVED' | 'UNKNOWN';
+  messageKind?: MessageKind;
+  transferEnvelope?: PrTransferEnvelope;
 }
 
 export interface ReadInboxOptions {

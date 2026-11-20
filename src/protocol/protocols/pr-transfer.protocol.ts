@@ -11,6 +11,7 @@ import {
   PrTransferEnvelopeSchema,
   generateProtocolId,
   type CapabilityToken,
+  type HandoverRecord,
   type LastWorkPositionLog,
   type PrTransferEnvelope,
   type ProtocolConfig,
@@ -38,6 +39,7 @@ export interface BuildTransferInput {
   allowedPaths?: string[];
   checkpointIdToRestore?: string;
   workspaceRoots?: string[];
+  recordHandover?: boolean;
 }
 
 /**
@@ -128,22 +130,73 @@ export class PrTaskTokenTransferProtocol
       checkpointRestored = true;
     }
 
+    const existingTask = await this.ledger.getTask(input.sessionId, input.taskId);
+    const inheritedPaths =
+      input.allowedPaths && input.allowedPaths.length > 0
+        ? input.allowedPaths
+        : existingTask?.targetFiles && existingTask.targetFiles.length > 0
+          ? existingTask.targetFiles
+          : [];
+
+    let resolvedTokenId = input.existingTokenId;
+    if (!resolvedTokenId) {
+      const fromBotToken = await this.moderator.findActiveTokenForTask(
+        input.sessionId,
+        input.taskId,
+        input.fromBotId
+      );
+      resolvedTokenId = fromBotToken?.tokenId;
+    }
+
     let transferredToken: CapabilityToken;
-    if (input.existingTokenId) {
+    if (input.toBotId === 'BOT000') {
+      // Handoff to Master (TASK_0 completion or UNKNOWN review) must NEVER lock worker paths.
+      const toRevokeId =
+        resolvedTokenId ??
+        (await this.moderator.findActiveTokenForTask(input.sessionId, input.taskId))?.tokenId;
+      if (toRevokeId) {
+        try {
+          await this.moderator.revokeToken(
+            input.sessionId,
+            toRevokeId,
+            `Task ${input.taskId} handed off to MASTER (BOT000) for review/closure.`,
+            input.fromBotId
+          );
+        } catch {
+          // Ignore if already revoked/transferred
+        }
+      }
+      transferredToken = await this.moderator.issueToken(input.sessionId, {
+        taskId: input.taskId,
+        holderBotId: 'BOT000',
+        allowedPaths: inheritedPaths,
+        accessMode: 'REVIEW_ONLY',
+      });
+    } else if (resolvedTokenId) {
       const res = await this.moderator.transferToken(
         input.sessionId,
-        input.existingTokenId,
+        resolvedTokenId,
         input.fromBotId,
-        input.toBotId
+        input.toBotId,
+        input.allowedPaths && input.allowedPaths.length > 0 ? input.allowedPaths : undefined
       );
       transferredToken = res.nextToken;
     } else {
-      transferredToken = await this.moderator.issueToken(input.sessionId, {
-        taskId: input.taskId,
-        holderBotId: input.toBotId,
-        allowedPaths: input.allowedPaths ?? ['**/*'],
-        accessMode: 'EXCLUSIVE_WRITE',
-      });
+      const existingToBotToken = await this.moderator.findActiveTokenForTask(
+        input.sessionId,
+        input.taskId,
+        input.toBotId
+      );
+      if (existingToBotToken) {
+        transferredToken = existingToBotToken;
+      } else {
+        transferredToken = await this.moderator.issueToken(input.sessionId, {
+          taskId: input.taskId,
+          holderBotId: input.toBotId,
+          allowedPaths: inheritedPaths,
+          accessMode: inheritedPaths.length > 0 ? 'EXCLUSIVE_WRITE' : 'REVIEW_ONLY',
+        });
+      }
     }
 
     const envelope = PrTransferEnvelopeSchema.parse({
@@ -156,18 +209,63 @@ export class PrTaskTokenTransferProtocol
       checkpointRestored,
     });
 
-    // Sync GoalLedger if task exists (preserve DONE on normal/TASK_0 completion handoffs)
-    const existingTask = await this.ledger.getTask(input.sessionId, input.taskId);
+    // Sync GoalLedger atomically: preserve DONE on TASK_0, increment handoverCount on worker handoff (APP-BUG-23)
     if (existingTask) {
       const targetStatus =
         existingTask.status === 'DONE' &&
         (!input.transferKind || input.transferKind === 'NORMAL_HANDOFF')
           ? 'DONE'
           : 'PENDING';
-      await this.ledger.updateTaskStatus(input.sessionId, input.taskId, targetStatus, {
-        assignedBotId: input.toBotId,
-        lastWorkPositionLog: workLog,
-      });
+
+      const shouldRecordHandover =
+        input.recordHandover !== false &&
+        input.fromBotId !== input.toBotId &&
+        input.toBotId !== 'BOT000';
+
+      if (shouldRecordHandover) {
+        const handoverReasonMap: Record<
+          PrTransferEnvelope['transferKind'],
+          HandoverRecord['reason']
+        > = {
+          NORMAL_HANDOFF: 'NORMAL_HANDOFF',
+          PR_ITERASI_TAKEOVER: 'PR_ITERASI',
+          PR_ME_END_MIGRATION: 'ME_END_MIGRATION',
+          PR_DE_REASSIGN: 'PR_DE',
+        };
+        const reason = handoverReasonMap[envelope.transferKind] ?? 'NORMAL_HANDOFF';
+        await this.ledger.recordHandover(
+          input.sessionId,
+          input.taskId,
+          {
+            attempt: existingTask.handoverCount + 1,
+            fromBotId: input.fromBotId,
+            toBotId: input.toBotId,
+            fromModel: 'active',
+            toModel: 'active',
+            reason,
+            summary:
+              input.pendingNextStep.trim() ||
+              input.lastCompletedStep.trim() ||
+              `Handover from ${input.fromBotId} to ${input.toBotId}`,
+            checkpointRestored,
+            newFenceEpoch: transferredToken.fenceEpoch,
+            timestamp: now,
+          },
+          {
+            newBotId: input.toBotId,
+            status: targetStatus,
+            lastWorkPositionLog: workLog,
+          }
+        );
+      } else {
+        await this.ledger.updateTaskStatus(input.sessionId, input.taskId, targetStatus, {
+          assignedBotId:
+            input.toBotId === 'BOT000' && existingTask.status === 'DONE'
+              ? existingTask.assignedBotId
+              : input.toBotId,
+          lastWorkPositionLog: workLog,
+        });
+      }
     }
 
     await this.store.updateRuntimeState(input.sessionId, (rt) => ({

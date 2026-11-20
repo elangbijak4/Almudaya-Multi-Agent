@@ -25,6 +25,10 @@ export class CapabilityPersistence {
     this.workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
   }
 
+  public getWorkspaceRoot(): string {
+    return this.workspaceRoot;
+  }
+
   public getCapabilitiesDir(sessionId: string): string {
     const validId = validateSessionId(sessionId);
     const targetDir = path.resolve(this.workspaceRoot, 'sessions', validId, 'capabilities');

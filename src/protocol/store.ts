@@ -43,6 +43,11 @@ export class ProtocolStore {
     return path.join(this.storage.getSessionDir(sessionId), 'protocol');
   }
 
+  public getWorkspaceRoot(): string | undefined {
+    const candidate = this.storage as { workspaceRoot?: unknown };
+    return typeof candidate.workspaceRoot === 'string' ? candidate.workspaceRoot : undefined;
+  }
+
   public getCheckpointsDir(sessionId: string): string {
     return path.join(this.getProtocolDir(sessionId), 'checkpoints');
   }

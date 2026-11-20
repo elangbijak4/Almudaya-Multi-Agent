@@ -12,6 +12,9 @@ import { ExecutionModeController, type ExecutionMode } from '../../bot/execution
 import { BotRuntime } from '../../bot/runtime.js';
 import { resolveWorkspaceRoot } from '../../core/config.js';
 import { ValidationError } from '../../core/errors.js';
+import { VERSION } from '../../core/version.js';
+import { ExecutionController } from '../../execution/controller.js';
+import { McpClientManager, McpConfigStore } from '../../mcp/index.js';
 import { createWorkspaceMemoryRuntime } from '../../memory_modules/index.js';
 import { MasterAgentOrchestrator } from '../../protocol/master-agent.js';
 import {
@@ -45,6 +48,9 @@ export interface UpCliOptions {
   prMeEnd?: boolean;
   prGate?: boolean;
   reattach?: boolean;
+  allowMasterWrite?: boolean;
+  mcpConfig?: string;
+  mcp?: boolean;
   turbo?: boolean;
   mode?: string;
   nonInteractive?: boolean;
@@ -114,7 +120,7 @@ export function resolveDefaultMasterSpec(options: UpCliOptions): ModelSpec {
       (p === 'gemini'
         ? 'gemini-2.5-flash'
         : p === 'nvidia'
-          ? 'nvidia/nemotron-3-super-120b-a12b'
+          ? 'nvidia/nemotron-3.5-super-vl-120b-a12b'
           : p === 'ollama'
             ? 'qwen2.5-coder:7b'
             : p === 'openrouter'
@@ -129,7 +135,7 @@ export function resolveDefaultMasterSpec(options: UpCliOptions): ModelSpec {
   if (process.env.NVIDIA_API_KEY) {
     return {
       provider: 'nvidia',
-      model: options.model ?? 'nvidia/nemotron-3-super-120b-a12b',
+      model: options.model ?? 'nvidia/nemotron-3.5-super-vl-120b-a12b',
     };
   }
   if (process.env.OPENROUTER_API_KEY) {
@@ -185,14 +191,15 @@ export function buildProtocolConfigFromCliOptions(
     maxWindows,
     prBotLimit: parsePositiveIntOption(options.prBot, 'pr-bot') ?? 10,
     prBotGlobalMax,
-    prIterasiLimit: parsePositiveIntOption(options.prIterasi, 'pr-iterasi') ?? 10,
+    prIterasiLimit: parsePositiveIntOption(options.prIterasi, 'pr-iterasi') ?? 25,
     prDeLimit: parsePositiveIntOption(options.prDe, 'pr-de') ?? 10,
-    tokenBudget: parsePositiveIntOption(options.tokenBudget, 'token-budget') ?? 1000000,
+    tokenBudget: parsePositiveIntOption(options.tokenBudget, 'token-budget') ?? 10000000,
     globalTimeoutMs,
     moderatorBotId: options.moderator ?? 'BOT000',
     prMeEndEnabled: options.prMeEnd !== false,
     prGateEnabled: options.prGate !== false,
     prReattachEnabled: options.reattach !== false,
+    masterStrictOrchestrator: !options.allowMasterWrite,
     masterModel,
     masterFailoverChain,
     modelPool: modelPool.length > 0 ? modelPool : [masterModel],
@@ -207,7 +214,7 @@ export function registerUpCommand(program: Command): void {
     .alias('start')
     .alias('master')
     .description(
-      'Start unified Almudaya Multi-Agent HITL + Master Bot (BOT000) session with v0.3.5 protocols'
+      `Start unified Almudaya Multi-Agent HITL + Master Bot (BOT000) session with v${VERSION} protocols`
     )
     .option('-s, --session <sessionId>', 'Create or resume a session ID')
     .option('-r, --root <paths...>', 'Workspace directory root paths')
@@ -222,14 +229,17 @@ export function registerUpCommand(program: Command): void {
     .option('--lazy-master', 'Wait in HITL standby until an objective activates Master Bot', false)
     .option('--pr-bot <limit>', 'Cumulative worker spawn limit per session', '10')
     .option('--pr-bot-global <limit>', 'Global concurrent bot ceiling (auto or integer)', 'auto')
-    .option('--pr-iterasi <limit>', 'Max ReAct iterations before PrIterasi handover', '10')
+    .option('--pr-iterasi <limit>', 'Max ReAct iterations before PrIterasi handover', '25')
     .option('--pr-de <limit>', 'Max thread exchanges before PrDE mediation', '10')
-    .option('--token-budget <tokens>', 'Session-wide token ceiling for PrBotGlobal', '1000000')
+    .option('--token-budget <tokens>', 'Session-wide token ceiling for PrBotGlobal', '10000000')
     .option('--time-limit <ms>', 'Session time budget in ms or "infinite"', 'infinite')
     .option('--moderator <botId>', 'Initial PrModerator holder Bot ID', 'BOT000')
     .option('--no-pr-me-end', 'Disable PrMEend dead-end message routing guard')
     .option('--no-pr-gate', 'Disable PrGate objective completion gate')
     .option('--no-reattach', 'Disable PrReattach PID reconciliation on resume')
+    .option('--allow-master-write', 'Allow Master Bot (BOT000) to directly write/edit code even when workers are active', false)
+    .option('--mcp-config <path>', 'Optional external mcp.json config file to load MCP servers')
+    .option('--no-mcp', 'Disable automatic MCP server connection on startup')
     .option('--turbo', 'Start execution mode in TURBO instead of REQUEST_REVIEW', false)
     .option('--mode <mode>', 'Execution mode (review|turbo)')
     .option('--non-interactive', 'Initialize and exit without starting interactive HITL console', false)
@@ -237,6 +247,7 @@ export function registerUpCommand(program: Command): void {
       try {
         const configOverrides = buildProtocolConfigFromCliOptions(options);
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
+        ExecutionController.configureWorkspaceRoot(workspaceRoot);
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const sessionService = new SessionService(storage);
         const sharedContext = new SharedContextService(storage);
@@ -249,14 +260,14 @@ export function registerUpCommand(program: Command): void {
             const created = await sessionService.createSession({
               sessionId,
               sessionName: sessionId,
-              description: 'Almudaya v0.3.5 Unified Natural Lifecycle session',
+              description: `Almudaya v${VERSION} Unified Natural Lifecycle session`,
             });
             sessionId = created.session_id;
           }
         } else {
           const created = await sessionService.createSession({
             sessionName: 'almudaya-session',
-            description: 'Almudaya v0.3.5 Unified Natural Lifecycle session',
+            description: `Almudaya v${VERSION} Unified Natural Lifecycle session`,
           });
           sessionId = created.session_id;
         }
@@ -283,6 +294,23 @@ export function registerUpCommand(program: Command): void {
             : 'REQUEST_REVIEW';
         const execController = new ExecutionModeController(execMode);
 
+        let mcpManager: McpClientManager | undefined;
+        if (!options.nonInteractive && options.mcp !== false) {
+          const mcpStore = new McpConfigStore({ workspaceRoot });
+          const effectiveServers = await mcpStore.resolveEffectiveServers({
+            sessionId,
+            externalConfigPath: options.mcpConfig,
+          });
+          if (effectiveServers.length > 0) {
+            mcpManager = new McpClientManager({ workspaceRoot });
+            const statuses = await mcpManager.connectAll(effectiveServers);
+            const okCount = statuses.filter((s) => s.connected).length;
+            console.log(
+              `[MCP] Master connected ${okCount}/${statuses.length} server(s) (${mcpManager.getRegisteredTools().length} tool(s)).`
+            );
+          }
+        }
+
         const orchestrator = new MasterAgentOrchestrator({
           storage,
           sessionId,
@@ -290,6 +318,8 @@ export function registerUpCommand(program: Command): void {
           configOverrides,
           lazyMaster: Boolean(options.lazyMaster),
           executionModeController: execController,
+          mcpConfigPath: options.mcpConfig,
+          mcpManager,
           providerFactory: (spec) => instantiateProviderFromSpec(spec),
         });
 
@@ -298,6 +328,7 @@ export function registerUpCommand(program: Command): void {
         if (options.nonInteractive) {
           console.log(`Session ready: ${sessionId} (${startup.masterStatus})`);
           orchestrator.stop();
+          await mcpManager?.disposeAll();
           return;
         }
 
@@ -322,6 +353,7 @@ export function registerUpCommand(program: Command): void {
           botId: 'BOT000',
           displayName: 'MASTER',
           description: 'Master Bot Coordinator & PrModerator Arbitration Seat',
+          modelRef: `${masterSpec.provider}:${masterSpec.model}`,
           autoAcknowledge: true,
           memoryRuntime,
           onMessage: async (msg, signal) => {
@@ -357,6 +389,8 @@ export function registerUpCommand(program: Command): void {
           aiProvider: masterProvider,
           protocolSupervisor: orchestrator.supervisor,
           spawnManager: orchestrator.spawnManager,
+          mcpManager,
+          mcpConfigPath: options.mcpConfig,
           isMasterConsole: true,
           onExit: async () => {
             orchestrator.stop();
@@ -369,7 +403,7 @@ export function registerUpCommand(program: Command): void {
         consoleInstance.start();
         await consoleInstance.waitForClose();
       } catch (err: unknown) {
-        console.error(`Failed to start Almudaya v0.3.5 Master session: ${(err as Error).message}`);
+        console.error(`Failed to start Almudaya v${VERSION} Master session: ${(err as Error).message}`);
         process.exitCode = 1;
       }
     });

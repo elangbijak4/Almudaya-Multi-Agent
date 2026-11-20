@@ -12,3 +12,4 @@ export * from './goal-tools.js';
 export * from './master-tools.js';
 export * from './skill-tools.js';
 export * from './pku-tools.js';
+export * from './web-tools.js';

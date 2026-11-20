@@ -8,6 +8,7 @@ import { AutonomousAgentLoop } from '../../bot/agent-loop.js';
 import { ExecutionModeController, type ExecutionMode } from '../../bot/execution-mode.js';
 import { BotConsole } from '../../bot/console.js';
 import { GeminiProvider } from '../../ai/gemini.js';
+import { FailoverAIProvider } from '../../ai/failover-provider.js';
 import { MockAIProvider } from '../../ai/mock-provider.js';
 import {
   createAIProvider,
@@ -23,8 +24,11 @@ import {
 } from '../../ai/hardware-advisor.js';
 import type { IAIModelProvider } from '../../ai/provider.js';
 import { ValidationError } from '../../core/errors.js';
+import { ExecutionController } from '../../execution/controller.js';
 import { registerSecret } from '../../execution/environment.js';
+import { McpClientManager, McpConfigStore } from '../../mcp/index.js';
 import { createWorkspaceMemoryRuntime } from '../../memory_modules/index.js';
+import { instantiateProviderFromSpec, parseModelSpecList } from './up.js';
 
 export function registerBotCommands(program: Command): void {
   const bot = program
@@ -94,12 +98,15 @@ export function registerBotCommands(program: Command): void {
     .option('--auto-ack', 'Automatically acknowledge incoming direct messages', true)
     .option('--no-auto-ack', 'Disable auto-acknowledgement of direct messages')
     .option('--provider <provider>', 'AI model provider ("gemini" | "nvidia" | "openrouter" | "9router" | "ollama" | "mock")')
-    .option('--model <model>', 'AI model name (e.g. "gemini-2.5-flash", "qwen2.5-coder:7b", "nvidia/nemotron-3-super-120b-a12b")')
+    .option('--model <model>', 'AI model name (e.g. "gemini-2.5-flash", "qwen2.5-coder:7b", "nvidia/nemotron-3.5-super-vl-120b-a12b")')
+    .option('--failover <specs>', 'Comma-separated worker failover models (provider:model,...)')
     .option('--base-url <url>', 'Custom OpenAI-compatible base URL (e.g. Ollama, 9router, or NVIDIA NIM endpoint)')
     .option('--api-key <key>', '[DEPRECATED - INSECURE] Explicit AI model API key (exposes argv; use GEMINI_API_KEY / NVIDIA_API_KEY / OPENROUTER_API_KEY env var)')
     .option('-m, --mode <mode>', 'Safety execution mode ("review" | "turbo", default: "review")')
-    .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 10)')
+    .option('--max-iterations <count>', 'Maximum tool calling iterations per message (default: 25)')
     .option('--timeout <ms>', 'AI request timeout in milliseconds (default: 180000)')
+    .option('--mcp-config <path>', 'Optional external mcp.json config file to load MCP servers')
+    .option('--no-mcp', 'Disable automatic MCP server connection on startup')
     .option('-w, --workspace <path>', 'Workspace directory path')
     .action(async (options: {
       session: string;
@@ -112,15 +119,19 @@ export function registerBotCommands(program: Command): void {
       autoAck?: boolean;
       provider?: string;
       model?: string;
+      failover?: string;
       baseUrl?: string;
       apiKey?: string;
       mode?: string;
       maxIterations?: string;
       timeout?: string;
+      mcpConfig?: string;
+      mcp?: boolean;
       workspace?: string;
     }) => {
       try {
         const workspaceRoot = resolveWorkspaceRoot({ workspace: options.workspace });
+        ExecutionController.configureWorkspaceRoot(workspaceRoot);
         const storage = new FilesystemSessionStorage(workspaceRoot);
         const botDisplayName = options.displayName ?? options.name;
         const botDescription = options.role ?? options.description;
@@ -131,7 +142,7 @@ export function registerBotCommands(program: Command): void {
           throw new ValidationError(`Invalid heartbeat interval "${options.interval}". Must be a positive integer.`);
         }
 
-        const maxIter = options.maxIterations ? parseInt(options.maxIterations, 10) : 10;
+        const maxIter = options.maxIterations ? parseInt(options.maxIterations, 10) : 25;
         if (options.maxIterations && (isNaN(maxIter) || maxIter <= 0)) {
           throw new ValidationError(`Invalid max-iterations "${options.maxIterations}". Must be a positive integer.`);
         }
@@ -174,7 +185,7 @@ export function registerBotCommands(program: Command): void {
         ) {
           const defaultModel =
             providerName === 'nvidia'
-              ? 'nvidia/nemotron-3-super-120b-a12b'
+              ? 'nvidia/nemotron-3.5-super-vl-120b-a12b'
               : providerName === 'ollama'
                 ? 'qwen2.5-coder:7b'
                 : providerName === 'openrouter'
@@ -200,7 +211,7 @@ export function registerBotCommands(program: Command): void {
         } else if (process.env.NVIDIA_API_KEY && !providerName) {
           aiProvider = createAIProvider({
             provider: 'nvidia',
-            modelName: options.model ?? 'nvidia/nemotron-3-super-120b-a12b',
+            modelName: options.model ?? 'nvidia/nemotron-3.5-super-vl-120b-a12b',
             baseUrl: options.baseUrl,
             timeoutMs: aiTimeoutMs,
           });
@@ -227,6 +238,49 @@ export function registerBotCommands(program: Command): void {
           });
         }
 
+        // Wrap worker AIProvider in FailoverAIProvider when --failover candidates are supplied
+        const failoverSpecs = parseModelSpecList(options.failover);
+        if (aiProvider && failoverSpecs.length > 0) {
+          const primaryProvider = aiProvider;
+          aiProvider = new FailoverAIProvider({
+            candidates: [
+              {
+                spec: {
+                  provider: primaryProvider.providerId,
+                  model: primaryProvider.modelName,
+                  baseUrl: options.baseUrl,
+                },
+                provider: primaryProvider,
+              },
+              ...failoverSpecs.map((spec) => ({ spec })),
+            ],
+            providerFactory: (spec) => instantiateProviderFromSpec(spec),
+            onSwitch: (from, to, reason) => {
+              console.warn(
+                `[Failover] Switching ${from.provider}:${from.model} -> ${to.provider}:${to.model} (${reason.slice(0, 120)})`
+              );
+            },
+          });
+        }
+
+        // Connect configured MCP servers when enabled
+        let mcpManager: McpClientManager | undefined;
+        if (options.mcp !== false) {
+          const mcpStore = new McpConfigStore({ workspaceRoot });
+          const effectiveServers = await mcpStore.resolveEffectiveServers({
+            sessionId: options.session,
+            externalConfigPath: options.mcpConfig,
+          });
+          if (effectiveServers.length > 0) {
+            mcpManager = new McpClientManager({ workspaceRoot });
+            const mcpStatuses = await mcpManager.connectAll(effectiveServers);
+            const okCount = mcpStatuses.filter((s) => s.connected).length;
+            console.log(
+              `[MCP] Connected ${okCount}/${mcpStatuses.length} server(s) (${mcpManager.getRegisteredTools().length} tool(s)).`
+            );
+          }
+        }
+
         // Configure Safety Execution Mode (FR-213, FR-214, FR-215)
         if (options.mode) {
           const modeLower = options.mode.toLowerCase();
@@ -248,6 +302,7 @@ export function registerBotCommands(program: Command): void {
           botId: options.bot,
           displayName: botDisplayName,
           description: botDescription,
+          modelRef: aiProvider ? `${aiProvider.providerId}:${aiProvider.modelName}` : undefined,
           heartbeatIntervalMs,
           autoAcknowledge: options.autoAck ?? true,
           memoryRuntime,
@@ -309,6 +364,7 @@ export function registerBotCommands(program: Command): void {
             executionModeController,
             maxIterations: maxIter,
             memoryRuntime,
+            mcpManager,
             onStatus: (msg) => {
               if (consoleInstance) {
                 consoleInstance.printNotification(msg);
@@ -326,6 +382,8 @@ export function registerBotCommands(program: Command): void {
           storage,
           executionModeController,
           aiProvider,
+          mcpManager,
+          mcpConfigPath: options.mcpConfig,
         });
 
         await consoleInstance.start();

@@ -2,6 +2,7 @@ import process from 'node:process';
 import type { IBlackboardStorage } from '../blackboard/interface.js';
 import { BotService } from './service.js';
 import { MessagingService } from '../messaging/service.js';
+import { DEFAULT_MESSAGE_LEASE_MS } from '../messaging/inbox-state.js';
 import type { BotRecord, RegisterBotInput } from './schema.js';
 import type { BroadcastEvent, DirectMessage } from '../messaging/schema.js';
 import {
@@ -15,8 +16,10 @@ export interface BotRuntimeOptions {
   botId?: string;
   displayName?: string;
   description?: string;
+  modelRef?: string;
   heartbeatIntervalMs?: number;
   pollIntervalMs?: number;
+  leaseDurationMs?: number;
   autoAcknowledge?: boolean;
   memoryRuntime?: MemoryRuntime;
   enablePkuSync?: boolean;
@@ -29,8 +32,10 @@ export class BotRuntime {
   public botId: string;
   public displayName?: string;
   public readonly description?: string;
+  public readonly modelRef?: string;
   private readonly heartbeatIntervalMs: number;
   private readonly pollIntervalMs: number;
+  private readonly leaseDurationMs: number;
   private readonly autoAcknowledge: boolean;
 
   private readonly botService: BotService;
@@ -53,8 +58,10 @@ export class BotRuntime {
     this.botId = options.botId ?? '';
     this.displayName = options.displayName;
     this.description = options.description;
+    this.modelRef = options.modelRef;
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 2000;
     this.pollIntervalMs = options.pollIntervalMs ?? 1000;
+    this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_MESSAGE_LEASE_MS;
     this.autoAcknowledge = options.autoAcknowledge ?? false;
 
     this.botService = new BotService(storage);
@@ -106,9 +113,11 @@ export class BotRuntime {
     }
 
     if (existing) {
-      // Re-activate bot with current process PID
+      // Re-activate bot with current process PID and sync active modelRef / description
       record = await this.botService.updateStatus(this.sessionId, existing.bot_id, 'active', {
         pid: process.pid,
+        ...(this.modelRef ? { model_ref: this.modelRef } : {}),
+        ...(this.description ? { description: this.description } : {}),
       });
       this.botId = record.bot_id;
       this.displayName = record.display_name;
@@ -118,6 +127,7 @@ export class BotRuntime {
         botId: this.botId || undefined,
         displayName: this.displayName,
         description: this.description,
+        modelRef: this.modelRef,
         status: 'active',
         pid: process.pid,
       };
@@ -240,12 +250,31 @@ export class BotRuntime {
           this.sessionId,
           this.botId,
           consumerId,
-          undefined,
+          this.leaseDurationMs,
           processedInThisCycle
         );
         if (!msg) break;
         activityOccurred = true;
         processedInThisCycle.push(msg.message_id);
+
+        const activeMsg = msg;
+        const renewIntervalMs = Math.max(1000, Math.floor(this.leaseDurationMs / 3));
+        const leaseRenewalTimer = setInterval(() => {
+          if (!this.isRunning || this.abortController.signal.aborted) return;
+          void this.messagingService.delivery
+            .renewMessageLease(
+              this.sessionId,
+              this.botId,
+              activeMsg.message_id,
+              consumerId,
+              activeMsg.fence_token,
+              this.leaseDurationMs
+            )
+            .catch(() => {
+              // Best-effort heartbeat renewal
+            });
+        }, renewIntervalMs);
+        leaseRenewalTimer.unref?.();
 
         try {
           if (this.onMessageCallback) {
@@ -271,6 +300,8 @@ export class BotRuntime {
             consumerId,
             msg.fence_token
           );
+        } finally {
+          clearInterval(leaseRenewalTimer);
         }
       }
 

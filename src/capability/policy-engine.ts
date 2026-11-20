@@ -148,21 +148,60 @@ export class PolicyEngine {
         const hasCommands = grant.scope.commands && grant.scope.commands.length > 0;
         const hasHosts = grant.scope.hosts && grant.scope.hosts.length > 0;
         const hasEnv = grant.scope.env_vars && grant.scope.env_vars.length > 0;
+        const hasServers = grant.scope.servers && grant.scope.servers.length > 0;
+        const hasTools = grant.scope.tools && grant.scope.tools.length > 0;
 
-        if (!hasPaths && !hasCommands && !hasHosts && !hasEnv) {
+        if (!hasPaths && !hasCommands && !hasHosts && !hasEnv && !hasServers && !hasTools) {
           scopeFailureReason = 'Capability requires explicit scope; empty scope does not grant unrestricted access.';
           continue;
         }
       }
 
-      // Check path scope (AUD-05, REQ-03, AUD-13, REQ-09)
-      if (targetResource && grant.scope.paths && grant.scope.paths.length > 0) {
+      // Check path scope ONLY for filesystem/config capabilities (APP-BUG-18: never test command strings or MCP resources against paths)
+      const isFilesystemCap =
+        capability.startsWith('filesystem.') || capability === 'system.config_access';
+      if (isFilesystemCap && targetResource && grant.scope.paths && grant.scope.paths.length > 0) {
         const pathMatches = grant.scope.paths.some((p) =>
           p === '*' || isPathInsideRoot(p, targetResource, request.platform ?? process.platform)
         );
         if (!pathMatches) {
           scopeFailureReason = `Path "${targetResource}" is not inside granted path scopes: [${grant.scope.paths.join(', ')}].`;
           continue;
+        }
+      }
+
+      // Check MCP server/tool scope for mcp.invoke
+      if (capability === 'mcp.invoke') {
+        const rawRes = targetResource ?? '';
+        const colonIdx = rawRes.indexOf(':');
+        const serverName = (colonIdx >= 0 ? rawRes.slice(0, colonIdx) : rawRes).trim().toLowerCase();
+        const toolName = (colonIdx >= 0 ? rawRes.slice(colonIdx + 1) : '').trim().toLowerCase();
+
+        if (grant.scope.servers && grant.scope.servers.length > 0) {
+          const serverMatches = grant.scope.servers.some((s) => {
+            const norm = s.trim().toLowerCase();
+            return norm === '*' || norm === serverName;
+          });
+          if (!serverMatches) {
+            scopeFailureReason = `MCP server "${serverName || 'unknown'}" is not in granted server scope: [${grant.scope.servers.join(', ')}].`;
+            continue;
+          }
+        } else {
+          scopeFailureReason = 'Capability "mcp.invoke" requires explicit servers scope.';
+          continue;
+        }
+
+        if (toolName && grant.scope.tools && grant.scope.tools.length > 0) {
+          const toolMatches = grant.scope.tools.some((pattern) => {
+            const norm = pattern.trim().toLowerCase();
+            if (norm === '*') return true;
+            if (norm.endsWith('*')) return toolName.startsWith(norm.slice(0, -1));
+            return norm === toolName;
+          });
+          if (!toolMatches) {
+            scopeFailureReason = `MCP tool "${toolName}" is not in granted tool scope: [${grant.scope.tools.join(', ')}].`;
+            continue;
+          }
         }
       }
 

@@ -12,6 +12,7 @@ import type { WorkspaceFileVerifier } from './protocols/pr-gate.protocol.js';
 import type { ReattachCandidate } from './protocols/pr-reattach.protocol.js';
 import type { InterventionQueueItem } from './registry.js';
 import type { GoalLedger, ModelSpec, ProtocolConfig } from './schema.js';
+import type { McpClientManager } from '../mcp/manager.js';
 import { SpawnManager, type SpawnWorkerOutcome } from './spawn-manager.js';
 import { ProtocolSupervisor } from './supervisor.js';
 
@@ -30,6 +31,8 @@ export interface MasterOrchestratorOptions {
   spawnManager?: SpawnManager;
   executionModeController?: ExecutionModeController;
   dryRunSpawn?: boolean;
+  mcpConfigPath?: string;
+  mcpManager?: McpClientManager;
   onHitlEscalation?: (item: InterventionQueueItem) => Promise<void> | void;
 }
 
@@ -55,6 +58,7 @@ export class MasterAgentOrchestrator {
   private readonly lazyMaster: boolean;
   private readonly configOverrides?: Partial<ProtocolConfig>;
   private readonly dryRunSpawn: boolean;
+  private readonly mcpManager?: McpClientManager;
   private readonly onHitlEscalation?: (
     item: InterventionQueueItem
   ) => Promise<void> | void;
@@ -79,6 +83,8 @@ export class MasterAgentOrchestrator {
       new SpawnManager({
         botService: this.botService,
         supervisor: this.supervisor,
+        blackboardRoot: this.supervisor.store.getWorkspaceRoot(),
+        mcpConfigPath: options.mcpConfigPath,
       });
     this.executionModeController =
       options.executionModeController ?? new ExecutionModeController('TURBO');
@@ -87,6 +93,7 @@ export class MasterAgentOrchestrator {
     this.lazyMaster = Boolean(options.lazyMaster);
     this.configOverrides = options.configOverrides;
     this.dryRunSpawn = Boolean(options.dryRunSpawn);
+    this.mcpManager = options.mcpManager;
     this.onHitlEscalation = options.onHitlEscalation;
   }
 
@@ -218,6 +225,7 @@ export class MasterAgentOrchestrator {
         protocolSupervisor: this.supervisor,
         spawnManager: this.spawnManager,
         dryRunSpawn: this.dryRunSpawn,
+        mcpManager: this.mcpManager,
         maxIterations: config.prIterasiLimit,
       });
     }

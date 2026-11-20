@@ -36,6 +36,7 @@ export async function executeRunCommand(
     botId: context?.botId,
     botDisplayName: context?.botDisplayName,
     isTurbo: context?.isTurbo,
+    workspaceRoot: context?.workspaceRoot,
   };
 
   const execRequest: CommandExecutionRequest = {

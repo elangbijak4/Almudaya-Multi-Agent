@@ -4,6 +4,7 @@ export interface ExecutionContext {
   botDisplayName?: string;
   isTurbo?: boolean;
   projectRoots: string[];
+  workspaceRoot?: string;
 }
 
 export interface CommandExecutionRequest {

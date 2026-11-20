@@ -49,6 +49,7 @@ import {
   type ProtocolRuntimeState,
 } from './schema.js';
 import { ProtocolStore } from './store.js';
+import { VERSION } from '../core/version.js';
 
 export interface ProtocolSupervisorOptions {
   storage: IBlackboardStorage;
@@ -143,7 +144,7 @@ export class ProtocolSupervisor {
       protocolId: 'SYSTEM',
       action: 'INITIALIZE_PROTOCOL_SESSION',
       actorBotId: 'BOT000',
-      reason: `Initialized v0.3.5 Unified Natural Lifecycle session (cap=${resolvedCap}, spawnMode=${config.spawnMode}).`,
+      reason: `Initialized v${VERSION} Unified Natural Lifecycle session (cap=${resolvedCap}, spawnMode=${config.spawnMode}).`,
       metadata: {
         resolvedHardwareBotCap: resolvedCap,
         spawnMode: config.spawnMode,
@@ -241,6 +242,8 @@ export class ProtocolSupervisor {
       allowedPaths?: string[];
       allowedComponents?: string[];
       accessMode?: 'EXCLUSIVE_WRITE' | 'SHARED_READ' | 'REVIEW_ONLY';
+      allowWildcardScope?: boolean;
+      allowMasterWrite?: boolean;
     }
   ): Promise<CapabilityToken> {
     return await this.prModerator.issueToken(sessionId, input);

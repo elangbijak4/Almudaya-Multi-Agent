@@ -34,7 +34,7 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
   describe('Capability Registry (Section 6.1)', () => {
     it('should register all canonical capability identifiers with risk metadata', () => {
       const caps = CapabilityRegistry.getAllCapabilities();
-      expect(caps.length).toBe(9);
+      expect(caps.length).toBe(10);
 
       const readExt = CapabilityRegistry.getCapability('filesystem.read_external');
       expect(readExt).toBeDefined();
@@ -45,6 +45,11 @@ describe('Agent Capability Governance (ACG) Subsystem (Phase 2, SEC-03, ADR-001)
       expect(arbCmd).toBeDefined();
       expect(arbCmd?.risk).toBe('CRITICAL');
       expect(arbCmd?.enforcement).toBe('os_isolation_required');
+
+      const mcpCap = CapabilityRegistry.getCapability('mcp.invoke');
+      expect(mcpCap).toBeDefined();
+      expect(mcpCap?.risk).toBe('HIGH');
+      expect(mcpCap?.enforcement).toBe('mcp_tool_governance');
     });
 
     it('should correctly distinguish known from unknown capabilities', () => {

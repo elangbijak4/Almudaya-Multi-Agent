@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type {
   ExecutionContext,
   CommandExecutionRequest,
@@ -6,6 +7,7 @@ import type {
 } from './types.js';
 import type { IIsolationBackend } from './isolation/interface.js';
 import { getIsolationBackend } from './isolation/factory.js';
+import { CapabilityPersistence } from '../capability/persistence.js';
 import { CapabilityService } from '../capability/service.js';
 import { CapabilityRegistry } from '../capability/registry.js';
 import { CapabilityApprovalService, type CapabilityApprovalRequest } from '../capability/approval.js';
@@ -17,6 +19,7 @@ export class ExecutionController {
   private static instance: ExecutionController | null = null;
   private backend: IIsolationBackend;
   private capabilityService: CapabilityService;
+  private readonly scopedCapabilityServices = new Map<string, CapabilityService>();
 
   constructor(
     capabilityService?: CapabilityService,
@@ -39,6 +42,41 @@ export class ExecutionController {
 
   public static setInstance(instance: ExecutionController | null): void {
     ExecutionController.instance = instance;
+  }
+
+  public static configureWorkspaceRoot(workspaceRoot: string): ExecutionController {
+    const resolved = path.resolve(workspaceRoot);
+    const current = ExecutionController.getInstance();
+    if (current.capabilityService.getPersistence().getWorkspaceRoot() !== resolved) {
+      const nextService = new CapabilityService(new CapabilityPersistence({ workspaceRoot: resolved }));
+      const approvalCb = current.capabilityService.getApprovalPromptCallback();
+      if (approvalCb) {
+        nextService.setApprovalPromptCallback(approvalCb);
+      }
+      current.capabilityService = nextService;
+      current.scopedCapabilityServices.clear();
+    }
+    return current;
+  }
+
+  private getAcgServiceForContext(context: ExecutionContext): CapabilityService {
+    if (!context.workspaceRoot || !context.workspaceRoot.trim()) {
+      return this.capabilityService;
+    }
+    const resolved = path.resolve(context.workspaceRoot);
+    if (this.capabilityService.getPersistence().getWorkspaceRoot() === resolved) {
+      return this.capabilityService;
+    }
+    let cached = this.scopedCapabilityServices.get(resolved);
+    if (!cached) {
+      cached = new CapabilityService(new CapabilityPersistence({ workspaceRoot: resolved }));
+      const approvalCb = this.capabilityService.getApprovalPromptCallback();
+      if (approvalCb) {
+        cached.setApprovalPromptCallback(approvalCb);
+      }
+      this.scopedCapabilityServices.set(resolved, cached);
+    }
+    return cached;
   }
 
   public getIsolationBackend(): IIsolationBackend {
@@ -118,10 +156,11 @@ export class ExecutionController {
     }
 
     // 3. Determine capability and perform ACG Policy Evaluation (AUD-01, AUD-13, AUD-14, REQ-01, REQ-09)
+    const acgService = this.getAcgServiceForContext(context);
     let targetCap = request.capability;
     if (!targetCap) {
       // If not explicitly set, check if session has an active grant for process.execute_external
-      const grants = await this.capabilityService.getGrants(context.sessionId);
+      const grants = await acgService.getGrants(context.sessionId);
       const hasExecGrant = grants.some(
         (g) => g.capability === 'process.execute_external' && g.status === 'active'
       );
@@ -145,7 +184,7 @@ export class ExecutionController {
     const backendSupportsCapability =
       this.backend.isAvailable() && this.backend.supportsCapability(def.enforcement);
 
-    const evalResult = await this.capabilityService.evaluate({
+    const evalResult = await acgService.evaluate({
       capability: targetCap,
       sessionId: context.sessionId,
       botId: context.botId,
@@ -237,7 +276,7 @@ export class ExecutionController {
     // 9. Record audit event in session capabilities if active
     if (context.sessionId) {
       try {
-        const persistence = this.capabilityService.getPersistence();
+        const persistence = acgService.getPersistence();
         await persistence.recordAuditEvent(context.sessionId, {
           event_id: crypto.randomUUID(),
           timestamp: new Date().toISOString(),
@@ -301,7 +340,8 @@ export class ExecutionController {
       throw new Error(`Access denied: External filesystem access to "${request.targetPath}" requires authenticated session identity and bot principal (sessionId and botId).`);
     }
 
-    const evalResult = await this.capabilityService.evaluate({
+    const acgService = this.getAcgServiceForContext(context);
+    const evalResult = await acgService.evaluate({
       capability: requiredCap,
       sessionId: context.sessionId,
       botId: context.botId,
@@ -315,7 +355,7 @@ export class ExecutionController {
     }
 
     if (evalResult.decision === 'REQUIRE_APPROVAL') {
-      const persistence = this.capabilityService.getPersistence();
+      const persistence = acgService.getPersistence();
 
       if (!this.approvalCallback) {
         try {
@@ -401,6 +441,65 @@ export class ExecutionController {
         }
         throw new Error(
           `Access denied: External filesystem operation rejected by human operator for path "${request.targetPath}".`
+        );
+      }
+    }
+  }
+
+  /**
+   * Authorizes external MCP server tool/resource invocations against ACG `mcp.invoke`.
+   */
+  public async authorizeMcpInvocation(
+    context: ExecutionContext,
+    request: {
+      serverName: string;
+      toolName: string;
+      operation?: 'call_tool' | 'read_resource' | 'list_tools';
+    }
+  ): Promise<void> {
+    if (!context.sessionId || !context.sessionId.trim() || !context.botId || !context.botId.trim()) {
+      throw new Error(
+        `Access denied by ACG policy: MCP tool invocation (${request.serverName}:${request.toolName}) requires authenticated sessionId and botId.`
+      );
+    }
+
+    const acgService = this.getAcgServiceForContext(context);
+    const targetResource = `${request.serverName}:${request.toolName}`;
+    const evalResult = await acgService.evaluate({
+      capability: 'mcp.invoke',
+      sessionId: context.sessionId,
+      botId: context.botId,
+      operation: request.operation ?? 'call_tool',
+      targetResource,
+      isTurbo: context.isTurbo,
+      enforcementBackendAvailable: true,
+    });
+
+    if (evalResult.decision === 'DENY') {
+      throw new Error(`Access denied by ACG policy (mcp.invoke): ${evalResult.reason}`);
+    }
+
+    if (evalResult.decision === 'REQUIRE_APPROVAL') {
+      if (!this.approvalCallback) {
+        throw new Error(
+          `Access denied: MCP tool "${targetResource}" requires human approval, but no approval interface is available.`
+        );
+      }
+      const approved = await CapabilityApprovalService.promptUser(
+        {
+          sessionId: context.sessionId,
+          botId: context.botId,
+          botDisplayName: context.botDisplayName,
+          capability: 'mcp.invoke',
+          operation: request.operation ?? 'call_tool',
+          targetResource,
+          reason: `MCP invocation "${targetResource}" requested by bot "${context.botId}"`,
+        },
+        this.approvalCallback
+      );
+      if (!approved) {
+        throw new Error(
+          `Access denied: MCP invocation "${targetResource}" rejected by human operator.`
         );
       }
     }

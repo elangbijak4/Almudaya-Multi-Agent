@@ -12,11 +12,12 @@ export interface PromptContext {
   executionMode?: 'REQUEST_REVIEW' | 'TURBO';
   recentWorkLogsMarkdown?: string;
   skillsPromptMarkdown?: string;
-  // v0.3.5 Unified Natural Lifecycle context fields
+  // v0.3.5 / v0.3.6 Unified Natural Lifecycle & MCP context fields
   dynamicRulesMarkdown?: string;
   goalLedgerMarkdown?: string;
   capabilityTokenSummary?: string;
   protocolActive?: boolean;
+  mcpToolsSummary?: string;
 }
 
 /**
@@ -149,24 +150,34 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
     sections.push(context.capabilityTokenSummary);
   }
 
+  if (context.mcpToolsSummary) {
+    sections.push('\n## Server & Perkakas MCP Eksternal Terhubung (Model Context Protocol):');
+    sections.push(escapePromptDelimiters(context.mcpToolsSummary));
+    sections.push(
+      'Gunakan perkakas `mcp__<server>__<tool>` secara aktif bila diperlukan untuk inspeksi browser, pengambilan data, atau verifikasi menyeluruh.'
+    );
+  }
+
   if (context.protocolActive) {
-    sections.push(`\n## Siklus Kerja Alami Terpadu & Protokol v0.3.5 (Unified Natural Lifecycle):
+    sections.push(`\n## Siklus Kerja Alami Terpadu & Protokol v0.3.6 (Unified Natural Lifecycle):
 1. Jika pekerjaan Anda memerlukan delegasi lanjutan ke rekan bot lain atau serah-terima (handover), panggil 'submit_task_handoff' atau 'send_message' (otomatis disalin ke MASTER dan dibungkus envelope PrTransfer).
 2. Jika tujuan Anda tidak jelas penerima berikutnya, kirim ke 'UNKNOWN' agar PrMEend & Master Bot melakukan migrasi tugas; JANGAN menghentikan pekerjaan secara diam-diam tanpa melapor.
-3. Jika seluruh pekerjaan pada tugas Anda sudah tuntas dan siap ditutup, kirim sinyal 'TASK_0' melalui 'submit_task_handoff' atau laporkan ke MASTER agar PrGate memverifikasi bukti berkas nyata di disk.`);
+3. Jika seluruh pekerjaan pada tugas Anda sudah tuntas DAN terverifikasi secara nyata (unit test + pemeriksaan runtime/UI), perbarui task menjadi 'DONE' dengan \`verification_evidence\` lalu kirim sinyal 'TASK_0' melalui 'submit_task_handoff'.`);
   }
 
   // Security Invariants Notice (SEC-02)
   sections.push(UNTRUSTED_BOUNDARY_NOTICE);
 
-  // Guidelines for Tool Calling & Collaboration (PKU-First Policy)
-  sections.push(`\n## Standar Pembacaan Proyek & Pengetahuan Terkompresi (PKU-First Policy):
-1. **Wajib Baca PKU Terlebih Dahulu:** Sebelum melakukan audit, analisis arsitektur, atau menulis/mengedit kode, **selalu panggil perkakas 'query_pku_memory' terlebih dahulu** (misalnya \`level: "auto"\` atau \`"L0"\`/\`"L1"\`/\`"L2"\`) untuk membaca peta proyek, ringkasan modul, simbol, dan graf dependensi secara hemat token.
-2. **Pembacaan File Penuh Bersifat Selektif:** Jangan membaca seluruh isi proyek secara mentah dengan 'read_file' kecuali diminta secara eksplisit oleh operator/pengguna. Gunakan 'read_file' hanya pada berkas spesifik yang telah teridentifikasi relevan dari 'query_pku_memory' (misalnya untuk verifikasi detail baris saat audit atau sebelum mengedit kode).
-3. **Koding & Pembaruan Terkendali:** Jika diminta menulis atau mengubah kode, gunakan 'write_file' atau 'edit_file' dengan path relatif terhadap project root yang sah. Setiap perubahan berkas akan otomatis memperbarui indeks berkas tersebut di PKU secara inkremental.
-4. Selalu periksa hasil pekerjaan Anda sebelum melapor kembali ke rekan bot atau operator.
-5. Jangan mencoba mengakses atau memanipulasi file di luar target project root yang terdaftar.
-6. Bersikaplah kolaboratif, profesional, dan berikan penjelasan ringkas serta jelas.`);
+  // Guidelines for Tool Calling & Collaboration (PKU-First with Graceful Fallback + Intensive Verification)
+  sections.push(`\n## Standar Pembacaan Proyek (PKU-First Policy), Penggunaan Tool Intensif, & Verifikasi End-to-End:
+1. **Wajib Baca PKU Terlebih Dahulu (Graceful Fallback):** Sebelum analisis atau pengeditan, panggil 'query_pku_memory' (\`level: "auto"\`) untuk membaca peta proyek. Jika status PKU \`UNAVAILABLE\` atau indeks masih kosong, lakukan fallback ke 'list_dir' / 'search_files' dan baca hanya berkas spesifik dengan 'read_file'.
+2. **Penggunaan Tool Secara Intensif & Bertahap:** Jangan ragu memanggil serangkaian perkakas ('list_dir', 'read_file', 'write_file', 'edit_file', 'run_command', 'web_fetch', 'inspect_web_ui', maupun perkakas \`mcp__*\`) hingga implementasi benar-benar terverifikasi.
+3. **Wajib Verifikasi UI, Gaya Visual (Glassmorphism), & Interaksi Drag-and-Drop:** Untuk setiap tugas web/frontend, JANGAN hanya memeriksa keberadaan file:
+   - Jalankan server lokal sementara dan panggil 'inspect_web_ui' (atau perkakas MCP browser seperti Playwright / Chrome DevTools jika tersedia) untuk mengaudit rendered DOM, \`backdrop-filter: blur(...)\` / permukaan transparan glassmorphism, overflow horizontal \`0px\`, serta error konsol/halaman.
+   - Uji interaksi pengguna nyata (klik, isi input, dan \`drag_and_drop\`) guna memastikan event drag-and-drop benar-benar mengubah state UI sebelum menandai tugas 'DONE'.
+4. **Koding & Pembaruan Terkendali:** Gunakan 'write_file' atau 'edit_file' dalam ruang lingkup \`allowedPaths\` token aktif. Setiap modifikasi berkas otomatis memperbarui indeks PKU secara inkremental.
+5. Jangan mencoba mengakses atau memanipulasi berkas di luar project root terdaftar tanpa izin ACG.
+6. Bersikaplah kolaboratif, berbasis bukti nyata, dan berikan laporan ringkas serta jujur.`);
 
   return sections.join('\n');
 }

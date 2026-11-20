@@ -7,6 +7,7 @@ import { registerMessagingCommands } from './commands/messaging.js';
 import { registerContextCommands } from './commands/context.js';
 import { registerCapabilityCommands } from './commands/capability.js';
 import { registerSkillCommands } from './commands/skill.js';
+import { registerMcpCommands } from './commands/mcp.js';
 import { registerUpCommand } from './commands/up.js';
 
 export function createProgram(): Command {
@@ -24,6 +25,7 @@ export function createProgram(): Command {
   registerContextCommands(program);
   registerCapabilityCommands(program);
   registerSkillCommands(program);
+  registerMcpCommands(program);
 
   return program;
 }

@@ -469,9 +469,51 @@ describe('Gemini Rate-Limit Throttling & Adaptive Backoff (NT-01, NT-05, NT-06, 
 
       expect(callCount).toBe(2);
       expect(statusNotifications).toHaveLength(1);
-      expect(statusNotifications[0]).toContain('⏳ Kuota Gemini tercapai (429 RESOURCE_EXHAUSTED)');
+      expect(statusNotifications[0]).toContain(
+        '⏳ Kuota throttled-ai (throttled-flash) tercapai (429 RESOURCE_EXHAUSTED)'
+      );
       expect(statusNotifications[0]).toContain('Menunggu jeda 1 detik sebelum mencoba kembali');
       expect(reply).toBe('Turn completed after adaptive pause.');
+    });
+
+    it('should label Gemini specifically when providerId is gemini', async () => {
+      let callCount = 0;
+      const statusNotifications: string[] = [];
+      const geminiThrottled: IAIModelProvider = {
+        providerId: 'gemini',
+        modelName: 'gemini-2.5-flash',
+        generateResponse: async (): Promise<AIResponse> => {
+          callCount++;
+          if (callCount === 1) {
+            throw new RateLimitPauseError('Quota exceeded', 0.2);
+          }
+          return { text: 'Done.' };
+        },
+      };
+      const agentLoop = new AutonomousAgentLoop({
+        sessionId,
+        botId: 'B001',
+        storage,
+        provider: geminiThrottled,
+        executionModeController: new ExecutionModeController('TURBO'),
+        botService,
+        messagingService,
+        onStatus: (msg) => {
+          statusNotifications.push(msg);
+        },
+      });
+      await agentLoop.handleMessage({
+        message_id: 'msg_test_02',
+        session_id: sessionId,
+        sender_bot_id: 'OPERATOR',
+        recipient_bot_id: 'B001',
+        timestamp: new Date().toISOString(),
+        message_type: 'TASK',
+        content: 'Run check',
+        status: 'unread',
+        metadata: {},
+      });
+      expect(statusNotifications[0]).toContain('⏳ Kuota Gemini tercapai (429 RESOURCE_EXHAUSTED)');
     });
   });
 });

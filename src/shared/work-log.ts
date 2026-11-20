@@ -9,6 +9,8 @@ export const WorkActionTypeSchema = z.enum([
   'READ',
   'COMMAND',
   'DECISION',
+  'MCP_TOOL_CALL',
+  'WEB_INSPECT',
 ]);
 export type WorkActionType = z.infer<typeof WorkActionTypeSchema>;
 

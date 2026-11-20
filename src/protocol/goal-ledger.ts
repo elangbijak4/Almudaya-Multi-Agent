@@ -7,6 +7,7 @@ import {
   type GoalTaskStatus,
   type HandoverRecord,
   type LastWorkPositionLog,
+  type TaskVerificationEvidence,
 } from './schema.js';
 import { ProtocolStore } from './store.js';
 
@@ -111,7 +112,12 @@ export class GoalLedgerService {
     sessionId: string,
     taskId: string,
     status: GoalTaskStatus,
-    options?: { assignedBotId?: string; latestCheckpointId?: string; lastWorkPositionLog?: LastWorkPositionLog }
+    options?: {
+      assignedBotId?: string;
+      latestCheckpointId?: string;
+      lastWorkPositionLog?: LastWorkPositionLog;
+      verificationEvidence?: TaskVerificationEvidence;
+    }
   ): Promise<GoalTask> {
     let updatedTask: GoalTask | undefined;
     const now = new Date().toISOString();
@@ -127,6 +133,7 @@ export class GoalLedgerService {
           assignedBotId: options?.assignedBotId ?? task.assignedBotId,
           latestCheckpointId: options?.latestCheckpointId ?? task.latestCheckpointId,
           lastWorkPositionLog: options?.lastWorkPositionLog ?? task.lastWorkPositionLog,
+          verificationEvidence: options?.verificationEvidence ?? task.verificationEvidence,
           updatedAt: now,
         };
         return updatedTask;

@@ -182,6 +182,8 @@ export class BotService {
 
       let newPid = existing.pid;
       let newMetadata = existing.metadata;
+      let newModelRef = existing.model_ref;
+      let newDescription = existing.description;
 
       if (metadata) {
         if ('pid' in metadata && typeof metadata['pid'] === 'number') {
@@ -189,6 +191,12 @@ export class BotService {
         }
         if (metadata['clearPid'] === true) {
           newPid = undefined;
+        }
+        if ('model_ref' in metadata && typeof metadata['model_ref'] === 'string' && metadata['model_ref'].trim()) {
+          newModelRef = metadata['model_ref'].trim();
+        }
+        if ('description' in metadata && typeof metadata['description'] === 'string' && metadata['description'].trim()) {
+          newDescription = metadata['description'].trim();
         }
         newMetadata = { ...existing.metadata, ...metadata };
       }
@@ -201,6 +209,8 @@ export class BotService {
         ...existing,
         status,
         pid: newPid,
+        model_ref: newModelRef,
+        description: newDescription,
         last_seen_at: now,
         metadata: newMetadata,
       };

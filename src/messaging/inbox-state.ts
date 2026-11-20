@@ -1,6 +1,6 @@
 import type { InboxDeliveryState, DirectMessage } from './schema.js';
 
-export const DEFAULT_MESSAGE_LEASE_MS = 30000;
+export const DEFAULT_MESSAGE_LEASE_MS = 180000;
 export const DEFAULT_MAX_ATTEMPTS = 3;
 
 /**

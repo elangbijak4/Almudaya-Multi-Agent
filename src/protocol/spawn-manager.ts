@@ -34,9 +34,12 @@ export interface SpawnWorkerInput {
   description?: string;
   requesterBotId?: string;
   model: ModelSpec;
+  failoverChain?: ModelSpec[];
   taskId?: string;
   allowedPaths?: string[];
   workspaceRoots: string[];
+  blackboardRoot?: string;
+  mcpConfigPath?: string;
   cliEntrypoint?: string;
   dryRun?: boolean;
 }
@@ -132,17 +135,23 @@ export class SpawnManager {
   private readonly launcher: ProcessLauncher;
   private readonly platform: NodeJS.Platform;
   private readonly managed = new Map<string, ManagedBotProcess>();
+  private readonly blackboardRoot?: string;
+  private readonly mcpConfigPath?: string;
   private readonly onMultiplexedLog?: (botId: string, stream: 'stdout' | 'stderr', line: string) => void;
 
   constructor(options: {
     botService: BotService;
     supervisor: ProtocolSupervisor;
+    blackboardRoot?: string;
+    mcpConfigPath?: string;
     launcher?: ProcessLauncher;
     platform?: NodeJS.Platform;
     onMultiplexedLog?: (botId: string, stream: 'stdout' | 'stderr', line: string) => void;
   }) {
     this.botService = options.botService;
     this.supervisor = options.supervisor;
+    this.blackboardRoot = options.blackboardRoot ?? options.supervisor.store.getWorkspaceRoot();
+    this.mcpConfigPath = options.mcpConfigPath;
     this.platform = options.platform ?? process.platform;
     this.onMultiplexedLog = options.onMultiplexedLog;
     this.launcher =
@@ -202,6 +211,14 @@ export class SpawnManager {
       };
     }
 
+    let inheritedPaths = input.allowedPaths;
+    if (input.taskId && (!inheritedPaths || inheritedPaths.length === 0)) {
+      const task = await this.supervisor.ledger.getTask(input.sessionId, input.taskId);
+      if (task?.targetFiles && task.targetFiles.length > 0) {
+        inheritedPaths = task.targetFiles;
+      }
+    }
+
     const recycleBotId = permission.metadata?.recycleCandidateBotId as string | undefined;
     if (recycleBotId) {
       await this.botService.updateStatus(input.sessionId, recycleBotId, 'active');
@@ -210,7 +227,9 @@ export class SpawnManager {
         token = await this.supervisor.issueTaskToken(input.sessionId, {
           taskId: input.taskId,
           holderBotId: recycleBotId,
-          allowedPaths: input.allowedPaths,
+          allowedPaths: inheritedPaths,
+          accessMode:
+            inheritedPaths && inheritedPaths.length > 0 ? 'EXCLUSIVE_WRITE' : 'REVIEW_ONLY',
         });
       }
       return {
@@ -237,7 +256,9 @@ export class SpawnManager {
       token = await this.supervisor.issueTaskToken(input.sessionId, {
         taskId: input.taskId,
         holderBotId: botRecord.bot_id,
-        allowedPaths: input.allowedPaths,
+        allowedPaths: inheritedPaths,
+        accessMode:
+          inheritedPaths && inheritedPaths.length > 0 ? 'EXCLUSIVE_WRITE' : 'REVIEW_ONLY',
       });
     }
 
@@ -260,6 +281,18 @@ export class SpawnManager {
       };
     }
 
+    const effectiveBlackboardRoot =
+      input.blackboardRoot ?? this.blackboardRoot ?? input.workspaceRoots[0] ?? process.cwd();
+    const effectiveMcpConfigPath = input.mcpConfigPath ?? this.mcpConfigPath;
+
+    const failoverCandidates = (
+      input.failoverChain && input.failoverChain.length > 0
+        ? input.failoverChain
+        : config.modelPool.filter(
+            (m) => !(m.provider === input.model.provider && m.model === input.model.model)
+          )
+    ).map((m) => `${m.provider}:${m.model}`);
+
     const cliEntry = input.cliEntrypoint ?? process.argv[1] ?? 'dist/cli/bin.js';
     const cliArgs = [
       'bot',
@@ -281,13 +314,19 @@ export class SpawnManager {
       '--timeout',
       String(config.taskTimeoutMs),
       '--workspace',
-      input.workspaceRoots[0] ?? process.cwd(),
+      effectiveBlackboardRoot,
     ];
     if (input.description) {
       cliArgs.push('--role', input.description);
     }
     if (input.model.baseUrl) {
       cliArgs.push('--base-url', input.model.baseUrl);
+    }
+    if (failoverCandidates.length > 0) {
+      cliArgs.push('--failover', failoverCandidates.join(','));
+    }
+    if (effectiveMcpConfigPath) {
+      cliArgs.push('--mcp-config', effectiveMcpConfigPath);
     }
 
     const launchSpec = buildOsTerminalLaunchSpec({
@@ -301,7 +340,7 @@ export class SpawnManager {
     const child = this.launcher(launchSpec.command, launchSpec.args, {
       detached: launchSpec.detached,
       stdio: launchSpec.stdio,
-      cwd: input.workspaceRoots[0],
+      cwd: input.workspaceRoots[0] ?? effectiveBlackboardRoot,
       env: process.env,
     });
 

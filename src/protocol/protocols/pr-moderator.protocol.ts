@@ -29,6 +29,11 @@ export interface PrModeratorContext {
   requireToken?: boolean;
 }
 
+export function isGlobalWildcardPath(pattern: string): boolean {
+  const norm = pattern.replace(/\\/g, '/').trim().replace(/^\.\//, '');
+  return norm === '*' || norm === '**' || norm === '**/*';
+}
+
 function matchesAllowedPath(pattern: string, targetPath: string): boolean {
   const normPattern = pattern.replace(/\\/g, '/').trim();
   const normTarget = targetPath.replace(/\\/g, '/').trim();
@@ -72,6 +77,44 @@ export class PrModeratorArbitrationProtocol
 
   public async getModeratorState(sessionId: string): Promise<ModeratorState> {
     return await this.store.getModeratorState(sessionId);
+  }
+
+  public async getActiveTokensForBot(
+    sessionId: string,
+    botId: string
+  ): Promise<CapabilityToken[]> {
+    const modState = await this.store.getModeratorState(sessionId);
+    return Object.values(modState.tokens).filter(
+      (t) => t.status === 'ACTIVE' && t.holderBotId === botId
+    );
+  }
+
+  public async findActiveTokenForTask(
+    sessionId: string,
+    taskId: string,
+    holderBotId?: string
+  ): Promise<CapabilityToken | undefined> {
+    const modState = await this.store.getModeratorState(sessionId);
+    const matches = Object.values(modState.tokens).filter(
+      (t) =>
+        t.status === 'ACTIVE' &&
+        t.taskId === taskId &&
+        (!holderBotId || t.holderBotId === holderBotId)
+    );
+    return matches.sort((a, b) => b.fenceEpoch - a.fenceEpoch)[0];
+  }
+
+  public async findMatchingActiveTokenForPath(
+    sessionId: string,
+    botId: string,
+    targetPath: string
+  ): Promise<CapabilityToken | undefined> {
+    const tokens = await this.getActiveTokensForBot(sessionId, botId);
+    return tokens.find(
+      (t) =>
+        t.accessMode === 'EXCLUSIVE_WRITE' &&
+        t.allowedPaths.some((p) => matchesAllowedPath(p, targetPath))
+    );
   }
 
   public async delegateModerator(
@@ -138,8 +181,42 @@ export class PrModeratorArbitrationProtocol
       allowedPaths?: string[];
       allowedComponents?: string[];
       accessMode?: AccessMode;
+      allowWildcardScope?: boolean;
+      allowMasterWrite?: boolean;
     }
   ): Promise<CapabilityToken> {
+    const cleanedPaths = (input.allowedPaths ?? []).map((p) => p.trim()).filter(Boolean);
+    const cleanedComponents = (input.allowedComponents ?? []).map((c) => c.trim()).filter(Boolean);
+
+    let effectiveAccessMode: AccessMode;
+    if (input.holderBotId === 'BOT000' && input.accessMode === undefined) {
+      effectiveAccessMode = 'REVIEW_ONLY';
+    } else if (cleanedPaths.length === 0 && input.accessMode === undefined) {
+      effectiveAccessMode = 'REVIEW_ONLY';
+    } else {
+      effectiveAccessMode = input.accessMode ?? 'EXCLUSIVE_WRITE';
+    }
+
+    if (
+      input.holderBotId === 'BOT000' &&
+      effectiveAccessMode === 'EXCLUSIVE_WRITE' &&
+      !input.allowMasterWrite
+    ) {
+      throw new Error(
+        'PrModerator rejected EXCLUSIVE_WRITE CapabilityToken for Master Bot (BOT000): assign a worker bot or pass allowMasterWrite: true explicitly.'
+      );
+    }
+
+    if (
+      effectiveAccessMode === 'EXCLUSIVE_WRITE' &&
+      !input.allowWildcardScope &&
+      (cleanedPaths.length === 0 || cleanedPaths.some((p) => isGlobalWildcardPath(p)))
+    ) {
+      throw new Error(
+        `PrModerator rejected EXCLUSIVE_WRITE CapabilityToken without concrete non-wildcard allowedPaths (received: [${cleanedPaths.join(', ')}]).`
+      );
+    }
+
     const now = new Date().toISOString();
     let issued!: CapabilityToken;
 
@@ -169,9 +246,9 @@ export class PrModeratorArbitrationProtocol
         issuedByModeratorId: issuer,
         holderBotId: input.holderBotId,
         fenceEpoch: nextEpoch,
-        allowedPaths: input.allowedPaths ?? ['**/*'],
-        allowedComponents: input.allowedComponents ?? ['*'],
-        accessMode: input.accessMode ?? 'EXCLUSIVE_WRITE',
+        allowedPaths: cleanedPaths,
+        allowedComponents: cleanedComponents,
+        accessMode: effectiveAccessMode,
         status: 'ACTIVE',
         issuedAt: now,
       });
@@ -209,8 +286,16 @@ export class PrModeratorArbitrationProtocol
     sessionId: string,
     tokenId: string,
     fromBotId: string,
-    toBotId: string
+    toBotId: string,
+    overrideAllowedPaths?: string[]
   ): Promise<{ previousToken: CapabilityToken; nextToken: CapabilityToken }> {
+    const cleanedOverride = overrideAllowedPaths?.map((p) => p.trim()).filter(Boolean);
+    if (cleanedOverride && cleanedOverride.some((p) => isGlobalWildcardPath(p))) {
+      throw new Error(
+        `PrModerator rejected global wildcard override allowedPaths during token transfer: [${cleanedOverride.join(', ')}].`
+      );
+    }
+
     const now = new Date().toISOString();
     let previousToken!: CapabilityToken;
     let nextToken!: CapabilityToken;
@@ -235,15 +320,24 @@ export class PrModeratorArbitrationProtocol
         status: 'TRANSFERRED',
         revokedAt: now,
       };
+      const nextAllowedPaths =
+        cleanedOverride && cleanedOverride.length > 0
+          ? cleanedOverride
+          : existing.allowedPaths;
+      const nextAccessMode: AccessMode =
+        toBotId === 'BOT000' && existing.accessMode === 'EXCLUSIVE_WRITE'
+          ? 'REVIEW_ONLY'
+          : existing.accessMode;
+
       nextToken = CapabilityTokenSchema.parse({
         tokenId: generateProtocolId('CTOK'),
         taskId: existing.taskId,
         issuedByModeratorId: current.activeModeratorBotId,
         holderBotId: toBotId,
         fenceEpoch: nextEpoch,
-        allowedPaths: existing.allowedPaths,
+        allowedPaths: nextAllowedPaths,
         allowedComponents: existing.allowedComponents,
-        accessMode: existing.accessMode,
+        accessMode: nextAccessMode,
         status: 'ACTIVE',
         issuedAt: now,
       });
@@ -402,8 +496,9 @@ export class PrModeratorArbitrationProtocol
       };
     }
 
-    // No explicit tokenId passed: check whether another bot holds an active exclusive write lock on targetPath
-    if (input.targetPath && input.botId !== 'BOT000') {
+    // No explicit tokenId passed: check whether ANY other bot (even against BOT000 — APP-BUG-20)
+    // holds an active exclusive write lock on targetPath.
+    if (input.targetPath) {
       const conflicting = activeTokens.find(
         (tok) =>
           tok.holderBotId !== input.botId &&
@@ -425,18 +520,45 @@ export class PrModeratorArbitrationProtocol
       }
     }
 
-    if (input.requireToken && input.botId !== 'BOT000') {
-      const owned = activeTokens.find(
-        (tok) =>
-          tok.holderBotId === input.botId && tok.accessMode === 'EXCLUSIVE_WRITE'
+    // Default-deny for non-Master workers when write-fencing is active in the session (APP-BUG-12 / S2b)
+    if (input.botId !== 'BOT000') {
+      const activeExclusiveTokens = activeTokens.filter(
+        (tok) => tok.accessMode === 'EXCLUSIVE_WRITE'
       );
-      if (!owned) {
-        return {
-          allowed: false,
-          protocol: this.protocolId,
-          action: 'DENY',
-          reason: `Worker ${input.botId} lacks an active EXCLUSIVE_WRITE CapabilityToken.`,
-        };
+      const ownedExclusiveTokens = activeExclusiveTokens.filter(
+        (tok) => tok.holderBotId === input.botId
+      );
+
+      if (input.requireToken || activeExclusiveTokens.length > 0) {
+        if (ownedExclusiveTokens.length === 0) {
+          return {
+            allowed: false,
+            protocol: this.protocolId,
+            action: 'DENY',
+            reason: `Worker ${input.botId} lacks an active EXCLUSIVE_WRITE CapabilityToken.`,
+          };
+        }
+
+        if (input.targetPath) {
+          const matchingOwned = ownedExclusiveTokens.find((tok) =>
+            tok.allowedPaths.some((p) => matchesAllowedPath(p, input.targetPath!))
+          );
+          if (!matchingOwned) {
+            return {
+              allowed: false,
+              protocol: this.protocolId,
+              action: 'DENY',
+              reason: `Write denied: path "${input.targetPath}" is outside active CapabilityToken allowedPaths for ${input.botId}.`,
+            };
+          }
+          return {
+            allowed: true,
+            protocol: this.protocolId,
+            action: 'ALLOW',
+            reason: `Verified owned CapabilityToken ${matchingOwned.tokenId} (epoch ${matchingOwned.fenceEpoch}) for ${input.targetPath}.`,
+            metadata: { tokenId: matchingOwned.tokenId, fenceEpoch: matchingOwned.fenceEpoch },
+          };
+        }
       }
     }
 

@@ -82,6 +82,15 @@ export const CAPABILITY_REGISTRY: Record<CapabilityId, CapabilityDefinition> = {
     enforcement: 'process_job_object',
     platformSupport: ['win32', 'linux', 'darwin'],
   },
+  'mcp.invoke': {
+    id: 'mcp.invoke',
+    description: 'Invoke external Model Context Protocol (MCP) server tools and read MCP resources',
+    risk: 'HIGH',
+    supportedOperations: ['list_tools', 'call_tool', 'read_resource'],
+    scopeRequired: true,
+    enforcement: 'mcp_tool_governance',
+    platformSupport: ['win32', 'linux', 'darwin'],
+  },
 };
 
 export class CapabilityRegistry {

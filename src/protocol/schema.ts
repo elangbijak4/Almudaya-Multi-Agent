@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import crypto from 'node:crypto';
 
-export const PROTOCOL_SCHEMA_VERSION = '0.3.5';
+export const PROTOCOL_SCHEMA_VERSION = '0.3.6';
 
 export const ProtocolIdSchema = z.enum([
   'PrBot',
@@ -30,7 +30,7 @@ export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 export const ProtocolConfigSchema = z.object({
   prBotLimit: z.number().int().min(1).default(10),
   prBotGlobalMax: z.union([z.literal('auto'), z.number().int().min(1)]).default('auto'),
-  prIterasiLimit: z.number().int().min(1).default(10),
+  prIterasiLimit: z.number().int().min(1).default(25),
   prIterasiHandoverLimit: z.number().int().min(1).default(3),
   prDeLimit: z.number().int().min(1).default(10),
   prDeEscalationLimit: z.number().int().min(1).default(10),
@@ -38,11 +38,12 @@ export const ProtocolConfigSchema = z.object({
   prMeEndEnabled: z.boolean().default(true),
   prGateEnabled: z.boolean().default(true),
   prReattachEnabled: z.boolean().default(true),
+  masterStrictOrchestrator: z.boolean().default(true),
   moderatorBotId: z.string().default('BOT000'),
   taskTimeoutMs: z.number().int().min(100).default(180000),
   threadTimeoutMs: z.number().int().min(100).default(300000),
   globalTimeoutMs: z.union([z.number().int().min(100), z.literal('infinite')]).default('infinite'),
-  tokenBudget: z.number().int().min(100).default(1000000),
+  tokenBudget: z.number().int().min(100).default(10000000),
   minFreeMemoryMb: z.number().int().min(64).default(256),
   spawnMode: SpawnModeSchema.default('windows'),
   maxWindows: z.number().int().min(0).default(0),
@@ -97,8 +98,8 @@ export const CapabilityTokenSchema = z.object({
   issuedByModeratorId: z.string(),
   holderBotId: z.string(),
   fenceEpoch: z.number().int().min(1),
-  allowedPaths: z.array(z.string()).default(['**/*']),
-  allowedComponents: z.array(z.string()).default(['*']),
+  allowedPaths: z.array(z.string()).default([]),
+  allowedComponents: z.array(z.string()).default([]),
   accessMode: AccessModeSchema.default('EXCLUSIVE_WRITE'),
   status: z.enum(['ACTIVE', 'TRANSFERRED', 'REVOKED', 'EXPIRED']).default('ACTIVE'),
   issuedAt: z.string(),
@@ -164,12 +165,32 @@ export const HandoverRecordSchema = z.object({
   toBotId: z.string(),
   fromModel: z.string(),
   toModel: z.string(),
-  reason: z.enum(['ITERATION_LIMIT', 'TASK_TIMEOUT', 'QUOTA_EXHAUSTED', 'ERROR']),
+  reason: z.enum([
+    'ITERATION_LIMIT',
+    'TASK_TIMEOUT',
+    'QUOTA_EXHAUSTED',
+    'ERROR',
+    'PR_ITERASI',
+    'PR_DE',
+    'WORKER_CRASH',
+    'HITL_REASSIGN',
+    'MODEL_UPGRADE',
+    'NORMAL_HANDOFF',
+    'ME_END_MIGRATION',
+  ]),
   summary: z.string(),
   checkpointRestored: z.boolean().default(false),
+  newFenceEpoch: z.number().int().positive().optional(),
   timestamp: z.string(),
 });
 export type HandoverRecord = z.infer<typeof HandoverRecordSchema>;
+
+export const TaskVerificationEvidenceSchema = z.object({
+  tested: z.boolean().optional(),
+  uiVerified: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+export type TaskVerificationEvidence = z.infer<typeof TaskVerificationEvidenceSchema>;
 
 export const GoalTaskSchema = z.object({
   taskId: z.string(),
@@ -184,6 +205,7 @@ export const GoalTaskSchema = z.object({
   taskFenceToken: z.number().int().min(1).default(1),
   latestCheckpointId: z.string().optional(),
   lastWorkPositionLog: LastWorkPositionLogSchema.optional(),
+  verificationEvidence: TaskVerificationEvidenceSchema.optional(),
   triedModels: z.array(z.string()).default([]),
   handoverCount: z.number().int().min(0).default(0),
   handoverHistory: z.array(HandoverRecordSchema).default([]),

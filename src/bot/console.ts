@@ -27,6 +27,8 @@ import { generateMessageId, type DirectMessage } from '../messaging/schema.js';
 import { VERSION } from '../core/version.js';
 import type { ProtocolSupervisor } from '../protocol/supervisor.js';
 import type { SpawnManager } from '../protocol/spawn-manager.js';
+import type { McpClientManager } from '../mcp/manager.js';
+import { McpConfigStore } from '../mcp/config-store.js';
 
 export interface BotConsoleOptions {
   runtime: BotRuntime;
@@ -36,6 +38,8 @@ export interface BotConsoleOptions {
   aiProvider?: IAIModelProvider;
   protocolSupervisor?: ProtocolSupervisor;
   spawnManager?: SpawnManager;
+  mcpManager?: McpClientManager;
+  mcpConfigPath?: string;
   isMasterConsole?: boolean;
   inputStream?: NodeJS.ReadableStream;
   outputStream?: NodeJS.WritableStream;
@@ -77,6 +81,8 @@ export class BotConsole {
   private readonly skillService: SkillService;
   private readonly protocolSupervisor?: ProtocolSupervisor;
   private readonly spawnManager?: SpawnManager;
+  private readonly mcpManager?: McpClientManager;
+  private readonly mcpConfigPath?: string;
   public readonly isMasterConsole: boolean;
 
   private closeResolver?: () => void;
@@ -91,6 +97,8 @@ export class BotConsole {
     this.aiProvider = options.aiProvider;
     this.protocolSupervisor = options.protocolSupervisor;
     this.spawnManager = options.spawnManager;
+    this.mcpManager = options.mcpManager ?? options.agentLoop?.getMcpManager();
+    this.mcpConfigPath = options.mcpConfigPath;
 
     this.inputStream = options.inputStream ?? process.stdin;
     this.outputStream = options.outputStream ?? process.stdout;
@@ -618,10 +626,100 @@ export class BotConsole {
         if (this.agentLoop) {
           this.agentLoop.setProvider(nextProvider);
         }
+        try {
+          await this.botService.updateStatus(this.sessionId, this.botId, 'active', {
+            model_ref: `${nextProvider.providerId}:${nextProvider.modelName}`,
+          });
+        } catch {
+          // Best-effort registry model sync
+        }
         this.writeLine(
           `[Console] Model bot "${this.botDisplayName}" diganti ke: ${nextProvider.providerId}:${nextProvider.modelName}`
         );
         return;
+      }
+
+      case '/mcp': {
+        if (!this.mcpManager) {
+          this.writeLine('[MCP] McpClientManager tidak aktif di konsol ini. Gunakan CLI `almudaya mcp add/preset`.');
+          break;
+        }
+        const sub = (argTokens[0] ?? 'list').toLowerCase();
+        const workspaceRoot =
+          'workspaceRoot' in this.storage &&
+          typeof (this.storage as { workspaceRoot?: unknown }).workspaceRoot === 'string'
+            ? String((this.storage as { workspaceRoot?: unknown }).workspaceRoot)
+            : undefined;
+        const mcpStore = workspaceRoot ? new McpConfigStore({ workspaceRoot }) : undefined;
+
+        if (sub === 'list' || sub === 'status') {
+          const statuses = this.mcpManager.getStatuses();
+          if (statuses.length === 0) {
+            this.writeLine('[MCP] Belum ada server MCP terhubung saat ini.');
+            break;
+          }
+          this.writeLine(`[MCP] Status Server Terhubung (${statuses.length}):`);
+          for (const st of statuses) {
+            const state = st.connected ? 'CONNECTED' : `DISCONNECTED (${st.error ?? 'closed'})`;
+            this.writeLine(`  - [${st.name}] (${st.transport}) ${state} — ${st.toolCount} tool(s)`);
+          }
+        } else if (sub === 'tools') {
+          const tools = this.mcpManager.getRegisteredTools();
+          if (tools.length === 0) {
+            this.writeLine('[MCP] Belum ada tool MCP terdaftar.');
+            break;
+          }
+          this.writeLine(`[MCP] Perkakas MCP Aktif (${tools.length}):`);
+          for (const t of tools) {
+            this.writeLine(`  - ${t.namespacedName} (${t.serverName}:${t.toolName})`);
+          }
+        } else if (sub === 'connect' && argTokens[1]) {
+          if (!mcpStore) {
+            this.writeLine('[MCP] Tidak dapat membaca McpConfigStore pada storage non-filesystem.');
+            break;
+          }
+          const targetName = argTokens[1];
+          const servers = await mcpStore.resolveEffectiveServers({
+            sessionId: this.sessionId,
+            externalConfigPath: this.mcpConfigPath,
+            includeDisabled: true,
+          });
+          const cfg = servers.find((s) => s.name === targetName);
+          if (!cfg) {
+            this.writeLine(`[MCP] Konfigurasi server "${targetName}" tidak ditemukan.`);
+            break;
+          }
+          const res = await this.mcpManager.connectServer(cfg);
+          this.writeLine(
+            res.connected
+              ? `[MCP] Terhubung ke "${res.name}" (${res.toolCount} tool tersedia).`
+              : `[MCP] Gagal terhubung ke "${res.name}": ${res.error ?? 'Unknown error'}`
+          );
+        } else if (sub === 'disconnect' && argTokens[1]) {
+          const ok = await this.mcpManager.disconnectServer(argTokens[1]);
+          this.writeLine(
+            ok ? `[MCP] Koneksi server "${argTokens[1]}" diputus.` : `[MCP] Server "${argTokens[1]}" tidak aktif.`
+          );
+        } else if (sub === 'reload') {
+          if (!mcpStore) {
+            this.writeLine('[MCP] Tidak dapat membaca McpConfigStore pada storage non-filesystem.');
+            break;
+          }
+          const servers = await mcpStore.resolveEffectiveServers({
+            sessionId: this.sessionId,
+            externalConfigPath: this.mcpConfigPath,
+          });
+          await this.mcpManager.disposeAll();
+          const results = await this.mcpManager.connectAll(servers);
+          this.writeLine(
+            `[MCP] Reload selesai: ${results.filter((r) => r.connected).length}/${results.length} server terhubung.`
+          );
+        } else {
+          this.writeLine(
+            '[MCP] Penggunaan: /mcp [list | tools | connect <nama> | disconnect <nama> | reload]'
+          );
+        }
+        break;
       }
 
       case '/protocol': {
@@ -630,7 +728,7 @@ export class BotConsole {
           break;
         }
         const summary = await this.protocolSupervisor.getStatusSummary(this.sessionId);
-        this.writeLine(`[Protocol v0.3.5 Unified Natural Lifecycle — Session ${this.sessionId}]:`);
+        this.writeLine(`[Protocol v${VERSION} Unified Natural Lifecycle — Session ${this.sessionId}]:`);
         this.writeLine(`  Status Loop       : ${summary.runtimeState.macroLoopStatus}`);
         this.writeLine(`  Spawn Mode        : ${summary.config.spawnMode} (maxWindows=${summary.config.maxWindows})`);
         this.writeLine(`  Active Moderator  : ${summary.activeModeratorBotId} (Fence Epoch=${summary.currentFenceEpoch})`);
@@ -748,7 +846,8 @@ export class BotConsole {
         this.writeLine(`  /mode [review|turbo]      Tampilkan atau ubah mode eksekusi keamanan`);
         this.writeLine(`  /model [id] [provider]    Lihat daftar model (Ollama/NVIDIA/9router/OpenRouter/Gemini), ganti model, /model recommend, atau /model pull <id>`);
         this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
-        this.writeLine(`  /protocol                 Status 10 protokol v0.3.5, kuota token, & GoalLedger`);
+        this.writeLine(`  /mcp [subcommand]         Kelola koneksi & perkakas server MCP (list, tools, connect, disconnect, reload)`);
+        this.writeLine(`  /protocol                 Status 10 protokol v${VERSION}, kuota token, & GoalLedger`);
         this.writeLine(`  /blueprint                Tampilkan GoalLedger blueprint tasks aktif`);
         this.writeLine(`  /rules [add|rm] [...]     Kelola Dynamic Rules sesi saat berjalan`);
         this.writeLine(`  /bots                     Lihat status & model semua worker/master bot`);
@@ -836,6 +935,14 @@ export class BotConsole {
 
     if (this.runtime.running) {
       await this.runtime.stop();
+    }
+
+    if (this.mcpManager) {
+      try {
+        await this.mcpManager.disposeAll();
+      } catch {
+        // Ignore MCP shutdown errors
+      }
     }
 
     this.spawnManager?.reapAll();

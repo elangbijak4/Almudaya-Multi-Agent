@@ -13,6 +13,7 @@ export const KNOWN_CAPABILITIES = [
   'command.arbitrary',
   'system.environment_access',
   'system.process_control',
+  'mcp.invoke',
 ] as const;
 
 export const CapabilityIdSchema = z.enum(KNOWN_CAPABILITIES);
@@ -40,6 +41,8 @@ export const CapabilityScopeSchema = z.object({
   commands: z.array(z.string()).optional(),
   hosts: z.array(z.string()).optional(),
   env_vars: z.array(z.string()).optional(),
+  servers: z.array(z.string()).optional(),
+  tools: z.array(z.string()).optional(),
   operations: z.array(z.string()).optional(),
 }).passthrough();
 export type CapabilityScope = z.infer<typeof CapabilityScopeSchema>;

@@ -1,6 +1,10 @@
 import type { ToolDefinition } from '../ai/provider.js';
 import type { MessagingService } from '../messaging/service.js';
-import type { GoalTaskStatus, TouchedFileStatus } from '../protocol/schema.js';
+import type {
+  GoalTaskStatus,
+  TaskVerificationEvidence,
+  TouchedFileStatus,
+} from '../protocol/schema.js';
 import type { ProtocolSupervisor } from '../protocol/supervisor.js';
 
 export const REQUEST_SPAWN_BOT_TOOL: ToolDefinition = {
@@ -59,6 +63,16 @@ export const UPDATE_GOAL_TASK_TOOL: ToolDefinition = {
       pending_next_step: {
         type: 'string',
         description: 'Concrete next step remaining on this task.',
+      },
+      verification_evidence: {
+        type: 'object',
+        description:
+          'Optional structured evidence confirming tests passed and live UI/interactive behavior was verified before DONE.',
+        properties: {
+          tested: { type: 'boolean' },
+          ui_verified: { type: 'boolean' },
+          notes: { type: 'string' },
+        },
       },
     },
     required: ['task_id', 'status'],
@@ -174,6 +188,17 @@ export async function executeUpdateGoalTask(
     ? String(rawArgs['pending_next_step']).trim()
     : undefined;
 
+  let verificationEvidence: TaskVerificationEvidence | undefined;
+  const rawEv = rawArgs['verification_evidence'];
+  if (rawEv && typeof rawEv === 'object') {
+    const ev = rawEv as Record<string, unknown>;
+    verificationEvidence = {
+      tested: typeof ev['tested'] === 'boolean' ? ev['tested'] : undefined,
+      uiVerified: typeof ev['ui_verified'] === 'boolean' ? ev['ui_verified'] : undefined,
+      notes: typeof ev['notes'] === 'string' ? ev['notes'].trim() : undefined,
+    };
+  }
+
   const updated = await supervisor.ledger.updateTaskStatus(sessionId, taskId, status, {
     lastWorkPositionLog:
       lastStep || nextStep
@@ -186,11 +211,13 @@ export async function executeUpdateGoalTask(
             recordedAt: new Date().toISOString(),
           }
         : undefined,
+    verificationEvidence,
   });
 
   return {
     task_id: updated.taskId,
     status: updated.status,
+    verification_evidence: updated.verificationEvidence,
     updated_at: updated.updatedAt,
   };
 }

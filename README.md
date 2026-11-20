@@ -1,14 +1,30 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.5)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.6)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 471 Passed](https://img.shields.io/badge/Tests-471%20Passed-brightgreen.svg)](./docs/ver0.3.5/10_PHASE_GATES/PHASE_STATUS.md)
+[![Tests: 486 Passed](https://img.shields.io/badge/Tests-486%20Passed-brightgreen.svg)](./TESTING5.md)
 [![AI Engines: Gemini | NVIDIA NIM | Ollama | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20NVIDIA%20NIM%20%7C%20Ollama%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Unified Natural Lifecycle Master Bot (`BOT000`) & 10 Atomic `IProtocol` Governance Classes**, **Dual-Mode Startup (`almudaya up`)**, **FailoverAIProvider & Write-Fencing Capability Tokens**, **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Model Context Protocol (MCP) Client, Server & ACG Governance**, **Live Web/UI Self-Verification Tools (`inspect_web_ui`, `web_fetch`)**, **Unified Natural Lifecycle Master Bot (`BOT000`) & 10 Atomic `IProtocol` Governance Classes**, **Dual-Mode Startup (`almudaya up`)**, **FailoverAIProvider & Write-Fencing Capability Tokens**, **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
+
+---
+
+## What's New in Version 0.3.6
+
+1. **First-Class Model Context Protocol (MCP) Client, Server & Governance (`src/mcp/`):**
+   - **Stdio & Streamable HTTP/SSE Transports (`StdioMcpClient`, `HttpMcpClient`):** Pure TypeScript JSON-RPC 2.0 MCP transports supporting external `mcp.json` files (`mcpServers` / `servers`), workspace/session persistence (`McpConfigStore`), and sanitized child-process environments.
+   - **ACG `mcp.invoke` Governance & Secret Redaction (`McpClientManager`):** Dynamically exposes server tools as `mcp__<server>__<tool>` inside `AutonomousAgentLoop`, enforcing `mcp.invoke` capability grants, `REQUEST_REVIEW` operator approval prompts, secret redaction, and `MCP_TOOL_CALL` work-log auditing.
+   - **Curated Presets & CLI (`almudaya mcp`):** Manage servers with `almudaya mcp add|list|remove|test|preset <id>` (`playwright`, `chrome-devtools`, `filesystem`, `fetch`, `memory`), `/mcp` live console commands, `--mcp-config <path>`, or expose Almudaya's Blackboard over MCP via `almudaya mcp serve` (`AlmudayaMcpServer`).
+2. **Built-In Web & UI Self-Verification Tools & Intensive Tool Calling (`src/tools/web-tools.ts`):**
+   - **`inspect_web_ui` & `web_fetch`:** Enables frontend/QA bots to verify live loopback web servers, audit rendered DOM, computed glassmorphism CSS (`backdrop-filter: blur(...)`, translucent `rgba` surfaces), horizontal overflow (`0px`), console/page errors, and interactive click/fill/`drag_and_drop` DOM state changes via headless Playwright or static CSS/HTML fallback inspection.
+   - **Verification-First Prompting & Iteration Headroom (`src/ai/prompts.ts`):** Raised default ReAct iteration ceiling (`maxIterations` / `prIterasiLimit`) from `10` to `25` with explicit graceful PKU fallback and mandatory end-to-end verification guidelines.
+3. **Hardening & Remediation of All 14 `v0.3.5` Field-Test Bugs (`TESTING5.md` — `APP-BUG-10` .. `APP-BUG-23`):**
+   - **Spawn & Workspace Resolution (`APP-BUG-10`, `APP-BUG-13`):** `SpawnManager` forwards `--workspace <blackboardRoot>` (distinct from target repo `cwd`) and `--failover` worker chains; `ExecutionController` binds ACG lookup directly to `-w <workspaceRoot>`.
+   - **Scoped Handoff, Master Isolation & Handover Audit (`APP-BUG-11`, `12`, `16`, `20`, `21`, `22`, `23`):** Exposed `create_goal_blueprint` in `MASTER_PROTOCOL_TOOLS`, eliminated implicit `['**/*']` token locks, inherited task `targetFiles` cleanly across `PrTransfer`, enforced default-deny on unclaimed worker paths while fencing is active, blocked `BOT000` write collisions & self-issued `EXCLUSIVE_WRITE` tokens under `masterStrictOrchestrator`, and recorded `handoverCount`/`handoverHistory` atomically.
+   - **Quotas, Leases, Model Catalog & Registry Sync (`APP-BUG-14`, `15`, `17`, `18`, `19`, `C2`, `C3`):** Updated default NVIDIA NIM catalog to `nvidia/nemotron-3.5-super-vl-120b-a12b`, raised default `tokenBudget` to `10,000,000` with ping-pong escalation suppression, separated filesystem `scope.paths` from shell command grants in `extended` presets, added dynamic `429` provider labeling, added worker `--failover`, synced `model_ref` in `bots.json`, increased `DEFAULT_MESSAGE_LEASE_MS` to `180000ms`, and added active background lease renewal during long multi-tool turns.
 
 ---
 
@@ -308,6 +324,7 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 
 | Command | Description |
 |---|---|
+| `almudaya up` | Start Unified Natural Lifecycle HITL + Master (`BOT000`) session with MCP, `--pool`, and protocol guards |
 | `almudaya session create <name>` | Create a persistent session with optional `--session <id>` |
 | `almudaya session list` | List all sessions and their metadata |
 | `almudaya session inspect --session <id>` | Inspect detailed session metadata and statistics |
@@ -333,6 +350,8 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 | `almudaya capability preset list\|show\|apply` | Inspect and apply pre-packaged capability security presets |
 | `almudaya skill list\|inspect\|styles\|platforms\|modalities` | Explore AVDS v1.0.1 visual styles (40), platforms (13), and modalities (10) |
 | `almudaya skill enable\|disable\|validate` | Bind AVDS skill configs to sessions/bots and validate design contracts |
+| `almudaya mcp list\|add\|preset\|remove\|test` | Configure external stdio/HTTP MCP servers & curated presets (`playwright`, `chrome-devtools`, `filesystem`, `fetch`, `memory`) |
+| `almudaya mcp serve` | Run Almudaya Blackboard as a stdio JSON-RPC 2.0 MCP server |
 
 All commands accept `--json` for machine readability and `--workspace <path>` to override the storage root.
 
@@ -353,7 +372,8 @@ npm run build
 npm pack --dry-run
 ```
 
-- **60 Test Files / 432 Tests:** 100% passing across all modules (`npm test`), covering SRP-1 security, PKU Spec v0.2, incremental codebase indexing, AVDS v1.0.1, OpenRouter/9router providers, and REPL `/model` switching.
+- **80 Test Files / 486 Tests:** 100% passing across all modules (`npm test`), covering `v0.3.6` MCP client/server & ACG governance, `web_fetch`/`inspect_web_ui`, `APP-BUG-10`..`APP-BUG-23` regressions, Unified Natural Lifecycle (`v0.3.5`), SRP-1 security, PKU Spec v0.2, AVDS v1.0.1, OpenRouter/9router/NVIDIA/Ollama providers, and REPL `/model` + `/mcp` commands.
+- **Field Test Report:** Full multi-bot `v0.3.5` validation & findings catalog documented in [`TESTING5.md`](./TESTING5.md).
 - **Independent Multi-Process Testing:** Validated with real spawned Node.js child processes for concurrent joins, message appends, and process crash recovery.
 - **Two-Terminal E2E Acceptance:** Validates the complete 12-step Proof of Concept specified in `MASTER_PROMPT.md` Section 10.
 

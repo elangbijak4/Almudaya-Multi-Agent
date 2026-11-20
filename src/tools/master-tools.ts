@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '../ai/provider.js';
 import type { BotService } from '../bot/service.js';
 import type { MessagingService } from '../messaging/service.js';
-import type { AccessMode, ModelSpec } from '../protocol/schema.js';
+import type { AccessMode, GoalTaskStatus, ModelSpec } from '../protocol/schema.js';
 import type { SpawnManager } from '../protocol/spawn-manager.js';
 import type { ProtocolSupervisor } from '../protocol/supervisor.js';
 
@@ -36,6 +36,50 @@ export const DELEGATE_MODERATOR_ROLE_TOOL: ToolDefinition = {
   },
 };
 
+export const CREATE_GOAL_BLUEPRINT_TOOL: ToolDefinition = {
+  name: 'create_goal_blueprint',
+  description:
+    'Initializes or updates the shared GoalLedger blueprint with decomposed tasks, owners, targetFiles, and acceptanceCriteria (BOT000 only).',
+  parameters: {
+    type: 'object',
+    properties: {
+      summary: { type: 'string', description: 'Concise overall blueprint mission summary.' },
+      tasks: {
+        type: 'array',
+        description: 'List of tasks in the decomposed execution plan.',
+        items: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            assigned_bot_id: { type: 'string' },
+            role_hint: { type: 'string' },
+            depends_on: { type: 'array', items: { type: 'string' } },
+            target_files: { type: 'array', items: { type: 'string' } },
+            acceptance_criteria: { type: 'array', items: { type: 'string' } },
+            status: {
+              type: 'string',
+              enum: [
+                'PENDING',
+                'IN_PROGRESS',
+                'HANDOVER_WAIT',
+                'PEER_REVIEW',
+                'REVISION',
+                'DONE',
+                'BLOCKED_HITL',
+                'CANCELLED',
+              ],
+            },
+          },
+          required: ['title', 'description'],
+        },
+      },
+    },
+    required: ['summary', 'tasks'],
+  },
+};
+
 export const ISSUE_CAPABILITY_TOKEN_TOOL: ToolDefinition = {
   name: 'issue_capability_token',
   description: 'Issues or revokes a fenced PrModerator CapabilityToken for workspace writes.',
@@ -47,6 +91,14 @@ export const ISSUE_CAPABILITY_TOKEN_TOOL: ToolDefinition = {
       holder_bot_id: { type: 'string' },
       allowed_paths: { type: 'array', items: { type: 'string' } },
       access_mode: { type: 'string', enum: ['EXCLUSIVE_WRITE', 'SHARED_READ', 'REVIEW_ONLY'] },
+      allow_wildcard_scope: {
+        type: 'boolean',
+        description: 'Explicit override allowing wildcard path scope (disabled by default).',
+      },
+      allow_master_write: {
+        type: 'boolean',
+        description: 'Explicit override when masterStrictOrchestrator is false.',
+      },
       token_id: { type: 'string', description: 'Token ID (for revoke).' },
       reason: { type: 'string' },
     },
@@ -144,6 +196,7 @@ export const MARK_GOAL_ACHIEVED_TOOL: ToolDefinition = {
 };
 
 export const MASTER_PROTOCOL_TOOLS: ToolDefinition[] = [
+  CREATE_GOAL_BLUEPRINT_TOOL,
   MANAGE_DYNAMIC_RULE_TOOL,
   DELEGATE_MODERATOR_ROLE_TOOL,
   ISSUE_CAPABILITY_TOKEN_TOOL,
@@ -180,6 +233,50 @@ export async function executeMasterProtocolTool(
   const { supervisor, messagingService, botService, spawnManager, workspaceRoots, sessionId, trustedBotId } = deps;
 
   switch (toolName) {
+    case 'create_goal_blueprint': {
+      assertMasterActor(trustedBotId, toolName);
+      const summary = String(rawArgs['summary'] ?? '').trim();
+      const rawTasks = Array.isArray(rawArgs['tasks']) ? rawArgs['tasks'] : [];
+      if (!summary || rawTasks.length === 0) {
+        throw new Error('create_goal_blueprint requires non-empty "summary" and "tasks" array.');
+      }
+      const mappedTasks = rawTasks.map((entry) => {
+        const item = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+        return {
+          taskId: item['task_id'] ? String(item['task_id']).trim() : undefined,
+          title: String(item['title'] ?? 'Untitled Task').trim(),
+          description: String(item['description'] ?? item['title'] ?? '').trim(),
+          assignedBotId: item['assigned_bot_id'] ? String(item['assigned_bot_id']).trim() : undefined,
+          roleHint: item['role_hint'] ? String(item['role_hint']).trim() : undefined,
+          dependsOn: Array.isArray(item['depends_on']) ? item['depends_on'].map(String) : undefined,
+          targetFiles: Array.isArray(item['target_files']) ? item['target_files'].map(String) : undefined,
+          acceptanceCriteria: Array.isArray(item['acceptance_criteria'])
+            ? item['acceptance_criteria'].map(String)
+            : undefined,
+          status: item['status'] ? (String(item['status']).trim() as GoalTaskStatus) : undefined,
+        };
+      });
+      const ledger = await supervisor.ledger.initializeBlueprint(sessionId, summary, mappedTasks);
+      await messagingService.publishBroadcast(sessionId, {
+        senderBotId: trustedBotId,
+        category: 'DECISION',
+        content: `[BLUEPRINT_INITIALIZED] ${ledger.tasks.length} task(s): ${summary}`,
+        metadata: { taskIds: ledger.tasks.map((t) => t.taskId) },
+      });
+      return {
+        action: 'blueprint_created',
+        summary: ledger.blueprintSummary,
+        task_count: ledger.tasks.length,
+        tasks: ledger.tasks.map((t) => ({
+          taskId: t.taskId,
+          title: t.title,
+          assignedBotId: t.assignedBotId,
+          targetFiles: t.targetFiles,
+          status: t.status,
+        })),
+      };
+    }
+
     case 'manage_dynamic_rule': {
       assertMasterActor(trustedBotId, toolName);
       const action = String(rawArgs['action'] ?? 'list');
@@ -257,11 +354,30 @@ export async function executeMasterProtocolTool(
         ? rawArgs['allowed_paths'].map(String)
         : undefined;
       const accessMode = (rawArgs['access_mode'] as AccessMode | undefined) ?? 'EXCLUSIVE_WRITE';
+      const config = await supervisor.store.getConfig(sessionId);
+      const allowMasterWriteArg = Boolean(rawArgs['allow_master_write']);
+      const allowWildcardArg = Boolean(rawArgs['allow_wildcard_scope']);
+
+      if (holderBotId === 'BOT000' && accessMode === 'EXCLUSIVE_WRITE') {
+        if (config.masterStrictOrchestrator !== false) {
+          throw new Error(
+            'issue_capability_token rejected EXCLUSIVE_WRITE self-grant to BOT000 while masterStrictOrchestrator is enabled; assign a worker bot or pass --allow-master-write.'
+          );
+        }
+        if (!allowMasterWriteArg) {
+          throw new Error(
+            'issue_capability_token to BOT000 requires allow_master_write: true explicitly.'
+          );
+        }
+      }
+
       const token = await supervisor.issueTaskToken(sessionId, {
         taskId,
         holderBotId,
         allowedPaths,
         accessMode,
+        allowWildcardScope: allowWildcardArg,
+        allowMasterWrite: allowMasterWriteArg && config.masterStrictOrchestrator === false,
       });
       return { token };
     }
@@ -355,6 +471,7 @@ export async function executeMasterProtocolTool(
         ? String(rawArgs['checkpoint_id'])
         : undefined;
 
+      const existingTask = await supervisor.ledger.getTask(sessionId, taskId);
       const envelope = await supervisor.commitTaskTransfer({
         sessionId,
         taskId,
@@ -365,13 +482,14 @@ export async function executeMasterProtocolTool(
         pendingNextStep: 'Execute assigned task cleanly under new CapabilityToken.',
         checkpointIdToRestore: checkpointId,
         workspaceRoots,
+        recordHandover: false,
       });
 
       await supervisor.ledger.recordHandover(
         sessionId,
         taskId,
         {
-          attempt: 1,
+          attempt: (existingTask?.handoverCount ?? 0) + 1,
           fromBotId,
           toBotId,
           fromModel: 'previous',
@@ -379,6 +497,7 @@ export async function executeMasterProtocolTool(
           reason: 'ITERATION_LIMIT',
           summary: reason,
           checkpointRestored: envelope.checkpointRestored,
+          newFenceEpoch: envelope.capabilityToken.fenceEpoch,
           timestamp: new Date().toISOString(),
         },
         { newBotId: toBotId, status: 'PENDING' }

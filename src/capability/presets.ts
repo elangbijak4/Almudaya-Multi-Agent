@@ -61,6 +61,12 @@ export const CAPABILITY_PRESETS: Record<string, CapabilityPresetDefinition> = {
         approval_mode: 'session',
         reason: 'Preset extended: standard project toolchain execution',
       },
+      {
+        capability: 'mcp.invoke',
+        scope: { servers: ['*'], tools: ['*'] },
+        approval_mode: 'session',
+        reason: 'Preset extended: configured MCP server tool invocation',
+      },
     ],
   },
   unrestricted: {
@@ -85,6 +91,12 @@ export const CAPABILITY_PRESETS: Record<string, CapabilityPresetDefinition> = {
         approval_mode: 'session',
         reason: 'Preset unrestricted: arbitrary command execution',
       },
+      {
+        capability: 'mcp.invoke',
+        scope: { servers: ['*'], tools: ['*'] },
+        approval_mode: 'session',
+        reason: 'Preset unrestricted: full MCP server tool invocation',
+      },
     ],
     warning: 'CAUTION: UNRESTRICTED authority grants broad host system execution. Use only in isolated VM, container, or disposable development machines.',
   },
@@ -94,6 +106,8 @@ export interface PresetOptions {
   durationHours?: number;
   botId?: string;
   paths?: string[];
+  commands?: string[];
+  servers?: string[];
 }
 
 export class CapabilityPresets {
@@ -123,8 +137,21 @@ export class CapabilityPresets {
 
     return preset.templates.map((tmpl) => {
       const scope: CapabilityScope = { ...tmpl.scope };
-      if (options.paths && options.paths.length > 0) {
+      const isFilesystemCap =
+        tmpl.capability.startsWith('filesystem.') || tmpl.capability === 'system.config_access';
+      if (isFilesystemCap && options.paths && options.paths.length > 0) {
         scope.paths = options.paths;
+      }
+      if (
+        (tmpl.capability === 'process.execute_external' ||
+          tmpl.capability === 'command.arbitrary') &&
+        options.commands &&
+        options.commands.length > 0
+      ) {
+        scope.commands = options.commands;
+      }
+      if (tmpl.capability === 'mcp.invoke' && options.servers && options.servers.length > 0) {
+        scope.servers = options.servers;
       }
 
       return {

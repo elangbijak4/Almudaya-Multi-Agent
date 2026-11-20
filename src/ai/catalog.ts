@@ -105,12 +105,28 @@ export const BUILTIN_MODEL_CATALOG: ModelCatalogEntry[] = [
   },
   // NVIDIA NIM models
   {
-    id: 'nvidia/nemotron-3-super-120b-a12b',
-    name: 'Nemotron 3 Super 120B (NVIDIA NIM)',
+    id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+    name: 'Nemotron 3.5 Super VL 120B (NVIDIA NIM)',
     provider: 'nvidia',
     tier: 'byok',
     requiresApiKey: true,
-    description: 'NVIDIA NIM verified primary coding, reasoning & agentic model',
+    description: 'NVIDIA NIM verified primary coding, multimodal & agentic model',
+  },
+  {
+    id: 'nvidia/nemotron-3-ultra-550b-a55b',
+    name: 'Nemotron 3 Ultra 550B (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM frontier architecture & heavy synthesis model',
+  },
+  {
+    id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+    name: 'Nemotron 3.5 Lightning 30B (NVIDIA NIM)',
+    provider: 'nvidia',
+    tier: 'byok',
+    requiresApiKey: true,
+    description: 'NVIDIA NIM fast low-latency coding & coordination model',
   },
   {
     id: 'nvidia/llama-3.3-nemotron-super-49b-v1.5',

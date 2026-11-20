@@ -28,6 +28,7 @@ export type CapabilityValidator = (
  * Read-only inspection tools (read_file, list_dir, search_files) execute safely without prompt.
  */
 const MUTATING_TOOLS = new Set(['write_file', 'edit_file', 'run_command']);
+const WRITE_FENCED_TOOLS = new Set(['write_file', 'edit_file']);
 
 /**
  * Controller enforcing safety boundaries and Human-in-the-Loop approval
@@ -76,7 +77,7 @@ export class ExecutionModeController {
     if (this.mode === 'TURBO') {
       return false;
     }
-    return MUTATING_TOOLS.has(toolName);
+    return MUTATING_TOOLS.has(toolName) || toolName.startsWith('mcp__');
   }
 
   /**
@@ -86,7 +87,7 @@ export class ExecutionModeController {
   public async requestApproval(
     request: ToolExecutionRequest
   ): Promise<ExecutionApprovalDecision> {
-    if (this.capabilityValidator && MUTATING_TOOLS.has(request.toolName)) {
+    if (this.capabilityValidator && WRITE_FENCED_TOOLS.has(request.toolName)) {
       const capCheck = await this.capabilityValidator(request);
       if (!capCheck.allowed) {
         return {
@@ -185,6 +186,9 @@ export class ExecutionModeController {
       if (request.args['timeout_ms']) {
         lines.push(`  Batas Waktu:    ${String(request.args['timeout_ms'])} ms`);
       }
+    } else if (request.toolName.startsWith('mcp__')) {
+      lines.push(`  MCP Tool Call:  ${request.toolName}`);
+      lines.push(`  Argumen:        ${JSON.stringify(request.args ?? {}).slice(0, 200)}`);
     }
 
     return lines.join('\n');

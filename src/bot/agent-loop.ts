@@ -28,6 +28,14 @@ import { SEND_MESSAGE_TOOL, executeSendMessage } from '../tools/messaging-tools.
 import { USE_SKILL_TOOL, executeUseSkill } from '../tools/skill-tools.js';
 import { QUERY_PKU_MEMORY_TOOL, executeQueryPkuMemory } from '../tools/pku-tools.js';
 import {
+  WEB_TOOLS,
+  executeInspectWebUi,
+  executeWebFetch,
+  type InspectWebUiArgs,
+  type WebFetchArgs,
+} from '../tools/web-tools.js';
+import type { McpClientManager } from '../mcp/manager.js';
+import {
   WORKER_PROTOCOL_TOOLS,
   executeRequestSpawnBot,
   executeSubmitTaskHandoff,
@@ -80,6 +88,7 @@ export interface AgentLoopOptions {
   activeTaskId?: string;
   activeTokenId?: string;
   dryRunSpawn?: boolean;
+  mcpManager?: McpClientManager;
   onStep?: (event: AgentStepEvent) => Promise<void> | void;
   onStatus?: (statusMessage: string) => Promise<void> | void;
 }
@@ -111,6 +120,8 @@ export class AutonomousAgentLoop {
   private readonly activeTaskId?: string;
   private readonly activeTokenId?: string;
   private readonly dryRunSpawn?: boolean;
+  private readonly blackboardRoot?: string;
+  private mcpManager?: McpClientManager;
   private readonly onStepCallback?: (event: AgentStepEvent) => Promise<void> | void;
   private readonly onStatusCallback?: (statusMessage: string) => Promise<void> | void;
   private abortController: AbortController = new AbortController();
@@ -122,7 +133,7 @@ export class AutonomousAgentLoop {
     this.provider = options.provider;
     this.executionModeController =
       options.executionModeController ?? new ExecutionModeController('REQUEST_REVIEW');
-    this.maxIterations = options.maxIterations ?? 10;
+    this.maxIterations = options.maxIterations ?? 25;
 
     this.botService = options.botService ?? new BotService(this.storage);
     this.messagingService =
@@ -143,8 +154,20 @@ export class AutonomousAgentLoop {
     this.activeTaskId = options.activeTaskId;
     this.activeTokenId = options.activeTokenId;
     this.dryRunSpawn = options.dryRunSpawn;
+    const maybeFsStorage = options.storage as { workspaceRoot?: unknown };
+    this.blackboardRoot =
+      typeof maybeFsStorage.workspaceRoot === 'string' ? maybeFsStorage.workspaceRoot : undefined;
+    this.mcpManager = options.mcpManager;
     this.onStepCallback = options.onStep;
     this.onStatusCallback = options.onStatus;
+  }
+
+  public getMcpManager(): McpClientManager | undefined {
+    return this.mcpManager;
+  }
+
+  public setMcpManager(manager?: McpClientManager): void {
+    this.mcpManager = manager;
   }
 
   public getProvider(): IAIModelProvider {
@@ -181,6 +204,15 @@ export class AutonomousAgentLoop {
       throw new Error('Operation aborted');
     }
 
+    // Suppress ping-pong loops triggered by peer escalation notices (APP-BUG-15)
+    if (
+      message.sender_bot_id !== 'OPERATOR' &&
+      typeof message.content === 'string' &&
+      message.content.trim().startsWith('[PrBotGlobal Escalation:')
+    ) {
+      return '[PrBotGlobal Escalation Acknowledged — Auto-reply suppressed to prevent ping-pong.]';
+    }
+
     // 1. Gather dynamic session context
     const currentBot = await this.botService.getBot(this.sessionId, this.botId);
     const peerBots = await this.botService.listBots(this.sessionId);
@@ -192,9 +224,19 @@ export class AutonomousAgentLoop {
     const currentTaskId = message.task_id ?? this.activeTaskId;
     const activeTokenId =
       message.transfer_envelope?.capabilityToken.tokenId ??
-      currentBot.active_capability_token_id ??
-      this.activeTokenId;
+      this.activeTokenId ??
+      currentBot.active_capability_token_id;
     const activeFenceEpoch = message.transfer_envelope?.capabilityToken.fenceEpoch;
+
+    const protocolConfig = activeSupervisor
+      ? await activeSupervisor.store.getConfig(this.sessionId)
+      : undefined;
+    const hasActiveWorkers = peerBots.some((b) => b.bot_id !== 'BOT000');
+    const strictMasterRole =
+      Boolean(activeSupervisor) &&
+      isMasterActor &&
+      (protocolConfig?.masterStrictOrchestrator ?? true) &&
+      hasActiveWorkers;
 
     if (activeSupervisor) {
       this.executionModeController.setCapabilityValidator(async (req) => {
@@ -240,9 +282,25 @@ export class AutonomousAgentLoop {
         ])
       : ['', ''];
 
-    const capabilityTokenSummary = activeTokenId
-      ? `TokenId=${activeTokenId}, FenceEpoch=${activeFenceEpoch ?? 'auto'}, TaskId=${currentTaskId ?? 'N/A'}`
-      : undefined;
+    let capabilityTokenSummary: string | undefined;
+    if (activeTokenId) {
+      capabilityTokenSummary = `TokenId=${activeTokenId}, FenceEpoch=${activeFenceEpoch ?? 'auto'}, TaskId=${currentTaskId ?? 'N/A'}`;
+    } else if (activeSupervisor) {
+      const botTokens = await activeSupervisor.prModerator.getActiveTokensForBot(
+        this.sessionId,
+        this.botId
+      );
+      if (botTokens.length > 0) {
+        capabilityTokenSummary = botTokens
+          .map(
+            (t) =>
+              `TokenId=${t.tokenId} (${t.accessMode}, epoch=${t.fenceEpoch}, paths=[${t.allowedPaths.join(', ')}])`
+          )
+          .join('\n');
+      }
+    }
+
+    const mcpToolsSummary = this.mcpManager?.getPromptSummaryMarkdown() || undefined;
 
     const systemPrompt = buildDynamicSystemPrompt({
       sessionId: this.sessionId,
@@ -258,19 +316,26 @@ export class AutonomousAgentLoop {
       dynamicRulesMarkdown: dynamicRulesMarkdown || undefined,
       goalLedgerMarkdown: goalLedgerMarkdown || undefined,
       capabilityTokenSummary,
+      mcpToolsSummary,
       protocolActive: Boolean(activeSupervisor),
     });
 
     // 2. Prepare available tools
+    const effectiveFileTools = strictMasterRole
+      ? FILE_TOOLS.filter((t) => t.name !== 'write_file' && t.name !== 'edit_file')
+      : FILE_TOOLS;
+
     const availableTools: ToolDefinition[] = [
       QUERY_PKU_MEMORY_TOOL,
-      ...FILE_TOOLS,
+      ...effectiveFileTools,
       RUN_COMMAND_TOOL,
+      ...WEB_TOOLS,
       GET_WORK_LOG_TOOL,
       SEND_MESSAGE_TOOL,
       USE_SKILL_TOOL,
       ...(activeSupervisor ? WORKER_PROTOCOL_TOOLS : []),
       ...(activeSupervisor && isMasterActor ? MASTER_PROTOCOL_TOOLS : []),
+      ...(this.mcpManager ? this.mcpManager.getToolDefinitions() : []),
     ];
 
     // 3. Sender Identity Verification (IDV-01, §18, §5.20)
@@ -306,11 +371,12 @@ export class AutonomousAgentLoop {
     let iteration = 0;
     let explicitlyMessagedSender = false;
     let explicitlySubmittedHandoff = false;
+    let escalatedOrHalted = false;
     const touchedFiles: TouchedFileStatus[] = [];
     const turnStartedMs = Date.now();
     const masterToolNames = new Set(MASTER_PROTOCOL_TOOLS.map((t) => t.name));
 
-    // 4. Bounded ReAct Iteration Loop (Max 10 steps per ADR-204, AUD-20, REQ-12)
+    // 4. Bounded ReAct Iteration Loop
     const effectiveSignal = signal ?? this.abortController.signal;
 
     while (iteration < this.maxIterations) {
@@ -333,7 +399,11 @@ export class AutonomousAgentLoop {
             throw new Error('Operation aborted');
           }
           const delaySec = Math.ceil(err.retryDelaySeconds);
-          const notifyMsg = `⏳ Kuota Gemini tercapai (429 RESOURCE_EXHAUSTED). Menunggu jeda ${delaySec} detik sebelum mencoba kembali...`;
+          const providerLabel =
+            this.provider.providerId === 'gemini'
+              ? 'Gemini'
+              : `${this.provider.providerId} (${this.provider.modelName})`;
+          const notifyMsg = `⏳ Kuota ${providerLabel} tercapai (429 RESOURCE_EXHAUSTED). Menunggu jeda ${delaySec} detik sebelum mencoba kembali...`;
           if (this.onStatusCallback) {
             await this.onStatusCallback(notifyMsg);
           }
@@ -356,7 +426,18 @@ export class AutonomousAgentLoop {
           aiResponse.usage.totalTokens
         );
         if (!budgetCheck.allowed) {
+          escalatedOrHalted = true;
           finalResponseText = `[PrBotGlobal Escalation: ${budgetCheck.reason}]`;
+          try {
+            await this.messagingService.publishBroadcast(this.sessionId, {
+              senderBotId: this.botId,
+              category: 'ALERT',
+              content: finalResponseText,
+              metadata: budgetCheck.metrics,
+            });
+          } catch {
+            // Best-effort alert broadcast
+          }
           break;
         }
       }
@@ -505,6 +586,74 @@ export class AutonomousAgentLoop {
                 toolCall.arguments,
                 this.skillService.skillRootDir
               );
+            } else if (toolCall.name === 'web_fetch') {
+              const fetchArgs = toolCall.arguments as unknown as WebFetchArgs;
+              const fetchRes = await executeWebFetch(fetchArgs, {
+                sessionId: this.sessionId,
+                botId: this.botId,
+                botDisplayName: currentBot.display_name,
+                isTurbo: this.executionModeController.getMode() === 'TURBO',
+                projectRoots: projectRootPaths,
+                workspaceRoot: this.blackboardRoot,
+              });
+              result = fetchRes;
+              await this.recordToolExecutionWorkLog(
+                currentBot,
+                projectRoots,
+                'WEB_INSPECT',
+                undefined,
+                `web_fetch ${fetchRes.url} (status ${fetchRes.status})`,
+                { url: fetchRes.url, status: fetchRes.status }
+              );
+            } else if (toolCall.name === 'inspect_web_ui') {
+              const inspectArgs = toolCall.arguments as unknown as InspectWebUiArgs;
+              const inspectRes = await executeInspectWebUi(projectRootPaths, inspectArgs, {
+                sessionId: this.sessionId,
+                botId: this.botId,
+                botDisplayName: currentBot.display_name,
+                isTurbo: this.executionModeController.getMode() === 'TURBO',
+                projectRoots: projectRootPaths,
+                workspaceRoot: this.blackboardRoot,
+              });
+              result = inspectRes;
+              await this.recordToolExecutionWorkLog(
+                currentBot,
+                projectRoots,
+                'WEB_INSPECT',
+                undefined,
+                `inspect_web_ui ${inspectRes.url} [${inspectRes.mode}] (overflow=${inspectRes.horizontalOverflowPx}px, blur=${inspectRes.glassmorphismAudit.backdropBlurElements}, consoleErrors=${inspectRes.consoleErrors.length})`,
+                {
+                  url: inspectRes.url,
+                  mode: inspectRes.mode,
+                  ok: inspectRes.ok,
+                }
+              );
+            } else if (this.mcpManager && this.mcpManager.isMcpToolName(toolCall.name)) {
+              const mcpRes = await this.mcpManager.invokeTool(
+                toolCall.name,
+                toolCall.arguments,
+                {
+                  sessionId: this.sessionId,
+                  botId: this.botId,
+                  botDisplayName: currentBot.display_name,
+                  isTurbo: this.executionModeController.getMode() === 'TURBO',
+                  projectRoots: projectRootPaths,
+                  workspaceRoot: this.blackboardRoot,
+                }
+              );
+              result = mcpRes;
+              await this.recordToolExecutionWorkLog(
+                currentBot,
+                projectRoots,
+                'MCP_TOOL_CALL',
+                undefined,
+                `Called MCP tool ${mcpRes['server']}:${mcpRes['tool']}`,
+                {
+                  namespaced_tool: toolCall.name,
+                  server: mcpRes['server'],
+                  tool: mcpRes['tool'],
+                }
+              );
             } else if (toolCall.name === 'run_command') {
               const cmdArgs: RunCommandArgs = {
                 command: String(toolCall.arguments['command'] ?? ''),
@@ -522,6 +671,7 @@ export class AutonomousAgentLoop {
                 botId: this.botId,
                 botDisplayName: currentBot.display_name,
                 isTurbo: this.executionModeController.getMode() === 'TURBO',
+                workspaceRoot: this.blackboardRoot,
               });
               result = cmdResult;
 
@@ -539,6 +689,15 @@ export class AutonomousAgentLoop {
                 }
               );
             } else {
+              if (
+                strictMasterRole &&
+                (toolCall.name === 'write_file' || toolCall.name === 'edit_file')
+              ) {
+                throw new Error(
+                  `Master Bot (BOT000) operates under strict orchestrator isolation (masterStrictOrchestrator=true): delegate "${toolCall.name}" to the owning worker bot.`
+                );
+              }
+
               if (
                 activeSupervisor &&
                 currentTaskId &&
@@ -569,6 +728,7 @@ export class AutonomousAgentLoop {
                   botId: this.botId,
                   botDisplayName: currentBot.display_name,
                   isTurbo: this.executionModeController.getMode() === 'TURBO',
+                  workspaceRoot: this.blackboardRoot,
                 }
               );
 
@@ -686,7 +846,8 @@ export class AutonomousAgentLoop {
         if (
           message.sender_bot_id !== 'OPERATOR' &&
           !explicitlyMessagedSender &&
-          !isIncomingAutoReply
+          !isIncomingAutoReply &&
+          !escalatedOrHalted
         ) {
           await this.messagingService.sendDirectMessage(this.sessionId, {
             senderBotId: this.botId,

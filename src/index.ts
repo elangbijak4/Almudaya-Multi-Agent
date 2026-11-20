@@ -24,6 +24,7 @@ export * from './shared/work-log.js';
 export * from './ai/index.js';
 export * from './tools/index.js';
 export * from './skills/index.js';
+export * as mcp from './mcp/index.js';
 export * as memoryModules from './memory_modules/index.js';
 export * from './protocol/index.js';
 

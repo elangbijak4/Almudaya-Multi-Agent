@@ -89,6 +89,56 @@ export class InboxDeliveryService {
   }
 
   /**
+   * Renews an active lease while a consumer is running a long multi-tool AI turn (APP-BUG-19).
+   * Enforces consumer ownership and fencing token under session lock.
+   */
+  public async renewMessageLease(
+    sessionId: string,
+    botIdentifier: string,
+    messageId: string,
+    consumerId: string,
+    fenceToken?: number,
+    leaseDurationMs: number = DEFAULT_MESSAGE_LEASE_MS
+  ): Promise<DirectMessage> {
+    const canonicalBotId = await this.botService.resolveBotId(sessionId, botIdentifier);
+
+    return await this.storage.withSessionLock(sessionId, async () => {
+      const inbox = await this.storage.getInbox(sessionId, canonicalBotId);
+      const target = inbox.messages.find((m) => m.message_id === messageId);
+
+      if (!target) {
+        throw new MessageNotFoundError(messageId, canonicalBotId);
+      }
+
+      if (target.delivery_state !== 'PROCESSING') {
+        throw new Error(
+          `Cannot renew lease for message ${messageId}: current state is ${target.delivery_state}.`
+        );
+      }
+
+      if (!target.lease_owner || target.lease_owner !== consumerId) {
+        throw new Error(
+          `Cannot renew lease for message ${messageId}: lease held by another consumer (${target.lease_owner ?? 'none'}).`
+        );
+      }
+
+      if (fenceToken !== undefined && target.fence_token !== fenceToken) {
+        throw new Error(
+          `Cannot renew lease for message ${messageId}: stale fencing token (${fenceToken} vs current ${target.fence_token}).`
+        );
+      }
+
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      target.lease_expires_at = new Date(nowMs + leaseDurationMs).toISOString();
+      inbox.updated_at = nowIso;
+      await this.storage.saveInbox(sessionId, canonicalBotId, inbox);
+
+      return JSON.parse(JSON.stringify(target)) as DirectMessage;
+    });
+  }
+
+  /**
    * Marks a message as successfully processed.
    * State transition: PROCESSING -> COMPLETED (and acknowledged).
    * Enforces exact consumer ownership and fencing token (AUD-08, REQ-04).

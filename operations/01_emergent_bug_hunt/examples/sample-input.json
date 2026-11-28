@@ -1,0 +1,9 @@
+{
+  "bug_report": "POST /api/import silently accepts negative quantities in CSV rows instead of rejecting with line diagnostics.",
+  "workspace_ref": "workspace://authorized/project-a",
+  "reproduction_hint": "Submit sample CSV with quantity=-5 on row 3.",
+  "severity": "high",
+  "constraints": [
+    "Preserve backward compatibility for positive decimal quantities"
+  ]
+}

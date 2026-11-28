@@ -39,6 +39,10 @@ export class ProtocolStore {
     this.storage = storage;
   }
 
+  public getStorage(): IBlackboardStorage {
+    return this.storage;
+  }
+
   public getProtocolDir(sessionId: string): string {
     return path.join(this.storage.getSessionDir(sessionId), 'protocol');
   }

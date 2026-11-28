@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Technical Assessment Input",
+  "type": "object",
+  "required": [
+    "project_brief",
+    "constraints"
+  ],
+  "properties": {
+    "project_brief": {
+      "type": "string",
+      "minLength": 20
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "domain": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

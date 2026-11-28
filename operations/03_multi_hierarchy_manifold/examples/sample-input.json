@@ -1,0 +1,15 @@
+{
+  "project_brief": "Assess feasibility of an explainable AI early-warning system for forest and land fire risk around institutional operational units.",
+  "domain": "AI, climate risk, geospatial decision support",
+  "evidence_requirements": [
+    "Use traceable scholarly and authoritative sources",
+    "Separate empirical evidence from design assumptions",
+    "Record year and DOI or stable identifier where available"
+  ],
+  "constraints": [
+    "Do not claim operational readiness without field validation",
+    "Do not publish externally without human approval",
+    "Identify data availability and governance risks"
+  ],
+  "output_format": "markdown"
+}

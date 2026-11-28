@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Multi-Hierarchy Manifold Output",
+  "type": "object",
+  "required": [
+    "status",
+    "child_operation_results",
+    "artifacts"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "succeeded",
+        "partial",
+        "failed",
+        "terminated_by_guard",
+        "cancelled",
+        "expired"
+      ]
+    },
+    "child_operation_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "child_id",
+          "status"
+        ],
+        "properties": {
+          "child_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "output_ref": {
+            "type": "string"
+          },
+          "waiver_reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "integrated_recommendation",
+        "evidence_register",
+        "research_synthesis",
+        "architecture_options",
+        "risk_register",
+        "quality_decision",
+        "decision_log",
+        "execution_trace"
+      ],
+      "properties": {
+        "integrated_recommendation": {
+          "type": "string"
+        },
+        "evidence_register": {
+          "type": "string"
+        },
+        "research_synthesis": {
+          "type": "string"
+        },
+        "architecture_options": {
+          "type": "string"
+        },
+        "risk_register": {
+          "type": "string"
+        },
+        "quality_decision": {
+          "type": "string"
+        },
+        "decision_log": {
+          "type": "string"
+        },
+        "execution_trace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

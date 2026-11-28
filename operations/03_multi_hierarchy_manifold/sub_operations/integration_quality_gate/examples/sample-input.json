@@ -1,0 +1,6 @@
+{
+  "evidence_register": "artifacts/research_branch/evidence_register.json",
+  "research_synthesis": "artifacts/research_branch/research_synthesis.md",
+  "architecture_options": "artifacts/technical_branch/architecture_options.md",
+  "risk_register": "artifacts/technical_branch/risk_register.json"
+}

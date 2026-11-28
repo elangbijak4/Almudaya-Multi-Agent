@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { createAIProvider, type CatalogProviderId } from '../../ai/catalog.js';
@@ -16,6 +17,7 @@ import { VERSION } from '../../core/version.js';
 import { ExecutionController } from '../../execution/controller.js';
 import { McpClientManager, McpConfigStore } from '../../mcp/index.js';
 import { createWorkspaceMemoryRuntime } from '../../memory_modules/index.js';
+import { OperationManifoldService } from '../../operation/manifold-engine.js';
 import { MasterAgentOrchestrator } from '../../protocol/master-agent.js';
 import {
   ProtocolConfigSchema,
@@ -54,6 +56,8 @@ export interface UpCliOptions {
   turbo?: boolean;
   mode?: string;
   nonInteractive?: boolean;
+  operation?: string;
+  operationParams?: string;
 }
 
 /**
@@ -242,6 +246,8 @@ export function registerUpCommand(program: Command): void {
     .option('--no-mcp', 'Disable automatic MCP server connection on startup')
     .option('--turbo', 'Start execution mode in TURBO instead of REQUEST_REVIEW', false)
     .option('--mode <mode>', 'Execution mode (review|turbo)')
+    .option('--operation <idOrAlias>', 'Optional Agentic Operation (v0.3) ID or alias to apply on startup')
+    .option('--operation-params <jsonOrFile>', 'Optional JSON string or path to parameters file for --operation')
     .option('--non-interactive', 'Initialize and exit without starting interactive HITL console', false)
     .action(async (options: UpCliOptions) => {
       try {
@@ -324,6 +330,30 @@ export function registerUpCommand(program: Command): void {
         });
 
         const startup = await orchestrator.initializeStartup();
+
+        if (options.operation) {
+          let opParams: Record<string, unknown> | undefined;
+          if (options.operationParams?.trim()) {
+            const rawParams = options.operationParams.trim();
+            opParams = rawParams.startsWith('{')
+              ? (JSON.parse(rawParams) as Record<string, unknown>)
+              : (JSON.parse(await fs.readFile(path.resolve(rawParams), 'utf-8')) as Record<
+                  string,
+                  unknown
+                >);
+          }
+          const manifold = new OperationManifoldService({
+            storage,
+            supervisor: orchestrator.supervisor,
+          });
+          const appliedOp = await manifold.applyOperation(sessionId, options.operation, {
+            parameters: opParams,
+            actorBotId: 'BOT000',
+          });
+          console.log(
+            `[Operation] Applied ${appliedOp.operationId}@${appliedOp.operationVersion} (${appliedOp.orchestrationRegime}/${appliedOp.topologyShape}, seeded=${appliedOp.seededTaskIds.length}).`
+          );
+        }
 
         if (options.nonInteractive) {
           console.log(`Session ready: ${sessionId} (${startup.masterStatus})`);

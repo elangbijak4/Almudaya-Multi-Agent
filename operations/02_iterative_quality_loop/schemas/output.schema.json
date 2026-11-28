@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Iterative Quality Loop Output",
+  "type": "object",
+  "required": [
+    "status",
+    "acceptance_summary",
+    "artifacts"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "terminated_by_guard",
+        "cancelled",
+        "expired"
+      ]
+    },
+    "acceptance_summary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "criterion",
+          "status"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "met",
+              "not_met",
+              "waived"
+            ]
+          },
+          "evidence_ref": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "iterations_used": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "change_set",
+        "test_report",
+        "review_report",
+        "decision_record",
+        "execution_trace"
+      ],
+      "properties": {
+        "change_set": {
+          "type": "string"
+        },
+        "test_report": {
+          "type": "string"
+        },
+        "review_report": {
+          "type": "string"
+        },
+        "decision_record": {
+          "type": "string"
+        },
+        "execution_trace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "escalations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

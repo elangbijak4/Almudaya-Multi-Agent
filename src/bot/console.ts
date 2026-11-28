@@ -26,9 +26,13 @@ import { SkillService } from '../skills/service.js';
 import { generateMessageId, type DirectMessage } from '../messaging/schema.js';
 import { VERSION } from '../core/version.js';
 import type { ProtocolSupervisor } from '../protocol/supervisor.js';
+import { ProtocolSupervisor as RuntimeProtocolSupervisor } from '../protocol/supervisor.js';
 import type { SpawnManager } from '../protocol/spawn-manager.js';
 import type { McpClientManager } from '../mcp/manager.js';
 import { McpConfigStore } from '../mcp/config-store.js';
+import { OperationManifoldService } from '../operation/manifold-engine.js';
+import { OperationRegistry } from '../operation/registry.js';
+import { validateOperationPackage } from '../operation/validator.js';
 
 export interface BotConsoleOptions {
   runtime: BotRuntime;
@@ -836,6 +840,115 @@ export class BotConsole {
         break;
       }
 
+      case '/operation': {
+        const sub = (argTokens[0] ?? 'status').toLowerCase();
+        const wsRoot =
+          'workspaceRoot' in this.storage &&
+          typeof (this.storage as { workspaceRoot?: unknown }).workspaceRoot === 'string'
+            ? String((this.storage as { workspaceRoot?: unknown }).workspaceRoot)
+            : undefined;
+        const sup =
+          this.protocolSupervisor ?? new RuntimeProtocolSupervisor({ storage: this.storage });
+        const registry = new OperationRegistry({ workspaceRoot: wsRoot });
+        const manifold = new OperationManifoldService({
+          storage: this.storage,
+          supervisor: sup,
+          skillService: this.skillService,
+          registry,
+        });
+
+        try {
+          if (sub === 'list') {
+            const ops = await registry.listOperations();
+            this.writeLine(`[Operation] Daftar Agentic Operations (${ops.length}):`);
+            for (const p of ops) {
+              const alias = p.op.identity.alias ? ` (${p.op.identity.alias})` : '';
+              this.writeLine(
+                `  - ${p.op.identity.id}@${p.op.identity.version}${alias} [${p.op.manifold.orchestration_regime}/${p.op.manifold.topology_shape}]`
+              );
+            }
+          } else if (sub === 'inspect' && argTokens[1]) {
+            const pkg = await registry.resolveOperation(argTokens[1]);
+            const op = pkg.op;
+            this.writeLine(
+              `[Operation] ${op.identity.name} (${op.identity.id}@${op.identity.version})`
+            );
+            this.writeLine(`  Objektif: ${op.mission.objective}`);
+            this.writeLine(
+              `  Manifold: regime=${op.manifold.orchestration_regime}, topology=${op.manifold.topology_shape}, l1_fallback=${op.manifold.continuity.l1_single_agent_fallback}`
+            );
+            this.writeLine(
+              `  Roles   : ${op.manifold.roles.map((r) => `${r.id}(${r.kind})`).join(', ')}`
+            );
+          } else if (sub === 'validate') {
+            if (argTokens[1]) {
+              const pkg = await registry.resolveOperation(argTokens[1]);
+              const all = await registry.listOperations();
+              const errs = await validateOperationPackage(
+                pkg.opDir,
+                new Map(all.map((p) => [p.op.identity.id, p]))
+              );
+              this.writeLine(
+                errs.length === 0
+                  ? `[Operation] ${pkg.op.identity.id} VALID (0 galat).`
+                  : `[Operation] Validasi GAGAL (${errs.length}): ${errs.join('; ')}`
+              );
+            } else {
+              const res = await registry.validateAll();
+              this.writeLine(
+                res.valid
+                  ? `[Operation] Seluruh ${res.checkedCount} Operation VALID (0 galat).`
+                  : `[Operation] Validasi GAGAL (${res.errors.length}): ${res.errors.join('; ')}`
+              );
+            }
+          } else if (sub === 'apply' && argTokens[1]) {
+            const inst = await manifold.applyOperation(this.sessionId, argTokens[1], {
+              actorBotId: this.botId,
+            });
+            this.writeLine(
+              `[Operation] Diterapkan: ${inst.operationId}@${inst.operationVersion} (${inst.orchestrationRegime}/${inst.topologyShape}, seededTasks=${inst.seededTaskIds.length}, rules=${inst.appliedDynamicRuleIds.length}).`
+            );
+          } else if (sub === 'evaluate') {
+            const verdict = await manifold.evaluateBehavior(this.sessionId);
+            this.writeLine(
+              `[Operation] OBS Verdict (${verdict.operationId}, status=${verdict.status}): termination=${JSON.stringify(verdict.termination)}`
+            );
+            for (const lp of verdict.loops) {
+              this.writeLine(
+                `  Loop ${lp.id} [${lp.scope}]: continue=${lp.continuation} accept=${lp.acceptance} rollback=${lp.rollback}`
+              );
+            }
+          } else if (sub === 'crystallize') {
+            const targetId = argTokens[1];
+            const res = await manifold.crystallizeActiveOperation(this.sessionId, {
+              targetId,
+              force: true,
+              actorBotId: this.botId,
+            });
+            this.writeLine(
+              `[Operation] Dikristalisasi: ${res.operationId}@${res.version} -> ${res.outputDir}`
+            );
+          } else {
+            const inst = await manifold.getActiveInstance(this.sessionId);
+            if (!inst) {
+              this.writeLine(
+                '[Operation] Belum ada #Operation aktif pada sesi ini. Gunakan: /operation list | /operation apply <id>'
+              );
+            } else {
+              this.writeLine(
+                `[Operation] Aktif: ${inst.operationId}@${inst.operationVersion} | Status: ${inst.status} | Regime: ${inst.orchestrationRegime} (${inst.topologyShape})`
+              );
+              this.writeLine(
+                `  Realisasi Aktif: ${JSON.stringify(inst.roleRealizationMap)}`
+              );
+            }
+          }
+        } catch (err: unknown) {
+          this.writeLine(`[Operation] Galat: ${(err as Error).message}`);
+        }
+        break;
+      }
+
       case '/help': {
         this.writeLine(`[Console] Daftar Perintah Interaktif:`);
         this.writeLine(`  /msg <targetBot> <pesan>  Kirim pesan langsung ke rekan bot`);
@@ -847,6 +960,7 @@ export class BotConsole {
         this.writeLine(`  /model [id] [provider]    Lihat daftar model (Ollama/NVIDIA/9router/OpenRouter/Gemini), ganti model, /model recommend, atau /model pull <id>`);
         this.writeLine(`  /skill [subcommand]       Kelola modul skill & AVDS (list, styles, platforms, modalities, enable, disable)`);
         this.writeLine(`  /mcp [subcommand]         Kelola koneksi & perkakas server MCP (list, tools, connect, disconnect, reload)`);
+        this.writeLine(`  /operation [subcommand]   Kelola #Operation v0.3 & Dynamic Swarm Manifold (list, status, inspect, validate, apply, evaluate, crystallize)`);
         this.writeLine(`  /protocol                 Status 10 protokol v${VERSION}, kuota token, & GoalLedger`);
         this.writeLine(`  /blueprint                Tampilkan GoalLedger blueprint tasks aktif`);
         this.writeLine(`  /rules [add|rm] [...]     Kelola Dynamic Rules sesi saat berjalan`);

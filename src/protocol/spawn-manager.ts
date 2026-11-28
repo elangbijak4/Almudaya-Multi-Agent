@@ -1,12 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import process from 'node:process';
 import { BotService } from '../bot/service.js';
+import { OperationManifoldService } from '../operation/manifold-engine.js';
 import type {
   CapabilityToken,
   ModelSpec,
   ProtocolConfig,
   SpawnMode,
 } from './schema.js';
+import { isGlobalWildcardPath } from './protocols/pr-moderator.protocol.js';
 import type { ReattachCandidate } from './protocols/pr-reattach.protocol.js';
 import { ProtocolSupervisor } from './supervisor.js';
 
@@ -31,6 +33,7 @@ export interface SpawnWorkerInput {
   botId?: string;
   displayName?: string;
   role?: 'worker' | 'moderator';
+  roleArchetype?: string;
   description?: string;
   requesterBotId?: string;
   model: ModelSpec;
@@ -201,13 +204,31 @@ export class SpawnManager {
       activeBotCount: activeBots.length,
       registeredBots,
       requestedSpawns: 1,
-      enforceOnAllow: true,
+      enforceOnAllow: false,
     });
 
     if (!permission.allowed) {
       return {
         action: 'DENIED',
         reason: permission.reason,
+      };
+    }
+
+    const manifoldService = new OperationManifoldService({
+      storage: this.supervisor.store.getStorage(),
+      supervisor: this.supervisor,
+    });
+    const prep = await manifoldService.prepareWorkerRealization(input.sessionId, {
+      requestedRole: input.roleArchetype ?? input.description ?? input.displayName,
+      displayName: input.displayName,
+      registeredBots,
+      candidateRecycleBotId: permission.metadata?.recycleCandidateBotId as string | undefined,
+    });
+
+    if (prep.deniedReason) {
+      return {
+        action: 'DENIED',
+        reason: prep.deniedReason,
       };
     }
 
@@ -218,8 +239,44 @@ export class SpawnManager {
         inheritedPaths = task.targetFiles;
       }
     }
+    if (
+      (!inheritedPaths || inheritedPaths.length === 0) &&
+      prep.inheritedAllowedPaths &&
+      prep.inheritedAllowedPaths.length > 0
+    ) {
+      inheritedPaths = prep.inheritedAllowedPaths;
+    }
 
-    const recycleBotId = permission.metadata?.recycleCandidateBotId as string | undefined;
+    const effectiveAccessMode =
+      prep.defaultAccessMode === 'REVIEW_ONLY'
+        ? 'REVIEW_ONLY'
+        : inheritedPaths &&
+            inheritedPaths.length > 0 &&
+            !inheritedPaths.some((p) => isGlobalWildcardPath(p))
+          ? prep.defaultAccessMode ?? 'EXCLUSIVE_WRITE'
+          : 'REVIEW_ONLY';
+
+    let recycleBotId = permission.metadata?.recycleCandidateBotId as string | undefined;
+    if (recycleBotId && prep.matched && prep.rejectRecycleCandidate) {
+      if (prep.alternativeRecycleBotId) {
+        recycleBotId = prep.alternativeRecycleBotId;
+      } else {
+        const resolvedCap =
+          (permission.metadata?.effectiveCap as number | undefined) ??
+          this.supervisor.budget.resolveHardwareBotCap(config);
+        if (activeBots.length < resolvedCap) {
+          recycleBotId = undefined;
+        } else {
+          return {
+            action: 'DENIED',
+            reason:
+              prep.antiAffinityReason ??
+              `Idle worker ${recycleBotId} rejected by Operation anti_affinity and global ceiling (${activeBots.length}/${resolvedCap}) reached.`,
+          };
+        }
+      }
+    }
+
     if (recycleBotId) {
       await this.botService.updateStatus(input.sessionId, recycleBotId, 'active');
       let token: CapabilityToken | undefined;
@@ -228,15 +285,40 @@ export class SpawnManager {
           taskId: input.taskId,
           holderBotId: recycleBotId,
           allowedPaths: inheritedPaths,
-          accessMode:
-            inheritedPaths && inheritedPaths.length > 0 ? 'EXCLUSIVE_WRITE' : 'REVIEW_ONLY',
+          accessMode: effectiveAccessMode,
         });
+      }
+      if (prep.matched && prep.roleArchetype) {
+        await manifoldService.commitWorkerRealization(
+          input.sessionId,
+          recycleBotId,
+          prep.roleArchetype.id
+        );
       }
       return {
         action: 'RECYCLED',
         botId: recycleBotId,
         capabilityToken: token,
         reason: `Recycled idle worker ${recycleBotId} under PrBotGlobal ceiling.`,
+      };
+    }
+
+    const runtimeStateBeforeSpawn = await this.supervisor.store.getRuntimeState(input.sessionId);
+    const prBotEval = await this.supervisor.registry.evaluate(
+      'PrBot',
+      {
+        sessionId: input.sessionId,
+        requesterBotId: input.requesterBotId ?? 'BOT000',
+        config,
+        state: runtimeStateBeforeSpawn,
+        requestedSpawns: 1,
+      },
+      { enforce: true }
+    );
+    if (!prBotEval.decision.allowed) {
+      return {
+        action: 'DENIED',
+        reason: prBotEval.decision.reason,
       };
     }
 
@@ -257,13 +339,19 @@ export class SpawnManager {
         taskId: input.taskId,
         holderBotId: botRecord.bot_id,
         allowedPaths: inheritedPaths,
-        accessMode:
-          inheritedPaths && inheritedPaths.length > 0 ? 'EXCLUSIVE_WRITE' : 'REVIEW_ONLY',
+        accessMode: effectiveAccessMode,
       });
     }
 
     if (input.dryRun) {
       await this.botService.updateStatus(input.sessionId, botRecord.bot_id, 'active');
+      if (prep.matched && prep.roleArchetype) {
+        await manifoldService.commitWorkerRealization(
+          input.sessionId,
+          botRecord.bot_id,
+          prep.roleArchetype.id
+        );
+      }
       this.managed.set(botRecord.bot_id, {
         botId: botRecord.bot_id,
         pid: process.pid,
@@ -368,6 +456,14 @@ export class SpawnManager {
       'active',
       child.pid ? { pid: child.pid } : undefined
     );
+
+    if (prep.matched && prep.roleArchetype) {
+      await manifoldService.commitWorkerRealization(
+        input.sessionId,
+        botRecord.bot_id,
+        prep.roleArchetype.id
+      );
+    }
 
     this.managed.set(botRecord.bot_id, {
       botId: botRecord.bot_id,

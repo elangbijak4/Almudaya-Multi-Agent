@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research Branch Output",
+  "type": "object",
+  "required": [
+    "status",
+    "artifacts"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "terminated_by_guard",
+        "cancelled",
+        "expired"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "evidence_register",
+        "research_synthesis",
+        "execution_trace"
+      ],
+      "properties": {
+        "evidence_register": {
+          "type": "string"
+        },
+        "research_synthesis": {
+          "type": "string"
+        },
+        "execution_trace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

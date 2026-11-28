@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research Pipeline Output",
+  "type": "object",
+  "required": [
+    "status",
+    "artifacts",
+    "verification_summary",
+    "human_approval_required"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "succeeded",
+        "partial",
+        "failed",
+        "terminated_by_guard",
+        "cancelled",
+        "expired"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "latex_source",
+        "pdf",
+        "bibliography",
+        "research_plan",
+        "citation_registry",
+        "claim_evidence_map",
+        "quality_report",
+        "revision_history",
+        "artifact_manifest"
+      ],
+      "properties": {
+        "latex_source": {
+          "type": "string"
+        },
+        "pdf": {
+          "type": "string"
+        },
+        "bibliography": {
+          "type": "string"
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "research_plan": {
+          "type": "string"
+        },
+        "citation_registry": {
+          "type": "string"
+        },
+        "claim_evidence_map": {
+          "type": "string"
+        },
+        "quality_report": {
+          "type": "string"
+        },
+        "revision_history": {
+          "type": "string"
+        },
+        "artifact_manifest": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verification_summary": {
+      "type": "object",
+      "properties": {
+        "verified_references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified_references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolved_claims": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "compilation_success": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "human_approval_required": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

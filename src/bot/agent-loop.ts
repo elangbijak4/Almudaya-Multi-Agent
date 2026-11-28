@@ -48,6 +48,7 @@ import {
 import type { TouchedFileStatus } from '../protocol/schema.js';
 import type { SpawnManager } from '../protocol/spawn-manager.js';
 import { ProtocolSupervisor } from '../protocol/supervisor.js';
+import { OperationManifoldService } from '../operation/manifold-engine.js';
 import { SkillService } from '../skills/service.js';
 import { WorkLogService, type WorkActionType } from '../shared/work-log.js';
 import { isPathInsideRoot } from '../tools/sandbox.js';
@@ -302,6 +303,20 @@ export class AutonomousAgentLoop {
 
     const mcpToolsSummary = this.mcpManager?.getPromptSummaryMarkdown() || undefined;
 
+    let operationSummaryMarkdown: string | undefined;
+    try {
+      const opSup = activeSupervisor ?? new ProtocolSupervisor({ storage: this.storage });
+      const manifoldSvc = new OperationManifoldService({
+        storage: this.storage,
+        supervisor: opSup,
+        skillService: this.skillService,
+      });
+      operationSummaryMarkdown =
+        (await manifoldSvc.buildPromptContextMarkdown(this.sessionId, this.botId)) || undefined;
+    } catch {
+      operationSummaryMarkdown = undefined;
+    }
+
     const systemPrompt = buildDynamicSystemPrompt({
       sessionId: this.sessionId,
       botId: currentBot.bot_id,
@@ -313,6 +328,7 @@ export class AutonomousAgentLoop {
       executionMode: this.executionModeController.getMode(),
       recentWorkLogsMarkdown,
       skillsPromptMarkdown,
+      operationSummaryMarkdown,
       dynamicRulesMarkdown: dynamicRulesMarkdown || undefined,
       goalLedgerMarkdown: goalLedgerMarkdown || undefined,
       capabilityTokenSummary,

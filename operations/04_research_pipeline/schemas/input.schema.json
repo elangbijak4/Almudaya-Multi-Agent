@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research Pipeline Input",
+  "type": "object",
+  "required": [
+    "idea_summary",
+    "experimental_log",
+    "latex_template",
+    "venue_guidelines"
+  ],
+  "properties": {
+    "idea_summary": {
+      "type": "string",
+      "minLength": 30
+    },
+    "experimental_log": {
+      "type": "string",
+      "minLength": 10
+    },
+    "latex_template": {
+      "type": "string"
+    },
+    "venue_guidelines": {
+      "type": "string"
+    },
+    "existing_figures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bibliography_seed": {
+      "type": "string"
+    },
+    "author_instructions": {
+      "type": "string"
+    },
+    "research_cutoff_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "target_venue": {
+      "type": "string"
+    },
+    "output_language": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

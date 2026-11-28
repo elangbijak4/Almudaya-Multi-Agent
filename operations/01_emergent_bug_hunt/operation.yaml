@@ -1,0 +1,380 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.emergent-bug-hunt
+  name: Emergent Swarm Bug Hunt
+  version: 0.3.0
+  alias: "#Operation-emergentBugHunt"
+  description: >
+    Stigmergic emergent swarm manifold for dynamic bug triage, reproduction,
+    root-cause isolation, patching, and verification with L=1 fallback.
+  tags:
+    - emergent
+    - swarm-manifold
+    - debugging
+    - dynamic-topology
+
+mission:
+  objective: >
+    Diagnose, isolate, patch, and verify a reported software defect while scaling
+    dynamically between L=1 single-agent execution and a multi-agent swarm.
+  scope:
+    - Reproduce the defect in an authorized workspace
+    - Isolate root cause and synthesize minimal fix
+    - Run verification tests and optional UI/runtime checks
+  deliverables:
+    - diagnosis_report
+    - patch_diff
+    - verification_report
+    - execution_trace
+  acceptance_criteria:
+    - Defect reproduction confirmed or ruled non-reproducible with evidence
+    - Fix passes targeted and regression checks recorded in GoalLedger
+    - Independent epoch-isolated or peer verification completed before DONE
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: emergent
+  topology_shape: stigmergic
+  continuity:
+    l1_single_agent_fallback: true
+    allow_role_coalescing: true
+    max_coalesced_roles_per_bot: 3
+  crystallization_policy:
+    allow_on_the_fly_synthesis: true
+    crystallize_on_success: true
+    target_registry_namespace: almudaya.operation.emergent
+  anti_affinity:
+    - roles:
+        - patch_crafter
+        - regression_verifier
+      reason: >
+        Prevent confirmation bias between author of the patch and verifier;
+        L=1 fallback is permitted only across an explicit epoch/context reset.
+      enforcement: epoch_reset_required
+  roles:
+    - id: triage_lead
+      kind: master
+      responsibilities:
+        - Assess defect complexity and choose L=1 vs swarm expansion
+        - Manage GoalLedger tasks, dynamic rules, and PrModerator write tokens
+        - Escalate unresolved dead-ends or HITL gates
+      skills:
+        - skill_id: task-decomposition
+          required: true
+        - skill_id: defect-triage
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: reproducer
+      kind: worker
+      responsibilities:
+        - Create minimal failing reproduction script or test case
+        - Publish reproduction trace to Session Blackboard
+      skills:
+        - skill_id: bug-reproduction
+          required: true
+          entry_point: qa
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - tests/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+        - process.execute_external
+      lifecycle:
+        cardinality:
+          min: 0
+          max: 2
+        spawn_trigger: worker_request
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: true
+
+    - id: patch_crafter
+      kind: worker
+      responsibilities:
+        - Trace root cause via PKU-First reading and work logs
+        - Implement minimal surgical patch within fenced targetFiles
+      skills:
+        - skill_id: root-cause-analysis
+          required: true
+          entry_point: implement
+        - skill_id: surgical-patching
+          required: true
+          entry_point: change
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - src/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 0
+          max: 2
+        spawn_trigger: worker_request
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: true
+
+    - id: regression_verifier
+      kind: worker
+      responsibilities:
+        - Execute regression tests and runtime/UI verification tools
+        - Submit structured verification_evidence to GoalLedger
+      skills:
+        - skill_id: regression-verification
+          required: true
+          entry_point: qa
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+        - process.execute_external
+        - mcp.invoke
+      lifecycle:
+        cardinality:
+          min: 0
+          max: 1
+        spawn_trigger: worker_request
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: true
+
+    - id: operator
+      kind: human
+      responsibilities:
+        - Approve production/destructive overrides and HITL escalations
+      skills: []
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities: []
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: triage_lead
+      namespace: swarm/triage
+      access: read_write
+    - role_id: reproducer
+      namespace: swarm/repro
+      access: read_write
+    - role_id: patch_crafter
+      namespace: swarm/patches
+      access: read_write
+    - role_id: regression_verifier
+      namespace: swarm/verification
+      access: read_write
+    - role_id: regression_verifier
+      namespace: swarm/patches
+      access: read
+
+workflow:
+  seed_stages: []
+  allow_dynamic_task_mutation: true
+
+behavior:
+  execution_mode: emergent
+  protocol_bindings:
+    pr_bot_limit: 8
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 25
+    pr_iterasi_handover_limit: 3
+    pr_de_limit: 8
+    pr_de_escalation_limit: 8
+    pr_no_progress_limit: 4
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 5400000
+    token_budget: 6000000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: emergent_swarm_refinement
+      scope: operation
+      target_units:
+        - active_goal_tasks
+      max_iterations: 4
+      no_progress_limit: 2
+      feedback_sources:
+        - kind: role
+          ref: regression_verifier
+        - kind: role
+          ref: triage_lead
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+          - op: lt
+            var: protocol.no_progress_count
+            value: 2
+      acceptance_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: true
+          - op: eq
+            var: ledger.open_tasks
+            value: 0
+      on_limit_reached: escalate_hitl
+  termination:
+    success:
+      all:
+        - op: eq
+          var: gate.passed
+          value: true
+        - op: eq
+          var: ledger.open_tasks
+          value: 0
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - patch_application
+      - handover
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 2
+
+resources:
+  contracts:
+    - id: workspace_fs
+      type: storage
+      purpose: Authorized target repository fenced via PrModerator CapabilityToken
+      access: read_write
+      authorized_roles:
+        - reproducer
+        - patch_crafter
+        - regression_verifier
+    - id: reasoning_model
+      type: model
+      purpose: Dynamic swarm defect diagnosis and patch generation
+      access: execute
+      authorized_roles:
+        - triage_lead
+        - reproducer
+        - patch_crafter
+        - regression_verifier
+    - id: pku_memory
+      type: memory_service
+      purpose: PKU-First codebase graph and historical work-log retrieval
+      access: read
+      authorized_roles:
+        - triage_lead
+        - reproducer
+        - patch_crafter
+        - regression_verifier
+    - id: web_ui_verifier
+      type: mcp_server
+      purpose: Optional browser/DOM reproduction and verification
+      access: execute
+      authorized_roles:
+        - reproducer
+        - regression_verifier
+      adapter_hint: playwright
+      optional: true
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 256
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-PKU-FIRST
+      severity: MANDATORY
+      scope: ALL_BOTS
+      statement: Query PKU memory before performing broad workspace file reads.
+    - rule_id: RULE-NO-UNVERIFIED-DONE
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Tasks cannot transition to DONE without factual verification_evidence.
+  hitl_gates:
+    - action: destructive_workspace_change
+      approval_mode: per_action
+      approver_role: operator
+    - action: production_deploy
+      approval_mode: per_action
+      approver_role: operator
+  prohibited_actions:
+    - bypass_capability_token_fencing
+    - forge_verification_evidence
+    - access_host_secrets
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/emergent-bug-hunt
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: false
+  mcp:
+    required_presets: []
+    optional_presets:
+      - playwright
+
+observability:
+  emit_events:
+    - manifold_initialized
+    - worker_spawned
+    - worker_recycled
+    - worker_dissolved
+    - handover_executed
+    - gate_evaluated
+    - operation_crystallized
+  produce_execution_trace: true

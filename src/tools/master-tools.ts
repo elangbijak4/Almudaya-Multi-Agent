@@ -1,6 +1,7 @@
 import type { ToolDefinition } from '../ai/provider.js';
 import type { BotService } from '../bot/service.js';
 import type { MessagingService } from '../messaging/service.js';
+import { OperationManifoldService } from '../operation/manifold-engine.js';
 import type { AccessMode, GoalTaskStatus, ModelSpec } from '../protocol/schema.js';
 import type { SpawnManager } from '../protocol/spawn-manager.js';
 import type { ProtocolSupervisor } from '../protocol/supervisor.js';
@@ -115,6 +116,10 @@ export const SPAWN_WORKER_BOT_TOOL: ToolDefinition = {
     properties: {
       name: { type: 'string', description: 'Worker display name.' },
       role: { type: 'string', description: 'Role or specialty description.' },
+      role_archetype: {
+        type: 'string',
+        description: 'Optional Operation RoleArchetype ID (e.g. developer, reviewer).',
+      },
       provider: { type: 'string' },
       model: { type: 'string' },
       task_id: { type: 'string' },
@@ -195,6 +200,63 @@ export const MARK_GOAL_ACHIEVED_TOOL: ToolDefinition = {
   },
 };
 
+export const APPLY_OPERATION_TOOL: ToolDefinition = {
+  name: 'apply_operation',
+  description:
+    'Applies a registered #Operation (almudaya.operation/v0.3) by ID or alias to configure protocols, rules, skills, and dynamic swarm manifold.',
+  parameters: {
+    type: 'object',
+    properties: {
+      operation_id: {
+        type: 'string',
+        description: 'Operation ID, alias (#Operation-...), or trailing slug.',
+      },
+      parameters: {
+        type: 'object',
+        description: 'Optional mission input parameters validated against operation input_schema.',
+      },
+    },
+    required: ['operation_id'],
+  },
+};
+
+export const SYNTHESIZE_OPERATION_TOOL: ToolDefinition = {
+  name: 'synthesize_operation',
+  description:
+    'Synthesizes an ad-hoc almudaya.operation/v0.3 Dynamic Swarm Manifold on the fly for novel missions (BOT000 only).',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Human-readable Operation name.' },
+      objective: { type: 'string', description: 'Mission objective statement.' },
+      orchestration_regime: {
+        type: 'string',
+        enum: ['emergent', 'blueprint_seeded', 'stage_gated'],
+      },
+      topology_shape: {
+        type: 'string',
+        enum: ['stigmergic', 'hierarchical', 'hybrid', 'pipeline', 'sub_manifold'],
+      },
+      l1_single_agent_fallback: { type: 'boolean' },
+    },
+    required: ['name', 'objective'],
+  },
+};
+
+export const CRYSTALLIZE_OPERATION_TOOL: ToolDefinition = {
+  name: 'crystallize_operation',
+  description:
+    'Crystallizes the active Dynamic Swarm Manifold into a reusable validated Operation directory in the workspace.',
+  parameters: {
+    type: 'object',
+    properties: {
+      target_id: { type: 'string', description: 'Optional target registry ID (a.b.c).' },
+      version: { type: 'string', description: 'Optional semver version (e.g. 0.1.0).' },
+      force: { type: 'boolean', description: 'Override GoalLedger completion check if true.' },
+    },
+  },
+};
+
 export const MASTER_PROTOCOL_TOOLS: ToolDefinition[] = [
   CREATE_GOAL_BLUEPRINT_TOOL,
   MANAGE_DYNAMIC_RULE_TOOL,
@@ -206,6 +268,9 @@ export const MASTER_PROTOCOL_TOOLS: ToolDefinition[] = [
   REASSIGN_HANDOVER_TASK_TOOL,
   MIGRATE_STALLED_MESSAGE_TOOL,
   MARK_GOAL_ACHIEVED_TOOL,
+  APPLY_OPERATION_TOOL,
+  SYNTHESIZE_OPERATION_TOOL,
+  CRYSTALLIZE_OPERATION_TOOL,
 ];
 
 function assertMasterActor(trustedBotId: string, toolName: string): void {
@@ -397,6 +462,11 @@ export async function executeMasterProtocolTool(
         sessionId,
         displayName: String(rawArgs['name'] ?? 'Worker').trim(),
         description: rawArgs['role'] ? String(rawArgs['role']) : undefined,
+        roleArchetype: rawArgs['role_archetype']
+          ? String(rawArgs['role_archetype'])
+          : rawArgs['role']
+            ? String(rawArgs['role'])
+            : undefined,
         requesterBotId: trustedBotId,
         model: modelSpec,
         taskId: rawArgs['task_id'] ? String(rawArgs['task_id']) : undefined,
@@ -547,6 +617,89 @@ export async function executeMasterProtocolTool(
         reason: evaluation.decision.reason,
         details: evaluation.decision.metadata,
       };
+    }
+
+    case 'apply_operation': {
+      assertMasterActor(trustedBotId, toolName);
+      const operationId = String(rawArgs['operation_id'] ?? '').trim();
+      if (!operationId) {
+        throw new Error('apply_operation requires "operation_id".');
+      }
+      const parameters =
+        rawArgs['parameters'] && typeof rawArgs['parameters'] === 'object'
+          ? (rawArgs['parameters'] as Record<string, unknown>)
+          : undefined;
+      const manifold = new OperationManifoldService({
+        storage: supervisor.store.getStorage(),
+        supervisor,
+      });
+      const instance = await manifold.applyOperation(sessionId, operationId, {
+        parameters,
+        actorBotId: trustedBotId,
+      });
+      return {
+        instance_id: instance.instanceId,
+        operation_id: instance.operationId,
+        version: instance.operationVersion,
+        regime: instance.orchestrationRegime,
+        status: instance.status,
+        seeded_tasks: instance.seededTaskIds.length,
+        dynamic_rules: instance.appliedDynamicRuleIds.length,
+      };
+    }
+
+    case 'synthesize_operation': {
+      assertMasterActor(trustedBotId, toolName);
+      const name = String(rawArgs['name'] ?? '').trim();
+      const objective = String(rawArgs['objective'] ?? '').trim();
+      if (!name || !objective) {
+        throw new Error('synthesize_operation requires "name" and "objective".');
+      }
+      const manifold = new OperationManifoldService({
+        storage: supervisor.store.getStorage(),
+        supervisor,
+      });
+      const instance = await manifold.synthesizeAdHocOperation(sessionId, {
+        name,
+        objective,
+        orchestrationRegime: rawArgs['orchestration_regime'] as
+          | 'emergent'
+          | 'blueprint_seeded'
+          | 'stage_gated'
+          | undefined,
+        topologyShape: rawArgs['topology_shape'] as
+          | 'stigmergic'
+          | 'hierarchical'
+          | 'hybrid'
+          | 'pipeline'
+          | 'sub_manifold'
+          | undefined,
+        l1SingleAgentFallback:
+          typeof rawArgs['l1_single_agent_fallback'] === 'boolean'
+            ? rawArgs['l1_single_agent_fallback']
+            : undefined,
+        actorBotId: trustedBotId,
+      });
+      return {
+        instance_id: instance.instanceId,
+        operation_id: instance.operationId,
+        synthesized_on_the_fly: instance.synthesizedOnTheFly,
+        status: instance.status,
+      };
+    }
+
+    case 'crystallize_operation': {
+      assertMasterActor(trustedBotId, toolName);
+      const manifold = new OperationManifoldService({
+        storage: supervisor.store.getStorage(),
+        supervisor,
+      });
+      return await manifold.crystallizeActiveOperation(sessionId, {
+        targetId: rawArgs['target_id'] ? String(rawArgs['target_id']) : undefined,
+        version: rawArgs['version'] ? String(rawArgs['version']) : undefined,
+        force: Boolean(rawArgs['force']),
+        actorBotId: trustedBotId,
+      });
     }
 
     default:

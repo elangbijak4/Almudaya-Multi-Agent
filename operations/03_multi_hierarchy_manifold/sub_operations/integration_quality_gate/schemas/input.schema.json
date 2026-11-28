@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Integration Quality Gate Input",
+  "type": "object",
+  "required": [
+    "evidence_register",
+    "research_synthesis",
+    "architecture_options",
+    "risk_register"
+  ],
+  "properties": {
+    "evidence_register": {
+      "type": "string"
+    },
+    "research_synthesis": {
+      "type": "string"
+    },
+    "architecture_options": {
+      "type": "string"
+    },
+    "risk_register": {
+      "type": "string"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

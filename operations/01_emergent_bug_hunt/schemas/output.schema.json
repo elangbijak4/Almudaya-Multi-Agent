@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Emergent Bug Hunt Output",
+  "type": "object",
+  "required": [
+    "status",
+    "artifacts",
+    "swarm_metrics"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "succeeded",
+        "partial",
+        "failed",
+        "terminated_by_guard",
+        "cancelled",
+        "expired"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "diagnosis_report",
+        "patch_diff",
+        "verification_report",
+        "execution_trace"
+      ],
+      "properties": {
+        "diagnosis_report": {
+          "type": "string"
+        },
+        "patch_diff": {
+          "type": "string"
+        },
+        "verification_report": {
+          "type": "string"
+        },
+        "execution_trace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "swarm_metrics": {
+      "type": "object",
+      "required": [
+        "peak_active_bots",
+        "mode_reached"
+      ],
+      "properties": {
+        "peak_active_bots": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mode_reached": {
+          "enum": [
+            "L1_COALESCED",
+            "SWARM_EXPANDED"
+          ]
+        },
+        "crystallized_operation_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,701 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.research-pipeline
+  name: Research Pipeline
+  version: 0.3.0
+  alias: "#Operation-researchPipeline"
+  description: >
+    Stage-gated Dynamic Swarm Manifold conversion of PaperOrchestra transforming
+    pre-writing materials into an evidence-grounded LaTeX/PDF manuscript package.
+  tags:
+    - research
+    - academic-writing
+    - literature-review
+    - latex
+    - stage-gated
+
+mission:
+  objective: Produce a structured, evidence-grounded scientific manuscript package from supplied research materials.
+  scope:
+    - Plan manuscript structure, literature strategy, and visualization plan
+    - Generate verified plots/diagrams and bibliographic synthesis in parallel
+    - Draft, refine with regression-checked rollback, and compile final LaTeX/PDF package
+  deliverables:
+    - latex_source
+    - pdf
+    - bibliography
+    - figures
+    - research_plan
+    - citation_registry
+    - claim_evidence_map
+    - quality_report
+    - revision_history
+    - artifact_manifest
+  acceptance_criteria:
+    - Required manuscript sections present and internally coherent
+    - Citations verified or explicitly flagged unresolved
+    - Empirical claims and numeric tables trace to supplied experimental log
+    - Figures retain provenance and pass visual critique guard
+    - Manuscript passes non-regressing refinement gate and compiles to PDF
+    - Human researcher signoff recorded before external submission
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: stage_gated
+  topology_shape: hybrid
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: false
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - manuscript_writer
+        - citation_verifier
+      reason: Citation identity verification must remain independent from manuscript drafting.
+      enforcement: strict_distinct_bot
+    - roles:
+        - manuscript_writer
+        - quality_refiner
+      reason: Quality scoring and revision rollback decisions must remain independent from drafting.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: operation_coordinator
+      kind: master
+      responsibilities:
+        - Own mission schedule, GoalLedger seed stages, and PrModerator write tokens
+        - Coordinate parallel visualization and literature branches
+        - Trigger LaTeX finalization and human approval gate
+      skills:
+        - skill_id: mission-planning
+          required: true
+        - skill_id: operation-orchestration
+          required: true
+        - skill_id: artifact-integration
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+        - process.execute_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: research_planner
+      kind: worker
+      responsibilities:
+        - Inspect pre-writing materials and generate outline, literature strategy, and visualization plan
+        - Map claims to supplied input evidence
+      skills:
+        - skill_id: research-framing
+          required: true
+        - skill_id: outline-generation
+          required: true
+        - skill_id: visualization-planning
+          required: true
+        - skill_id: search-strategy-design
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - plan/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: stage_completed
+        coalescable: false
+
+    - id: visualization_specialist
+      kind: worker
+      responsibilities:
+        - Generate data plots and conceptual diagrams with provenance metadata
+        - Respond to VLM visual critique within bounded revision loop
+      skills:
+        - skill_id: data-visualization
+          required: true
+        - skill_id: conceptual-diagramming
+          required: true
+        - skill_id: figure-captioning
+          required: true
+        - skill_id: visual-quality-control
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - figures/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+        - process.execute_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 2
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: stage_completed
+        coalescable: false
+
+    - id: literature_specialist
+      kind: worker
+      responsibilities:
+        - Discover candidate literature, deduplicate records, and synthesize related work
+        - Prepare BibTeX and citation registry
+      skills:
+        - skill_id: scholarly-search
+          required: true
+        - skill_id: literature-screening
+          required: true
+        - skill_id: literature-synthesis
+          required: true
+        - skill_id: citation-management
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - literature/**
+        - references.bib
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+        - network.outbound
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 2
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: stage_completed
+        coalescable: false
+
+    - id: citation_verifier
+      kind: worker
+      responsibilities:
+        - Verify bibliographic metadata and resolve DOIs/identifiers sequentially
+        - Flag unresolved references without fabricating identifiers
+      skills:
+        - skill_id: bibliographic-verification
+          required: true
+          entry_point: audit
+        - skill_id: doi-resolution
+          required: true
+        - skill_id: reference-deduplication
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+        - network.outbound
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: stage_completed
+        coalescable: false
+
+    - id: manuscript_writer
+      kind: worker
+      responsibilities:
+        - Draft sections in supplied LaTeX template integrating verified citations and figures
+        - Execute targeted manuscript revisions during refinement cycle
+      skills:
+        - skill_id: academic-writing
+          required: true
+        - skill_id: latex-authoring
+          required: true
+        - skill_id: evidence-grounded-synthesis
+          required: true
+        - skill_id: table-generation
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - manuscript/**
+        - paper.tex
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 2
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: quality_refiner
+      kind: worker
+      responsibilities:
+        - Evaluate manuscript against configured rubric and compute subscore deltas
+        - Accept improving/non-regressing revisions or trigger checkpoint rollback
+      skills:
+        - skill_id: manuscript-review
+          required: true
+          entry_point: audit
+        - skill_id: structured-critique
+          required: true
+        - skill_id: revision-planning
+          required: true
+        - skill_id: regression-checking
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: human_researcher
+      kind: human
+      responsibilities:
+        - Confirm research framing and disputed claims
+        - Approve final scientific signoff and any external submission
+      skills: []
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities: []
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: operation_coordinator
+      namespace: research/control
+      access: read_write
+    - role_id: research_planner
+      namespace: research/plan
+      access: read_write
+    - role_id: visualization_specialist
+      namespace: research/figures
+      access: read_write
+    - role_id: literature_specialist
+      namespace: research/literature
+      access: read_write
+    - role_id: citation_verifier
+      namespace: research/literature
+      access: read_write
+    - role_id: manuscript_writer
+      namespace: research/manuscript
+      access: read_write
+    - role_id: quality_refiner
+      namespace: research/manuscript
+      access: read
+    - role_id: quality_refiner
+      namespace: research/reviews
+      access: read_write
+
+workflow:
+  seed_stages:
+    - id: outline_generation
+      title: Outline & Plan Generation
+      owner_ref: research_planner
+      owner_kind: role
+      depends_on: []
+      action: Generate outline, section plan, visualization plan, search strategy, and claim-evidence map.
+      expected_outputs:
+        - research_plan
+        - claim_evidence_map
+      write_scope_globs:
+        - plan/**
+    - id: plot_generation
+      title: Parallel Plot & Diagram Generation
+      owner_ref: visualization_specialist
+      owner_kind: role
+      depends_on:
+        - outline_generation
+      parallel_group: research_assets
+      action: Generate plots and conceptual diagrams with captions and provenance.
+      expected_outputs:
+        - figures
+      write_scope_globs:
+        - figures/**
+    - id: literature_review
+      title: Parallel Literature Discovery & Verification
+      owner_ref: literature_specialist
+      owner_kind: role
+      depends_on:
+        - outline_generation
+      parallel_group: research_assets
+      action: Discover, screen, verify via citation_verifier, and synthesize literature into BibTeX.
+      expected_outputs:
+        - bibliography
+        - citation_registry
+      write_scope_globs:
+        - literature/**
+        - references.bib
+    - id: section_writing
+      title: LaTeX Manuscript Drafting
+      owner_ref: manuscript_writer
+      owner_kind: role
+      depends_on:
+        - plot_generation
+        - literature_review
+      action: Draft and integrate complete manuscript using supplied LaTeX template and experimental log.
+      expected_outputs:
+        - latex_source
+      write_scope_globs:
+        - manuscript/**
+        - paper.tex
+    - id: content_refinement
+      title: Iterative Non-Regressing Content Refinement
+      owner_ref: quality_refiner
+      owner_kind: role
+      depends_on:
+        - section_writing
+      action: Evaluate draft, coordinate writer revisions, and accept or rollback via OBS predicates.
+      expected_outputs:
+        - quality_report
+        - revision_history
+    - id: finalization
+      title: Compilation & Human Signoff
+      owner_ref: operation_coordinator
+      owner_kind: role
+      depends_on:
+        - content_refinement
+      action: Compile LaTeX to PDF, verify references/figures, build artifact manifest, and request HITL approval.
+      expected_outputs:
+        - pdf
+        - artifact_manifest
+  allow_dynamic_task_mutation: false
+
+behavior:
+  execution_mode: composite
+  protocol_bindings:
+    pr_bot_limit: 12
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 25
+    pr_iterasi_handover_limit: 3
+    pr_de_limit: 10
+    pr_de_escalation_limit: 10
+    pr_no_progress_limit: 1
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 14400000
+    token_budget: 20000000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: visual_critique_loop
+      scope: agent
+      target_units:
+        - plot_generation
+      max_iterations: 4
+      no_progress_limit: 2
+      feedback_sources:
+        - kind: resource_evaluator
+          ref: visual_critic
+      continuation_predicate:
+        all:
+          - op: eq
+            var: candidate.visual_gate_passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+      acceptance_predicate:
+        all:
+          - op: eq
+            var: candidate.visual_factual_consistency
+            value: true
+          - op: eq
+            var: candidate.visual_legible
+            value: true
+          - op: eq
+            var: candidate.caption_aligned
+            value: true
+      on_limit_reached: escalate_hitl
+    - id: manuscript_refinement_loop
+      scope: operation
+      target_units:
+        - content_refinement
+        - section_writing
+      max_iterations: 3
+      no_progress_limit: 1
+      feedback_sources:
+        - kind: role
+          ref: quality_refiner
+        - kind: resource_evaluator
+          ref: manuscript_evaluator
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+          - op: lt
+            var: protocol.no_progress_count
+            value: 1
+      acceptance_predicate:
+        any:
+          - op: gt
+            var: candidate.overall_score
+            ref: accepted.overall_score
+          - all:
+              - op: eq
+                var: candidate.overall_score
+                ref: accepted.overall_score
+              - op: gte
+                var: candidate.net_subscore_delta
+                value: 0
+              - op: eq
+                var: candidate.required_subscore_regression
+                value: false
+      rollback_predicate:
+        any:
+          - op: lt
+            var: candidate.overall_score
+            ref: accepted.overall_score
+          - all:
+              - op: eq
+                var: candidate.overall_score
+                ref: accepted.overall_score
+              - op: lt
+                var: candidate.net_subscore_delta
+                value: 0
+          - op: eq
+            var: candidate.hard_constraint_violated
+            value: true
+      on_limit_reached: rollback_and_stop
+    - id: task_retry
+      scope: task
+      target_units:
+        - outline_generation
+        - plot_generation
+        - literature_review
+        - section_writing
+        - finalization
+      max_iterations: 2
+      no_progress_limit: 2
+      feedback_sources:
+        - kind: role
+          ref: operation_coordinator
+      continuation_predicate:
+        all:
+          - op: eq
+            var: error.retryable
+            value: true
+          - op: eq
+            var: error.idempotent_or_checkpointed
+            value: true
+      acceptance_predicate:
+        op: eq
+        var: error.retryable
+        value: false
+      on_limit_reached: handover_via_pr_transfer
+  termination:
+    success:
+      all:
+        - op: eq
+          var: gate.passed
+          value: true
+        - op: eq
+          var: artifact.latex_compiled
+          value: true
+        - op: eq
+          var: gate.human_signoff_recorded
+          value: true
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: eq
+          var: error.required_input_missing
+          value: true
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - plot_generation
+      - literature_review
+      - section_writing
+      - content_refinement
+      - finalization
+    restore_strategy: last_accepted_artifact
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 1
+
+resources:
+  contracts:
+    - id: reasoning_model
+      type: model
+      purpose: Planning, synthesis, manuscript drafting, and structured review
+      access: execute
+      authorized_roles:
+        - operation_coordinator
+        - research_planner
+        - visualization_specialist
+        - literature_specialist
+        - citation_verifier
+        - manuscript_writer
+        - quality_refiner
+    - id: literature_search
+      type: external_api
+      purpose: Discover candidate scholarly publications
+      access: execute
+      authorized_roles:
+        - literature_specialist
+    - id: bibliographic_metadata
+      type: external_api
+      purpose: Verify publication identity and resolve DOI sequentially under rate limits
+      access: execute
+      authorized_roles:
+        - citation_verifier
+    - id: scholarly_content
+      type: external_api
+      purpose: Retrieve abstracts and licensed full text
+      access: read
+      authorized_roles:
+        - literature_specialist
+    - id: plotting_engine
+      type: builtin_tool
+      purpose: Generate data-derived statistical plots and diagrams
+      access: execute
+      authorized_roles:
+        - visualization_specialist
+    - id: visual_critic
+      type: model
+      purpose: Evaluate visual clarity and factual alignment of generated figures
+      access: execute
+      authorized_roles:
+        - visualization_specialist
+      optional: true
+    - id: manuscript_evaluator
+      type: model
+      purpose: Score manuscript quality and produce structured rubric subscores
+      access: execute
+      authorized_roles:
+        - quality_refiner
+      optional: true
+    - id: latex_compiler
+      type: builtin_tool
+      purpose: Compile LaTeX source into PDF and capture build diagnostics
+      access: execute
+      authorized_roles:
+        - operation_coordinator
+    - id: artifact_store
+      type: storage
+      purpose: Store versioned manuscript drafts, figures, bibliography, and provenance
+      access: read_write
+      authorized_roles:
+        - operation_coordinator
+        - research_planner
+        - visualization_specialist
+        - literature_specialist
+        - citation_verifier
+        - manuscript_writer
+        - quality_refiner
+    - id: project_knowledge
+      type: memory_service
+      purpose: Retrieve approved project terminology and research context via PKU
+      access: read
+      authorized_roles:
+        - operation_coordinator
+        - research_planner
+        - literature_specialist
+        - manuscript_writer
+        - quality_refiner
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 512
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-EVIDENCE-TRACEABILITY
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Empirical claims and table numbers must trace to experimental_log or verified references.
+    - rule_id: RULE-NO-FABRICATED-REFS
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Never invent references, DOIs, or experimental metrics; flag unresolved citations explicitly.
+  hitl_gates:
+    - action: final_scientific_signoff
+      approval_mode: per_action
+      approver_role: human_researcher
+    - action: external_submission
+      approval_mode: per_action
+      approver_role: human_researcher
+  prohibited_actions:
+    - fabricate_citations
+    - invent_experimental_results
+    - misrepresent_unverified_claims
+    - submit_without_human_approval
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/research-pipeline
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true
+
+observability:
+  emit_events:
+    - operation_started
+    - plan_created
+    - parallel_branch_started
+    - citation_verified
+    - figure_revised
+    - draft_created
+    - revision_accepted
+    - revision_rejected
+    - rollback_performed
+    - latex_compiled
+    - human_approval_requested
+    - operation_terminated
+  produce_execution_trace: true
+  retain_artifact_provenance: true

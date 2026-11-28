@@ -1,0 +1,60 @@
+{
+  "name": "almudaya-operation-v0.3",
+  "version": "0.3.0",
+  "apiVersion": "almudaya.operation/v0.3",
+  "edition": "Dynamic Swarm Manifold Edition",
+  "operations": [
+    {
+      "id": "almudaya.operation.emergent-bug-hunt",
+      "version": "0.3.0",
+      "regime": "emergent",
+      "path": "01_emergent_bug_hunt/operation.yaml",
+      "documentation": "01_emergent_bug_hunt/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.looping",
+      "version": "0.3.0",
+      "regime": "blueprint_seeded",
+      "path": "02_iterative_quality_loop/operation.yaml",
+      "documentation": "02_iterative_quality_loop/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.multi-hierarchy",
+      "version": "0.3.0",
+      "regime": "blueprint_seeded",
+      "path": "03_multi_hierarchy_manifold/operation.yaml",
+      "documentation": "03_multi_hierarchy_manifold/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.research-branch",
+      "version": "1.0.0",
+      "regime": "blueprint_seeded",
+      "role_in_registry": "sub_operation",
+      "path": "03_multi_hierarchy_manifold/sub_operations/research_branch/operation.yaml",
+      "documentation": "03_multi_hierarchy_manifold/sub_operations/research_branch/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.technical-assessment",
+      "version": "1.0.0",
+      "regime": "blueprint_seeded",
+      "role_in_registry": "sub_operation",
+      "path": "03_multi_hierarchy_manifold/sub_operations/technical_assessment/operation.yaml",
+      "documentation": "03_multi_hierarchy_manifold/sub_operations/technical_assessment/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.integration-quality-gate",
+      "version": "1.0.0",
+      "regime": "blueprint_seeded",
+      "role_in_registry": "sub_operation",
+      "path": "03_multi_hierarchy_manifold/sub_operations/integration_quality_gate/operation.yaml",
+      "documentation": "03_multi_hierarchy_manifold/sub_operations/integration_quality_gate/Operation.md"
+    },
+    {
+      "id": "almudaya.operation.research-pipeline",
+      "version": "0.3.0",
+      "regime": "stage_gated",
+      "path": "04_research_pipeline/operation.yaml",
+      "documentation": "04_research_pipeline/Operation.md"
+    }
+  ]
+}

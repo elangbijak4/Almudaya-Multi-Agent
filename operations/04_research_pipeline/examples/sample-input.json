@@ -1,0 +1,12 @@
+{
+  "idea_summary": "We propose an organizationally lifted Dynamic Swarm Manifold abstraction bridging single-agent Skills and runtime-independent multi-agent Operations.",
+  "experimental_log": "Experiment log comparing L=1 Skill-only, static multi-agent workflow, and Dynamic Swarm Manifold Operations across latency, regression rate, and token usage.",
+  "latex_template": "workspace://templates/target-conference-template",
+  "venue_guidelines": "workspace://guidelines/target-conference",
+  "existing_figures": [],
+  "bibliography_seed": "workspace://research/seed-references.bib",
+  "author_instructions": "Maintain strict traceability between experimental log numbers and manuscript tables.",
+  "research_cutoff_date": "2026-11-28",
+  "target_venue": "AAMAS / NeurIPS Agentic Systems Track",
+  "output_language": "English"
+}

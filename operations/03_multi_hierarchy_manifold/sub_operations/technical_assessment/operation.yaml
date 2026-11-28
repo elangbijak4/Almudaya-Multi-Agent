@@ -1,0 +1,276 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.technical-assessment
+  name: Technical & Risk Assessment Sub-Manifold
+  version: 1.0.0
+  description: >
+    Child Operation generating architecture options and conducting independent
+    risk & security assessment under delegated PrModerator token fencing.
+  tags:
+    - child-operation
+    - architecture
+    - risk-assessment
+
+mission:
+  objective: Formulate architecture options and a threat/risk register respecting mission constraints.
+  scope:
+    - Propose candidate system architectures aligned with constraints
+    - Assess operational, data availability, and security risks independently
+  deliverables:
+    - architecture_options
+    - risk_register
+    - execution_trace
+  acceptance_criteria:
+    - Each architecture option documents trade-offs and assumptions
+    - Material risks include mitigation controls and severity classification
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: blueprint_seeded
+  topology_shape: hierarchical
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: true
+    max_coalesced_roles_per_bot: 2
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - systems_architect
+        - risk_assessor
+      reason: Risk & security critique must remain independent from architecture authorship.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: technical_lead
+      kind: moderator
+      responsibilities:
+        - Hold delegated PrModerator seat for technical_branch
+        - Coordinate architecture design and risk review
+      skills:
+        - skill_id: technical-planning
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: true
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: systems_architect
+      kind: worker
+      responsibilities:
+        - Formulate architecture options and interface boundaries
+      skills:
+        - skill_id: software-architecture
+          required: true
+          entry_point: design
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - architecture/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: task_assigned
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: risk_assessor
+      kind: worker
+      responsibilities:
+        - Identify data, governance, and threat risks across proposed options
+      skills:
+        - skill_id: threat-modeling
+          required: true
+          entry_point: audit
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - risks/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: technical_lead
+      namespace: hierarchy/technical_branch
+      access: read_write
+    - role_id: systems_architect
+      namespace: hierarchy/technical_branch/architecture
+      access: read_write
+    - role_id: risk_assessor
+      namespace: hierarchy/technical_branch/risks
+      access: read_write
+    - role_id: risk_assessor
+      namespace: hierarchy/technical_branch/architecture
+      access: read
+
+workflow:
+  seed_stages:
+    - id: design_options
+      title: Formulate Architecture Options
+      owner_ref: systems_architect
+      owner_kind: role
+      depends_on: []
+      action: Draft candidate technical architectures and trade-offs.
+      expected_outputs:
+        - architecture_options
+    - id: assess_risks
+      title: Independent Risk & Security Review
+      owner_ref: risk_assessor
+      owner_kind: role
+      depends_on:
+        - design_options
+      action: Assess governance, data, and security risks of proposed options.
+      expected_outputs:
+        - risk_register
+  allow_dynamic_task_mutation: true
+
+behavior:
+  execution_mode: iterative
+  protocol_bindings:
+    pr_bot_limit: 5
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 20
+    pr_iterasi_handover_limit: 2
+    pr_de_limit: 6
+    pr_de_escalation_limit: 6
+    pr_no_progress_limit: 2
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 5400000
+    token_budget: 8750000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: architecture_risk_loop
+      scope: operation
+      target_units:
+        - design_options
+        - assess_risks
+      max_iterations: 2
+      no_progress_limit: 1
+      feedback_sources:
+        - kind: role
+          ref: risk_assessor
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+      acceptance_predicate:
+        op: eq
+        var: gate.passed
+        value: true
+      on_limit_reached: escalate_hitl
+  termination:
+    success:
+      op: eq
+      var: gate.passed
+      value: true
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - assess_risks
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 1
+
+resources:
+  contracts:
+    - id: technical_store
+      type: storage
+      purpose: Store architecture options and risk register artifacts
+      access: read_write
+      authorized_roles:
+        - technical_lead
+        - systems_architect
+        - risk_assessor
+    - id: architecture_model
+      type: model
+      purpose: Architecture design and threat modeling reasoning
+      access: execute
+      authorized_roles:
+        - technical_lead
+        - systems_architect
+        - risk_assessor
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 256
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-SEPARATE-DESIGN-RISK
+      severity: MANDATORY
+      scope: ALL_BOTS
+      statement: Risk assessor must evaluate architecture options independently.
+  hitl_gates: []
+  prohibited_actions:
+    - omit_material_risks
+    - exceed_partitioned_budget
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/multi-hierarchy/technical-assessment
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true

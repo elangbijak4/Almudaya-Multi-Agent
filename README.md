@@ -1,16 +1,23 @@
-# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.6)
+# Almudaya Multi-Agent (`almudaya-multiagent` v0.3.7)
 
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests: 486 Passed](https://img.shields.io/badge/Tests-486%20Passed-brightgreen.svg)](./TESTING5.md)
+[![Tests: 496 Passed](https://img.shields.io/badge/Tests-496%20Passed-brightgreen.svg)](./TESTING5.md)
 [![AI Engines: Gemini | NVIDIA NIM | Ollama | OpenRouter | 9router](https://img.shields.io/badge/AI%20Engines-Gemini%20%7C%20NVIDIA%20NIM%20%7C%20Ollama%20%7C%20OpenRouter%20%7C%209router-orange.svg)](./USER_MANUAL.md)
 
-A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Model Context Protocol (MCP) Client, Server & ACG Governance**, **Live Web/UI Self-Verification Tools (`inspect_web_ui`, `web_fetch`)**, **Unified Natural Lifecycle Master Bot (`BOT000`) & 10 Atomic `IProtocol` Governance Classes**, **Dual-Mode Startup (`almudaya up`)**, **FailoverAIProvider & Write-Fencing Capability Tokens**, **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
+A session-centric, multi-process autonomous AI coding agent collaboration foundation featuring **Agentic Operation v0.3 (`#Operation`) & Dynamic Swarm Manifold Engine**, **Model Context Protocol (MCP) Client, Server & ACG Governance**, **Live Web/UI Self-Verification Tools (`inspect_web_ui`, `web_fetch`)**, **Unified Natural Lifecycle Master Bot (`BOT000`) & 10 Atomic `IProtocol` Governance Classes**, **Dual-Mode Startup (`almudaya up`)**, **FailoverAIProvider & Write-Fencing Capability Tokens**, **Agent Capability Governance (ACG)**, **OS-Level Boundary Enforcement**, **Transactional Inbox State Machine**, **Interactive All-in-One Bot Console REPL**, **PKU Unified Persistent Memory (Spec v0.2) with PKU-First Reading**, **Multi-Provider AI (Gemini, Direct NVIDIA NIM, Ollama Local & Cloud, OpenRouter, 9router)**, **Hardware Advisor & Model Auto-Recommendation**, and **Almudaya Visual Design Skills (AVDS v1.0.1)**.
 
 Almudaya Multi-Agent empowers multiple autonomous AI bots and human engineers to collaborate across multiple project directories within an isolated, persistent **Session Blackboard**, executing real-world software engineering tasks directly against registered project codebases with strict security boundaries.
 
 ---
+
+## What's New in Version 0.3.7
+
+1. **Agentic Operation (`#Operation`, `almudaya.operation/v0.3`) & Dynamic Swarm Manifold Engine (`src/operation/`, `operations/`):**
+   - **Zero-Dependency Parser, Zod Strict Schema & 9-Layer Semantic Validator (`yaml-lite.ts`, `schema.ts`, `validator.ts`):** Parses indented YAML 1.2 and JSON `operation.yaml` specs, enforces strict `PredicateExpr` ASTs (`all`/`any`/`not`/`eq..in`), validates workflow & cross-operation DAG acyclicity, parent–child schema mappings, and `REVIEW_ONLY` least-privilege invariants across 7 bundled Operations (`01_emergent_bug_hunt`, `02_iterative_quality_loop`, `03_multi_hierarchy_manifold` + 3 child sub-operations, `04_research_pipeline`).
+   - **Dynamic Realization Map ($\mu_t$), Ephemeral Worker Lifecycle & Anti-Affinity (`manifold-engine.ts`, `SpawnManager`, `goal-tools.ts`):** Binds `#Operation` Role Archetypes directly onto `SpawnManager` (`cardinality.max`, automatic `allowed_path_globs` & `default_access_mode` token inheritance, automatic `SkillService` logical bindings & `ACG` grants), enforces `strict_distinct_bot` `anti_affinity` against `PrBotGlobal` idle bot recycling, triggers worker **apoptosis** (`idle`/`stopped`) on `DONE` / `TASK_0` completion, and manages elastic `running_l1 ↔ running_swarm` transitions.
+   - **On-the-Fly Synthesis, Crystallization, CLI & REPL (`master-tools.ts`, `cli/commands/operation.ts`, `up.ts`, `BotConsole`):** Added `almudaya operation list|inspect|validate|apply|status|evaluate|crystallize`, `almudaya up --operation <idOrAlias> [--operation-params <jsonOrFile>]`, interactive REPL `/operation`, and `BOT000` tools (`apply_operation`, `synthesize_operation`, `crystallize_operation`), plus active Operation & Role context injection in `buildDynamicSystemPrompt`.
 
 ## What's New in Version 0.3.6
 
@@ -352,6 +359,8 @@ almudaya context doc add --session S001 --id SRS-01 --title "Software Requiremen
 | `almudaya skill enable\|disable\|validate` | Bind AVDS skill configs to sessions/bots and validate design contracts |
 | `almudaya mcp list\|add\|preset\|remove\|test` | Configure external stdio/HTTP MCP servers & curated presets (`playwright`, `chrome-devtools`, `filesystem`, `fetch`, `memory`) |
 | `almudaya mcp serve` | Run Almudaya Blackboard as a stdio JSON-RPC 2.0 MCP server |
+| `almudaya operation list\|inspect\|validate` | Discover, inspect, and statically validate bundled & workspace `almudaya.operation/v0.3` packages |
+| `almudaya operation apply\|status\|evaluate\|crystallize` | Bind `#Operation` manifold to a session, inspect $\mu_t$ realizations, evaluate OBS predicates, or crystallize ad-hoc swarms |
 
 All commands accept `--json` for machine readability and `--workspace <path>` to override the storage root.
 
@@ -372,7 +381,7 @@ npm run build
 npm pack --dry-run
 ```
 
-- **80 Test Files / 486 Tests:** 100% passing across all modules (`npm test`), covering `v0.3.6` MCP client/server & ACG governance, `web_fetch`/`inspect_web_ui`, `APP-BUG-10`..`APP-BUG-23` regressions, Unified Natural Lifecycle (`v0.3.5`), SRP-1 security, PKU Spec v0.2, AVDS v1.0.1, OpenRouter/9router/NVIDIA/Ollama providers, and REPL `/model` + `/mcp` commands.
+- **83 Test Files / 496 Tests:** 100% passing across all modules (`npm test`), covering `v0.3.7` Agentic Operation v0.3 & Dynamic Swarm Manifold Engine (`yaml-lite`, 9-layer validator, `PredicateExpr`, `SpawnManager` anti-affinity & apoptosis, CLI/REPL), `v0.3.6` MCP client/server & ACG governance, `web_fetch`/`inspect_web_ui`, `APP-BUG-10`..`APP-BUG-23` regressions, Unified Natural Lifecycle (`v0.3.5`), SRP-1 security, PKU Spec v0.2, AVDS v1.0.1, OpenRouter/9router/NVIDIA/Ollama providers, and REPL `/model` + `/mcp` + `/operation` commands.
 - **Field Test Report:** Full multi-bot `v0.3.5` validation & findings catalog documented in [`TESTING5.md`](./TESTING5.md).
 - **Independent Multi-Process Testing:** Validated with real spawned Node.js child processes for concurrent joins, message appends, and process crash recovery.
 - **Two-Terminal E2E Acceptance:** Validates the complete 12-step Proof of Concept specified in `MASTER_PROMPT.md` Section 10.
@@ -393,10 +402,12 @@ Almudaya Multi-Agent v0.1.0 is intentionally **infrastructure-first**. The follo
 
 ## Documentation & User Manuals
 
-Panduan penggunaan dan referensi teknis lengkap:
-- 📖 [**USER_MANUAL.md**](./USER_MANUAL.md) — Manual referensi teknis perintah CLI, opsi, environment variables, skema filesystem, dan error handling.
-- 📘 [**USER_GUIDE.md**](./USER_GUIDE.md) — Panduan konseptual, arsitektur proses, filosofi pemisahan 3 direktori (Engine, Blackboard, Target Project), dan ketahanan crash.
-- 📗 [**USER_TUTORIAL.md**](./USER_TUTORIAL.md) — Tutorial praktis hands-on langkah demi langkah simulasi multi-terminal dari nol.
+Panduan penggunaan dan referensi teknis lengkap (`v0.3.7`):
+- 📖 [**USER_MANUAL.md**](./USER_MANUAL.md) — Manual referensi teknis perintah CLI, `#Operation v0.3`, `mcp`, slash command REPL, environment variables, skema filesystem, dan error handling.
+- 📘 [**USER_GUIDE.md**](./USER_GUIDE.md) — Panduan konseptual, arsitektur Dynamic Swarm Manifold, 10 protokol, PKU Spec v0.2, ACG, MCP, & AVDS v1.0.1.
+- 📗 [**USER_TUTORIAL.md**](./USER_TUTORIAL.md) — Tutorial praktis hands-on langkah demi langkah (`almudaya up --operation` & simulasi multi-terminal).
+- 🧪 [**USER_TESTING.md**](./USER_TESTING.md) — Skenario pengujian multi-bot siap-pakai langkah demi langkah menggunakan Windows `cmd.exe` mulai dari cold start.
+- 🗂️ [**USER/**](./USER/README.md) — Arsip penjejakan dokumentasi penggunaan lintas-versi (`v0.1.0`, `v0.3.0`, `v0.3.5`, `v0.3.7`) tanpa penghapusan versi terdahulu.
 
 Full architectural specifications, decision records, and test reports are maintained under [`docs/docs_v0.1.0/`](./docs/docs_v0.1.0/):
 - [`01_PROJECT_CHARTER.md`](./docs/docs_v0.1.0/01_PROJECT_CHARTER.md) — Charter, vision, principles, and stakeholders.

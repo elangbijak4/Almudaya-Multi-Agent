@@ -1,84 +1,122 @@
-# Almudaya Multi-Agent v0.3.5 — Hands-on Step-by-Step Tutorial
+# Almudaya Multi-Agent v0.3.7 — Hands-on Step-by-Step Tutorial
 
-Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.5)**, termasuk:
-1. Orkestrasi satu-perintah **Unified HITL + Master Bot (`almudaya up`)** atau multi-proses lintas-terminal dengan **Interactive Bot Console REPL** (*Unified Natural Lifecycle* & **10 Protokol Atomic `IProtocol`**),
-2. Pemilihan model AI fleksibel secara langsung melalui **Ollama (Lokal)**, **NVIDIA NIM**, **Google Gemini**, **OpenRouter**, atau **9router** — lengkap dengan **Hardware Spec Advisor** (`almudaya bot advisor`) dan pengunduh model Ollama (`almudaya bot pull` & `/model pull`),
-3. Tata kelola keamanan **Agent Capability Governance (ACG)**,
-4. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI `almudaya skill`, perintah REPL `/skill`, dan perkakas AI otonom `use_skill`,
-5. Sinkronisasi memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory Architecture (Spec v0.2)** dengan kebijakan **PKU-First Reading** (`query_pku_memory`).
+> [!NOTE]
+> Tutorial ini telah diperbarui untuk **`v0.3.7`** (*Agentic Operation v0.3 & Dynamic Swarm Manifold*). Jika Anda menginginkan skenario pengujian siap-salin yang disusun khusus untuk **Windows Command Prompt (`cmd.exe`)** mulai dari menyalakan aplikasi pertama kali, langsung buka [**`USER_TESTING.md`**](./USER_TESTING.md). Versi lama tutorial ini tetap diarsipkan pada `USER/`.
+
+Panduan praktis langkah demi langkah untuk menjalankan ekosistem kolaborasi multi-agent otonom **Almudaya Multi-Agent (`almudaya-multiagent` v0.3.7)**, mencakup:
+1. **Jalur Cepat Dynamic Swarm Manifold (`almudaya up --operation`)** dengan **Master Bot (`BOT000`)**, **#Operation (`almudaya.operation/v0.3`)**, serta **10 Protokol Atomic `IProtocol`**,
+2. **Jalur Kolaborasi Multi-Terminal (`BOT001` + `BOT002`)** dengan **Interactive Bot Console REPL**,
+3. Pemilihan model AI fleksibel melalui **Ollama (Lokal)**, **NVIDIA NIM**, **Google Gemini**, **OpenRouter**, atau **9router** — lengkap dengan **Hardware Spec Advisor** (`almudaya bot advisor`), `--failover` worker, dan pengunduh model Ollama (`almudaya bot pull`),
+4. Tata kelola keamanan **Agent Capability Governance (ACG)** (`extended` preset) & **MCP (`almudaya mcp`)**,
+5. Pemanfaatan modul **Almudaya Visual Design Skills (AVDS v1.0.1)** (`almudaya skill`, `/skill`, `use_skill`), serta
+6. Memori kerja bersama (`work_log.jsonl`) dan **PKU Unified Persistent Memory (Spec v0.2)** (`query_pku_memory`).
 
 ---
 
 ## 📋 Skenario Tutorial
 
-Kita akan membangun lingkungan kolaborasi nyata dengan konfigurasi:
-1. **Target Proyek Eksternal:** Folder kerja di luar engine, misalnya di `D:\testingbot`.
-2. **Session Kolaborasi:** Session `S002` bernama `proyek-quantum-ui`.
-3. **Dua Bot Independen dengan Konsol REPL Interaktif:**
-   - `BOT001` (`"Architect"`) — UI/UX & System Architect yang merancang *Composition Plan* berbasis **AVDS v1.0.1** (Terminal 1).
-   - `BOT002` (`"Coder"`) — Fullstack Engineer bertenaga AI Google Gemini yang mengimplementasikan kode dan mengujinya (Terminal 2).
+Anda dapat memilih **salah satu dari dua mode tutorial** (atau menjalankan keduanya berurutan):
+- **Jalur Cepat (Bagian IA — `almudaya up`):** Satu perintah menghidupkan `BOT000` + memilih `#Operation-looping`, lalu worker (`developer`, `test_engineer`, `reviewer`) terbentuk dan berakhir otomatis sesuai topologi swarm dinamis.
+- **Jalur Manual Multi-Terminal (Bagian IB & II):** Mengamati kolaborasi eksplisit antara:
+  - **Target Proyek Eksternal:** `D:\testingbot`
+  - **Session Kolaborasi:** `S002` (`proyek-quantum-ui`)
+  - **`BOT001` (`"Architect"`)** — UI/UX & System Architect (`--mode review`, Terminal 1)
+  - **`BOT002` (`"Coder"`)** — Fullstack Engineer (`--mode turbo`, Terminal 2)
 
 ---
 
-## BAGIAN I: Persiapan Workspace, Root Proyek, Capability & Skill AVDS
+## Langkah 1: Kompilasi & Registrasi Global CLI Engine
 
-### Langkah 1: Kompilasi & Registrasi Global CLI Engine
+Buka PowerShell atau Command Prompt (`cmd.exe`), arahkan ke direktori engine Almudaya:
 
-Buka PowerShell / Command Prompt pertama Anda, arahkan ke folder engine Almudaya:
-
+**PowerShell:**
 ```powershell
 cd D:\almudaya_multiagent_v0.1.0
-
-# 1. Kompilasi kode sumber TypeScript
 npm run build
-
-# 2. Daftarkan CLI 'almudaya' ke sistem global
 npm link
-
-# 3. Verifikasi versi CLI
 almudaya --version
 ```
-Pastikan output menampilkan **`0.3.5`**.
+
+**Windows Command Prompt (`cmd.exe`):**
+```cmd
+cd /d D:\almudaya_multiagent_v0.1.0
+npm run build
+npm link
+almudaya --version
+```
+
+Pastikan keluaran menampilkan **`0.3.7`**. Periksa pula katalog `#Operation v0.3` bawaan:
+```bash
+almudaya operation validate
+```
+Keluaran yang diharapkan:
+```text
+All 7 Operation(s) PASSED static semantic validation (0 errors).
+```
 
 > [!TIP]
-> **Cara Cepat v0.3.5 (`almudaya up`):** Mulai `v0.3.5`, Anda dapat langsung menjalankan konsol HITL + **Master Bot (`BOT000`)** yang otomatis membuka terminal worker dan mengawal *Unified Natural Lifecycle* dalam satu perintah:
-> ```powershell
-> almudaya up --root D:\testingbot --provider gemini --spawn-mode windows
-> ```
-> Jika Anda ingin memahami arsitektur manual proses demi proses, ikuti Langkah 2–8 di bawah ini.
+> **Perbedaan Set Variabel Lingkungan di Windows:**
+> - Di **PowerShell**: `$env:GEMINI_API_KEY="AIza..."` atau `$env:NVIDIA_API_KEY="nvapi-..."`
+> - Di **`cmd.exe`**: `set "GEMINI_API_KEY=AIza..."` atau `set "NVIDIA_API_KEY=nvapi-..."` (jangan tulis `set KEY="val"` di CMD karena tanda kutip ikut tersimpan ke dalam nilai key!).
 
 ---
+
+## BAGIAN IA: Jalur Cepat Dynamic Swarm Manifold (`almudaya up --operation`)
+
+Sejak `v0.3.7`, Anda dapat langsung mengikat **`#Operation` (`almudaya.operation/v0.3`)** ketika menjalankan `almudaya up`, sehingga topologi swarm terbentuk dinamis mengikuti definisi `#Operation`:
+
+1. Siapkan direktori target (mis. `D:\testingbot`) dan set kunci AI provider pilihan Anda (`GEMINI_API_KEY` / `NVIDIA_API_KEY` / `OPENROUTER_API_KEY` / `OLLAMA_BASE_URL`).
+2. Jalankan `almudaya up` dengan `#Operation-looping` (atau `--provider nvidia` sesuai API key Anda):
+   ```powershell
+   almudaya up --root D:\testingbot --provider gemini --spawn-mode windows --operation #Operation-looping
+   ```
+3. Begitu masuk prompt `HITL [MASTER]> `, inspeksi topologi swarm yang sudah dimaterialisasi:
+   ```text
+   HITL [MASTER]> /operation status
+   HITL [MASTER]> /protocol
+   HITL [MASTER]> /blueprint
+   ```
+4. Berikan objektif nyata dalam bahasa alami agar `BOT000` men-spawn worker terpisah untuk implementasi dan pengujian (`developer` != `reviewer` sesuai aturan `anti_affinity`):
+   ```text
+   HITL [MASTER]> Bangun modul src/vector.js beserta pengujian unit tests/vector.test.js menggunakan node:test pada root D:\testingbot. Gunakan Role Archetype developer untuk implementasi dan test_engineer untuk pengujian terpisah, lalu jalankan tes hingga semua PASS.
+   ```
+5. Amati bagaimana `BOT000` men-spawn terminal worker baru, menugaskan `CapabilityToken` disjoin (`PrModerator`), mengevaluasi kemajuan melalui `GoalLedger`, dan menghentikan worker secara otomatis ketika tugas mencapai `DONE` / `TASK_0`.
+6. Di akhir sesi, periksa evaluasi predikat **OBS** dan keluar aman:
+   ```text
+   HITL [MASTER]> /operation evaluate
+   HITL [MASTER]> /bots
+   HITL [MASTER]> /exit
+   ```
+
+---
+
+## BAGIAN IB: Persiapan Workspace Manual, Root Proyek, ACG & Skill AVDS
+
+Jika Anda ingin menjalankan **kolaborasi multi-terminal manual** langkah demi langkah tanpa `BOT000` auto-spawn, ikuti Langkah 2–8 di bawah ini.
 
 ### Langkah 2: Siapkan Folder Target Proyek & Buat Session Baru
 
 ```powershell
-cd D:\
-mkdir testingbot
-cd testingbot
+mkdir D:\testingbot
+cd D:\testingbot
 
 # Buat Session baru dengan ID S002
 almudaya session create proyek-quantum-ui --session S002 --description "Kolaborasi desain dan implementasi dengan AVDS v1.0.1 & PKU Memory"
 ```
 
----
-
 ### Langkah 3: Daftarkan Target Project Root & Terapkan Preset Kapabilitas (ACG)
 
-1. Daftarkan folder `D:\testingbot` sebagai target *project root* utama:
+1. Daftarkan folder `D:\testingbot` sebagai target *project root* utama (format posisi: `almudaya context root add <name> <path> ...`):
    ```powershell
-   almudaya context root add --session S002 --id app-root --name "Quantum Lab App" --path D:\testingbot --type primary
+   almudaya context root add "Quantum Lab App" D:\testingbot --session S002 --id app-root --type primary
    ```
-2. Terapkan preset izin kapabilitas `standard_coding` agar bot memiliki izin eksekusi terarah di dalam `D:\testingbot`:
+2. Terapkan preset izin kapabilitas resmi **`extended`** agar bot memiliki izin baca/tulis terarah di `D:\testingbot`, eksekusi toolchain (`git`, `npm`, `tsc`, `node`), dan akses `mcp.invoke`:
    ```powershell
-   almudaya capability preset apply standard_coding --session S002 --paths D:\testingbot
+   almudaya capability preset apply extended --session S002 --paths D:\testingbot
    almudaya capability list --session S002
    ```
 
----
-
 ### Langkah 4: Eksplorasi & Aktifkan Modul Skill AVDS v1.0.1
-
-Sebelum menjalankan bot, mari kita jelajahi katalog **Almudaya Visual Design Skills (AVDS v1.0.1)** melalui CLI:
 
 ```powershell
 # 1. Lihat modul skill yang terpasang
@@ -99,18 +137,11 @@ almudaya skill platforms
 almudaya skill modalities
 ```
 
-Sekarang aktifkan skill **AVDS (`almudaya-visual-design`)** untuk Session `S002` dengan gaya utama `quantum-futurism`, pengaruh sekunder `scientific-visualization`, platform `web`, dan modalitas `keyboard` serta `mouse-pointer`:
-
+Aktifkan skill **AVDS (`almudaya-visual-design`)** untuk Session `S002`:
 ```powershell
 almudaya skill enable avds --session S002 --style quantum-futurism --secondary-styles scientific-visualization --platform web --modalities keyboard mouse-pointer --entry-point full-cycle --notes "Gunakan komposisi spasial modular dan kontras WCAG 2.2 AA"
-```
-
-Periksa status ikatan skill pada sesi `S002` (yang juga otomatis tersinkronisasi ke penyimpanan **PKU Memory**):
-```powershell
 almudaya skill list --session S002
 ```
-
----
 
 ### Langkah 5: Daftarkan Identitas Dua Bot ke Session
 
@@ -126,7 +157,7 @@ almudaya bot join --session S002 --bot BOT002 --display-name "Coder" --role "Fro
 
 ## BAGIAN II: Kolaborasi Multi-Terminal dengan Interactive Bot Console REPL
 
-Dengan fitur **Interactive Bot Console REPL**, Anda cukup menggunakan **2 jendela terminal** (satu untuk setiap bot) tanpa memerlukan terminal ketiga!
+Dengan fitur **Interactive Bot Console REPL**, cukup gunakan **2 jendela terminal** (satu untuk setiap bot).
 
 ### 🖥️ Terminal 1 (Kiri): Jalankan Bot "Architect"
 
@@ -134,104 +165,73 @@ Dengan fitur **Interactive Bot Console REPL**, Anda cukup menggunakan **2 jendel
 $env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 almudaya bot run --session S002 --bot BOT001 --provider gemini --mode review
 ```
-Terminal 1 akan menampilkan banner interaktif dan prompt `Architect> `:
-```text
-================================================================
- Almudaya Multi-Agent v0.3.3 — Interactive Bot Console REPL
- Bot: "Architect" [BOT001] | Session: S002
- Mode: REQUEST_REVIEW | Provider: gemini (gemini-2.5-flash)
- Ketik /help untuk daftar perintah slash atau ketik instruksi langsung.
-================================================================
-Architect> 
-```
-
-Di dalam prompt `Architect> `, coba jalankan perintah slash berikut:
+Terminal 1 menampilkan banner interaktif `Almudaya Multi-Agent v0.3.7` dan prompt `Architect> `. Coba perintah slash berikut:
 ```text
 Architect> /peers
 Architect> /roots
 Architect> /model
 Architect> /skill list
-Architect> /skill styles futuristic
+Architect> /operation list
+Architect> /mcp list
 ```
-> **Tips Multi-Provider Langsung (`--provider ollama`, `nvidia`, `9router`, & `openrouter`) + Hardware Advisor:** Anda dapat memeriksa kecocokan spek komputer Anda, mengunduh model lokal via Ollama, atau langsung memakai NVIDIA NIM / 9router / OpenRouter:
+
+> **Tips Multi-Provider (`ollama`, `nvidia`, `9router`, & `openrouter`) + Worker Failover:**
 > ```powershell
-> # 1. Periksa spek laptop/PC (CPU, RAM, GPU/VRAM) & dapatkan rekomendasi model lokal + cloud gratis
+> # 1. Periksa spek komputer & rekomendasi model lokal/cloud gratis
 > almudaya bot advisor
-> # (atau: almudaya bot models --recommend)
 >
-> # 2. Unduh & jalankan model lokal Ollama yang cocok dengan spek Anda (tanpa API key)
+> # 2. Gunakan model lokal Ollama
 > almudaya bot pull qwen2.5-coder:7b
-> almudaya bot models --provider ollama
 > almudaya bot run --session S002 --bot BOT001 --provider ollama --model qwen2.5-coder:7b --mode review
 >
-> # 3. Menggunakan NVIDIA NIM secara langsung
+> # 3. Gunakan NVIDIA NIM langsung + failover ke OpenRouter
 > $env:NVIDIA_API_KEY="nvapi-xxxxxxxxxxxxxxxxxxxxxxxx"
-> almudaya bot models --provider nvidia
-> almudaya bot run --session S002 --bot BOT001 --provider nvidia --model meta/llama-3.3-70b-instruct --mode review
->
-> # 4. Atau menggunakan 9router lokal (set NINEROUTER_API_KEY jika router memakai key)
-> almudaya bot models --provider 9router
-> $env:NINEROUTER_API_KEY="<NINEROUTER_API_KEY_JIKA_ADA>"
-> almudaya bot run --session S002 --bot BOT001 --provider 9router --model mycombo --mode review
+> almudaya bot run --session S002 --bot BOT001 --provider nvidia --model nvidia/nemotron-3.5-super-vl-120b-a12b --failover openrouter:deepseek/deepseek-chat-v3-0324:free --mode review
 > ```
-> Di dalam REPL kapan saja, ketik `/model recommend` untuk analisis hardware, `/model pull qwen2.5-coder:7b` untuk mengunduh model Ollama, `/model list ollama` atau `/model list nvidia` untuk melihat daftar model, lalu `/model qwen2.5-coder:7b ollama`, `/model deepseek-ai/deepseek-r1 nvidia`, `/model mycombo 9router`, atau `/model deepseek/deepseek-chat-v3-0324:free openrouter` untuk mengganti model tanpa me-restart bot.
-
----
+> Di dalam REPL kapan saja, gunakan `/model recommend`, `/model pull qwen2.5-coder:7b`, `/model list nvidia`, atau `/model meta/llama-3.3-70b-instruct nvidia` untuk berganti model tanpa me-restart proses bot.
 
 ### 🖥️ Terminal 2 (Kanan): Jalankan Bot "Coder" di Mode TURBO
 
-Buka jendela terminal kedua di `D:\testingbot`:
-
+Buka jendela terminal kedua:
 ```powershell
 $env:GEMINI_API_KEY="<YOUR_GEMINI_API_KEY>"
 almudaya bot run --session S002 --bot BOT002 --provider gemini --mode turbo
 ```
 Terminal 2 akan menampilkan prompt `Coder> `.
 
----
-
 ### 🚀 Langkah 6: Kirim Tugas Berbasis Skill AVDS dari Konsol "Architect" ke "Coder"
 
-Di **Terminal 1 (`Architect> `)**, kirimkan pesan tugas langsung ke `Coder` menggunakan perintah `/msg`:
-
+Di **Terminal 1 (`Architect> `)**, kirimkan pesan tugas langsung ke `Coder`:
 ```text
 Architect> /msg Coder Tolong gunakan tool use_skill untuk membaca profil gaya 'quantum-futurism' dan platform 'web', lalu buatkan berkas 'src/theme-tokens.json' dan modul 'src/math.js' beserta pengujiannya dengan node.
 ```
 
-### Apa yang Terjadi Secara Otonom di Terminal 2 (`Coder> `)?
-1. Bot **Coder** langsung menerima pesan dengan *non-destructive TTY rendering* (tanpa merusak baris prompt).
-2. `AutonomousAgentLoop` secara otomatis menyuntikkan **PKU-First Reading Policy** dan konfigurasi aktif **AVDS (`quantum-futurism`, `web`, `keyboard`, `mouse-pointer`)** ke dalam System Prompt Coder.
-3. Coder terlebih dahulu memanggil **`query_pku_memory`** untuk memeriksa ringkasan kode/graf pengetahuan proyek di PKU sebelum membaca atau menulis berkas penuh.
-4. Coder memanggil perkakas **`use_skill`** (`action: "get_style", target_id: "quantum-futurism"` dan `action: "get_platform", target_id: "web"`) untuk membaca spesifikasi desain resmi AVDS.
-5. Coder memanggil **`write_file`** untuk menulis `src/theme-tokens.json` dan `src/math.js` di dalam `D:\testingbot`—sistem otomatis memperbarui indeks PKU **hanya untuk berkas yang baru ditulis/diubah** tanpa mengindeks ulang seluruh proyek.
-6. Coder memanggil **`run_command`** untuk memverifikasi kode dengan `node`.
-7. Seluruh mutasi berkas dan eksekusi perintah otomatis tercatat ke `work_log.jsonl`, serta Coder mengirim balasan langsung kembali ke `Architect`!
-
----
+Yang terjadi secara otonom di Terminal 2 (`Coder> `):
+1. Bot **Coder** menerima pesan dengan *non-destructive TTY rendering*.
+2. `AutonomousAgentLoop` menyuntikkan **PKU-First Reading Policy** dan konfigurasi **AVDS** ke dalam System Prompt Coder.
+3. Coder memanggil **`query_pku_memory`** terlebih dahulu, lalu **`use_skill`** untuk membaca spesifikasi `quantum-futurism` dan `web`.
+4. Coder memanggil **`write_file`** untuk menulis `src/theme-tokens.json` dan `src/math.js` (otomatis memperbarui indeks PKU inkremental), lalu memanggil **`run_command`** untuk menjalankan verifikasi `node`.
+5. Seluruh mutasi tercatat di `work_log.jsonl` dan balasan dikirim kembali ke `Architect`.
 
 ### Langkah 7: Periksa Riwayat Kerja & Validasi Kontrak AVDS
 
-Di **Terminal 1 (`Architect> `)**, ketik:
+Di **Terminal 1 (`Architect> `)**, periksa log lintas-root:
 ```text
 Architect> /log
 ```
-Anda akan melihat linimasa lengkap seluruh berkas yang ditulis dan perintah yang dijalankan oleh `Coder` beserta lokasi root-nya.
-
-Anda juga dapat memvalidasi berkas kontrak desain atau rencana komposisi AVDS kapan saja dari CLI:
+Untuk memvalidasi artefak kontrak desain AVDS dari CLI:
 ```powershell
 almudaya skill validate D:\almudaya_multiagent_v0.1.0\skill\almudaya-visual-design\design-contract\examples\design-contract-example.json
 ```
-Output:
+Keluaran:
 ```text
 AVDS Artifact Validation (design-contract): VALID ✅
 ```
 
----
-
 ### Langkah 8: Menghentikan Bot dengan Aman
 
-Di masing-masing terminal bot (`Architect> ` dan `Coder> `), cukup ketik:
+Di masing-masing terminal bot (`Architect> ` dan `Coder> `), ketik:
 ```text
 /exit
 ```
-Kedua bot akan melakukan *graceful shutdown*, melepaskan lock dengan bersih, dan menyimpan seluruh jejak sesi di Blackboard serta penyimpanan memori persisten PKU.
+Kedua bot melakukan *graceful shutdown*, melepaskan lock dengan bersih, dan menyimpan jejak sesi pada Blackboard serta penyimpanan memori persisten PKU.

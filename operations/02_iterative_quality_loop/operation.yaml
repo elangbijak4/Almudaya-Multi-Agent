@@ -1,0 +1,457 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.looping
+  name: Iterative Software Quality Loop
+  version: 0.3.0
+  alias: "#Operation-looping"
+  description: >
+    Blueprint-seeded adaptive swarm manifold enforcing bounded
+    implement-test-review-evaluate cycles with strict developer/reviewer separation.
+  tags:
+    - looping
+    - iterative
+    - software-engineering
+    - blueprint-seeded
+
+mission:
+  objective: Deliver a software change satisfying all acceptance criteria under strict review separation.
+  scope:
+    - Decompose feature requirement into fenced GoalLedger tasks
+    - Implement changes inside EXCLUSIVE_WRITE capability tokens
+    - Validate via automated tests and independent code/security review
+  deliverables:
+    - change_set
+    - test_report
+    - review_report
+    - decision_record
+    - execution_trace
+  acceptance_criteria:
+    - All mandatory acceptance criteria recorded as met in GoalLedger
+    - Required automated tests pass with factual verification_evidence
+    - Independent reviewer approval recorded without critical unresolved findings
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: blueprint_seeded
+  topology_shape: hybrid
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: true
+    max_coalesced_roles_per_bot: 2
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - developer
+        - reviewer
+      reason: >
+        Code and security review must be executed by a distinct bot process
+        and isolated context from the implementing developer.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: delivery_lead
+      kind: master
+      responsibilities:
+        - Seed GoalLedger blueprint and arbitrate PrModerator write tokens
+        - Evaluate cycle progress and decide acceptance vs revision vs HITL escalation
+      skills:
+        - skill_id: requirements-analysis
+          required: true
+        - skill_id: task-decomposition
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: developer
+      kind: worker
+      responsibilities:
+        - Inspect codebase via PKU-First reading
+        - Implement bounded code changes and address review feedback
+      skills:
+        - skill_id: code-navigation
+          required: true
+        - skill_id: implementation
+          required: true
+          entry_point: implement
+        - skill_id: debugging
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - src/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 2
+        spawn_trigger: task_assigned
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: test_engineer
+      kind: worker
+      responsibilities:
+        - Author or update automated test suites
+        - Execute authorized test profiles and report reproducible failures
+      skills:
+        - skill_id: test-design
+          required: true
+          entry_point: qa
+        - skill_id: test-execution
+          required: true
+          entry_point: qa
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - tests/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+        - process.execute_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: true
+
+    - id: reviewer
+      kind: worker
+      responsibilities:
+        - Audit git/work-log diffs against acceptance criteria
+        - Check security boundaries and emit structured findings
+      skills:
+        - skill_id: code-review
+          required: true
+          entry_point: audit
+        - skill_id: secure-coding-review
+          required: true
+          entry_point: audit
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: operator
+      kind: human
+      responsibilities:
+        - Approve deployment, release, or destructive changes
+      skills: []
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities: []
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: delivery_lead
+      namespace: loop/control
+      access: read_write
+    - role_id: developer
+      namespace: loop/changes
+      access: read_write
+    - role_id: test_engineer
+      namespace: loop/tests
+      access: read_write
+    - role_id: reviewer
+      namespace: loop/reviews
+      access: read_write
+    - role_id: reviewer
+      namespace: loop/changes
+      access: read
+
+workflow:
+  seed_stages:
+    - id: plan
+      title: Blueprint Decomposition
+      owner_ref: delivery_lead
+      owner_kind: role
+      depends_on: []
+      action: Convert requirement into fenced GoalLedger tasks and targetFiles.
+      expected_outputs:
+        - task_plan
+    - id: implement
+      title: Implementation
+      owner_ref: developer
+      owner_kind: role
+      depends_on:
+        - plan
+      action: Implement bounded feature change inside authorized targetFiles.
+      expected_outputs:
+        - change_set
+      write_scope_globs:
+        - src/**
+    - id: test
+      title: Automated Testing
+      owner_ref: test_engineer
+      owner_kind: role
+      depends_on:
+        - implement
+      action: Run test profile and publish structured verification report.
+      expected_outputs:
+        - test_report
+      write_scope_globs:
+        - tests/**
+    - id: review
+      title: Independent Code & Security Review
+      owner_ref: reviewer
+      owner_kind: role
+      depends_on:
+        - implement
+        - test
+      action: Review diff and test evidence independently from developer.
+      expected_outputs:
+        - review_report
+    - id: evaluate
+      title: Readiness Evaluation
+      owner_ref: delivery_lead
+      owner_kind: role
+      depends_on:
+        - test
+        - review
+      action: Evaluate acceptance predicates and run PrGate or trigger revision loop.
+      expected_outputs:
+        - decision_record
+  allow_dynamic_task_mutation: true
+
+behavior:
+  execution_mode: iterative
+  protocol_bindings:
+    pr_bot_limit: 10
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 25
+    pr_iterasi_handover_limit: 3
+    pr_de_limit: 10
+    pr_de_escalation_limit: 10
+    pr_no_progress_limit: 2
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 7200000
+    token_budget: 10000000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: implementation_feedback_cycle
+      scope: operation
+      target_units:
+        - implement
+        - test
+        - review
+        - evaluate
+      max_iterations: 5
+      no_progress_limit: 2
+      feedback_sources:
+        - kind: role
+          ref: test_engineer
+        - kind: role
+          ref: reviewer
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+          - op: lt
+            var: protocol.no_progress_count
+            value: 2
+      acceptance_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: true
+          - op: eq
+            var: ledger.tests_passed
+            value: true
+          - op: eq
+            var: ledger.reviewer_approved
+            value: true
+      on_limit_reached: escalate_hitl
+    - id: task_retry
+      scope: task
+      target_units:
+        - implement
+        - test
+      max_iterations: 2
+      no_progress_limit: 2
+      feedback_sources:
+        - kind: role
+          ref: delivery_lead
+      continuation_predicate:
+        all:
+          - op: eq
+            var: error.retryable
+            value: true
+          - op: eq
+            var: error.idempotent_or_checkpointed
+            value: true
+      acceptance_predicate:
+        op: eq
+        var: error.retryable
+        value: false
+      on_limit_reached: handover_via_pr_transfer
+  termination:
+    success:
+      all:
+        - op: eq
+          var: gate.passed
+          value: true
+        - op: eq
+          var: ledger.reviewer_approved
+          value: true
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - implement
+      - evaluate
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 2
+
+resources:
+  contracts:
+    - id: code_workspace
+      type: storage
+      purpose: Authorized source tree and patch artifacts under PrModerator fencing
+      access: read_write
+      authorized_roles:
+        - developer
+        - test_engineer
+        - reviewer
+    - id: test_runner
+      type: builtin_tool
+      purpose: Run allowlisted project tests and linters
+      access: execute
+      authorized_roles:
+        - test_engineer
+    - id: coding_model
+      type: model
+      purpose: Developer, tester, and reviewer reasoning
+      access: execute
+      authorized_roles:
+        - delivery_lead
+        - developer
+        - test_engineer
+        - reviewer
+    - id: pku_memory
+      type: memory_service
+      purpose: Retrieve project conventions via PKU-First policy
+      access: read
+      authorized_roles:
+        - delivery_lead
+        - developer
+        - test_engineer
+        - reviewer
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 256
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-FENCING-REQUIRED
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Do not modify workspace files without an active PrModerator CapabilityToken.
+    - rule_id: RULE-VERIFY-BEFORE-DONE
+      severity: MANDATORY
+      scope: ALL_BOTS
+      statement: Attach test execution evidence before transitioning GoalTask to DONE.
+  hitl_gates:
+    - action: deployment
+      approval_mode: per_action
+      approver_role: operator
+    - action: release_publication
+      approval_mode: per_action
+      approver_role: operator
+    - action: destructive_changes
+      approval_mode: per_action
+      approver_role: operator
+  prohibited_actions:
+    - access_unlisted_secrets
+    - modify_production_without_approval
+    - self_approve_own_change_set
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/looping
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true
+
+observability:
+  emit_events:
+    - operation_started
+    - stage_completed
+    - feedback_received
+    - iteration_started
+    - handover_executed
+    - guard_triggered
+    - operation_terminated
+  produce_execution_trace: true

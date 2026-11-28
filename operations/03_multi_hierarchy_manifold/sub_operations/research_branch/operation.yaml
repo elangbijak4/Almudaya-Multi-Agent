@@ -1,0 +1,281 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.research-branch
+  name: Research Evidence Sub-Manifold
+  version: 1.0.0
+  description: >
+    Child Operation executing traceable scholarly discovery, bibliographic verification,
+    and thematic evidence synthesis under a delegated PrModerator seat.
+  tags:
+    - child-operation
+    - research
+    - evidence-synthesis
+
+mission:
+  objective: Produce a verified evidence register and thematic research synthesis for the supplied project brief.
+  scope:
+    - Discover and screen candidate scholarly and authoritative sources
+    - Verify identifiers and synthesize findings without inventing citations
+  deliverables:
+    - evidence_register
+    - research_synthesis
+    - execution_trace
+  acceptance_criteria:
+    - Every included source carries traceable identifier or explicit unresolved tag
+    - Empirical findings separated cleanly from hypotheses
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: blueprint_seeded
+  topology_shape: hierarchical
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: true
+    max_coalesced_roles_per_bot: 2
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - researcher
+        - evidence_auditor
+      reason: Evidence verification must be separated from literature discovery.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: research_lead
+      kind: moderator
+      responsibilities:
+        - Hold delegated PrModerator seat for research_branch
+        - Decompose search scope and approve synthesis
+      skills:
+        - skill_id: research-planning
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: true
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: researcher
+      kind: worker
+      responsibilities:
+        - Search scholarly sources and draft thematic synthesis
+      skills:
+        - skill_id: scholarly-search
+          required: true
+        - skill_id: literature-synthesis
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - evidence/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+        - network.outbound
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 2
+        spawn_trigger: task_assigned
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: evidence_auditor
+      kind: worker
+      responsibilities:
+        - Verify metadata and flag unsupported claims or unverified DOIs
+      skills:
+        - skill_id: bibliographic-verification
+          required: true
+          entry_point: audit
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+        - network.outbound
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: research_lead
+      namespace: hierarchy/research_branch
+      access: read_write
+    - role_id: researcher
+      namespace: hierarchy/research_branch
+      access: read_write
+    - role_id: evidence_auditor
+      namespace: hierarchy/research_branch
+      access: read
+
+workflow:
+  seed_stages:
+    - id: discover
+      title: Discover & Screen Sources
+      owner_ref: researcher
+      owner_kind: role
+      depends_on: []
+      action: Discover candidate sources and record metadata.
+      expected_outputs:
+        - evidence_register
+    - id: audit_and_synthesize
+      title: Audit Evidence & Finalize Synthesis
+      owner_ref: evidence_auditor
+      owner_kind: role
+      depends_on:
+        - discover
+      action: Audit citations and approve research synthesis.
+      expected_outputs:
+        - research_synthesis
+  allow_dynamic_task_mutation: true
+
+behavior:
+  execution_mode: iterative
+  protocol_bindings:
+    pr_bot_limit: 5
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 20
+    pr_iterasi_handover_limit: 2
+    pr_de_limit: 6
+    pr_de_escalation_limit: 6
+    pr_no_progress_limit: 2
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 5400000
+    token_budget: 7500000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: evidence_audit_loop
+      scope: operation
+      target_units:
+        - discover
+        - audit_and_synthesize
+      max_iterations: 2
+      no_progress_limit: 1
+      feedback_sources:
+        - kind: role
+          ref: evidence_auditor
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+      acceptance_predicate:
+        op: eq
+        var: gate.passed
+        value: true
+      on_limit_reached: escalate_hitl
+  termination:
+    success:
+      op: eq
+      var: gate.passed
+      value: true
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - audit_and_synthesize
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 1
+
+resources:
+  contracts:
+    - id: scholarly_search_api
+      type: external_api
+      purpose: Query scholarly metadata and abstracts
+      access: execute
+      authorized_roles:
+        - researcher
+        - evidence_auditor
+    - id: evidence_storage
+      type: storage
+      purpose: Store child evidence register and synthesis
+      access: read_write
+      authorized_roles:
+        - research_lead
+        - researcher
+        - evidence_auditor
+    - id: reasoning_model
+      type: model
+      purpose: Literature screening and synthesis
+      access: execute
+      authorized_roles:
+        - research_lead
+        - researcher
+        - evidence_auditor
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 256
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-NO-FABRICATED-CITATIONS
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Never fabricate citations, DOIs, or empirical findings.
+  hitl_gates: []
+  prohibited_actions:
+    - fabricate_citations
+    - exceed_partitioned_budget
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/multi-hierarchy/research-branch
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true

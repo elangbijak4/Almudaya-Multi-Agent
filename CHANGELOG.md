@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.7] - 2026-11-28
+
+### Added
+- **Agentic Operation (`almudaya.operation/v0.3`) & Dynamic Swarm Manifold Engine (`src/operation/`, `operations/`):**
+  - Bundled 7 validated `v0.3` Operations (`01_emergent_bug_hunt`, `02_iterative_quality_loop`, `03_multi_hierarchy_manifold` with 3 child sub-operations, and `04_research_pipeline`).
+  - Added zero-dependency YAML 1.2 / JSON parser (`yaml-lite.ts`), Zod v4 strict schema & recursive `PredicateExpr` evaluator (`schema.ts`, `predicates.ts`), 9-layer static semantic validator (`validator.ts`), `OperationRegistry`, and `OperationManifoldService`.
+  - Integrated Role Archetype realization ($\mu_t$), `cardinality.max`, `strict_distinct_bot` `anti_affinity` against idle bot recycling, token scope inheritance, and worker apoptosis on task completion (`SpawnManager`, `goal-tools.ts`, `SkillService`).
+  - Added `BOT000` Master protocol tools (`apply_operation`, `synthesize_operation`, `crystallize_operation`), prompt context injection, CLI `almudaya operation` + `almudaya up --operation`, and REPL `/operation`.
+
+---
+
 ## [0.3.3] - 2026-11-09
 
 ### Security & Reliability Remediation (SRP-1)

@@ -1,6 +1,6 @@
 {
   "name": "almudaya-multiagent",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Session-centric multi-process autonomous AI coding agent collaboration foundation",
   "type": "module",
   "main": "dist/index.js",
@@ -9,7 +9,8 @@
     "almudaya": "./dist/cli/bin.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "operations"
   ],
   "engines": {
     "node": ">=22.12.0"

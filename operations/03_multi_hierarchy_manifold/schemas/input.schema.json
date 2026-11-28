@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Multi-Hierarchy Manifold Input",
+  "type": "object",
+  "required": [
+    "project_brief",
+    "evidence_requirements",
+    "constraints"
+  ],
+  "properties": {
+    "project_brief": {
+      "type": "string",
+      "minLength": 20
+    },
+    "domain": {
+      "type": "string"
+    },
+    "evidence_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "output_format": {
+      "enum": [
+        "markdown",
+        "docx",
+        "pdf",
+        "json"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

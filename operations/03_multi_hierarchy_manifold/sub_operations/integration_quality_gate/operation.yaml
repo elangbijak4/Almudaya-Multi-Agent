@@ -1,0 +1,272 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.integration-quality-gate
+  name: Integration & Quality Gate Sub-Manifold
+  version: 1.0.0
+  description: >
+    Child Operation integrating evidence and architecture outputs across sibling
+    sub-manifolds and issuing a reconciled quality decision.
+  tags:
+    - child-operation
+    - integration
+    - quality-gate
+
+mission:
+  objective: Reconcile evidence synthesis and technical options into an integrated recommendation and quality decision.
+  scope:
+    - Cross-check research findings against proposed technical architectures and risks
+    - Resolve or document cross-branch contradictions
+    - Issue structured quality gate verdict
+  deliverables:
+    - integrated_recommendation
+    - quality_decision
+    - execution_trace
+  acceptance_criteria:
+    - Contradictions between research evidence and technical options are resolved or flagged
+    - Recommendation traces back to evidence_register and risk_register
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: blueprint_seeded
+  topology_shape: pipeline
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: false
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - synthesizer
+        - gate_auditor
+      reason: Integration synthesis and final child quality gate verdict must be separate.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: integration_lead
+      kind: moderator
+      responsibilities:
+        - Hold delegated PrModerator seat for integration_branch
+        - Manage cross-branch artifact alignment
+      skills:
+        - skill_id: decision-integration
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: true
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: synthesizer
+      kind: worker
+      responsibilities:
+        - Merge research synthesis and architecture trade-offs into recommendation
+      skills:
+        - skill_id: analytical-writing
+          required: true
+        - skill_id: decision-integration
+          required: true
+      default_access_mode: EXCLUSIVE_WRITE
+      allowed_path_globs:
+        - integration/**
+      acg_capabilities:
+        - filesystem.read_external
+        - filesystem.write_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: task_assigned
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: gate_auditor
+      kind: worker
+      responsibilities:
+        - Verify recommendation traceability and emit quality_decision
+      skills:
+        - skill_id: quality-assurance
+          required: true
+          entry_point: audit
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: integration_lead
+      namespace: hierarchy/integration_branch
+      access: read_write
+    - role_id: synthesizer
+      namespace: hierarchy/integration_branch/output
+      access: read_write
+    - role_id: gate_auditor
+      namespace: hierarchy/integration_branch/output
+      access: read
+
+workflow:
+  seed_stages:
+    - id: reconcile_and_draft
+      title: Reconcile Branches & Draft Recommendation
+      owner_ref: synthesizer
+      owner_kind: role
+      depends_on: []
+      action: Integrate evidence_register, research_synthesis, architecture_options, and risk_register.
+      expected_outputs:
+        - integrated_recommendation
+    - id: audit_integration
+      title: Quality Gate Audit
+      owner_ref: gate_auditor
+      owner_kind: role
+      depends_on:
+        - reconcile_and_draft
+      action: Verify cross-branch consistency and emit quality_decision.
+      expected_outputs:
+        - quality_decision
+  allow_dynamic_task_mutation: false
+
+behavior:
+  execution_mode: iterative
+  protocol_bindings:
+    pr_bot_limit: 4
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 15
+    pr_iterasi_handover_limit: 2
+    pr_de_limit: 6
+    pr_de_escalation_limit: 6
+    pr_no_progress_limit: 2
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 3600000
+    token_budget: 6250000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: integration_review_loop
+      scope: operation
+      target_units:
+        - reconcile_and_draft
+        - audit_integration
+      max_iterations: 2
+      no_progress_limit: 1
+      feedback_sources:
+        - kind: role
+          ref: gate_auditor
+      continuation_predicate:
+        all:
+          - op: eq
+            var: gate.passed
+            value: false
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+      acceptance_predicate:
+        op: eq
+        var: gate.passed
+        value: true
+      on_limit_reached: escalate_hitl
+  termination:
+    success:
+      op: eq
+      var: gate.passed
+      value: true
+    failure:
+      any:
+        - op: eq
+          var: error.unrecoverable
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - audit_integration
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 1
+
+resources:
+  contracts:
+    - id: integration_store
+      type: storage
+      purpose: Store reconciled recommendation and quality decision
+      access: read_write
+      authorized_roles:
+        - integration_lead
+        - synthesizer
+        - gate_auditor
+    - id: synthesis_model
+      type: model
+      purpose: Integration writing and quality audit
+      access: execute
+      authorized_roles:
+        - integration_lead
+        - synthesizer
+        - gate_auditor
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 256
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-TRACE-CONTRADICTIONS
+      severity: MANDATORY
+      scope: ALL_BOTS
+      statement: Explicitly surface unresolved contradictions across sibling branches.
+  hitl_gates: []
+  prohibited_actions:
+    - hide_cross_branch_contradictions
+    - exceed_partitioned_budget
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/multi-hierarchy/integration-branch
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true

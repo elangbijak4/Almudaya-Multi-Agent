@@ -27,5 +27,7 @@ export * from './skills/index.js';
 export * as mcp from './mcp/index.js';
 export * as memoryModules from './memory_modules/index.js';
 export * from './protocol/index.js';
+export * as operation from './operation/index.js';
+export { OperationRegistry, OperationManifoldService } from './operation/index.js';
 
 export { createProgram, run } from './cli/index.js';

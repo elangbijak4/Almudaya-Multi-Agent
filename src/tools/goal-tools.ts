@@ -1,5 +1,7 @@
 import type { ToolDefinition } from '../ai/provider.js';
+import { BotService } from '../bot/service.js';
 import type { MessagingService } from '../messaging/service.js';
+import { OperationManifoldService } from '../operation/manifold-engine.js';
 import type {
   GoalTaskStatus,
   TaskVerificationEvidence,
@@ -214,6 +216,21 @@ export async function executeUpdateGoalTask(
     verificationEvidence,
   });
 
+  if (status === 'DONE') {
+    try {
+      const storage = supervisor.store.getStorage();
+      const manifold = new OperationManifoldService({ storage, supervisor });
+      await manifold.handleTaskCompletionLifecycle(
+        sessionId,
+        trustedBotId,
+        taskId,
+        new BotService(storage)
+      );
+    } catch {
+      // Fail-open when no active Operation or storage lacks bot registry
+    }
+  }
+
   return {
     task_id: updated.taskId,
     status: updated.status,
@@ -336,6 +353,21 @@ export async function executeSubmitTaskHandoff(
       transferEnvelope: envelope,
       content: `[CC: MASTER] Handover ${trustedSenderBotId} -> ${actualDeliveryTarget} (${taskId}): ${summary}`,
     });
+  }
+
+  if (isTaskZero) {
+    try {
+      const storage = supervisor.store.getStorage();
+      const manifold = new OperationManifoldService({ storage, supervisor });
+      await manifold.handleTaskCompletionLifecycle(
+        sessionId,
+        trustedSenderBotId,
+        taskId,
+        new BotService(storage)
+      );
+    } catch {
+      // Fail-open when no active Operation
+    }
   }
 
   return {

@@ -18,6 +18,7 @@ export interface PromptContext {
   capabilityTokenSummary?: string;
   protocolActive?: boolean;
   mcpToolsSummary?: string;
+  operationSummaryMarkdown?: string;
 }
 
 /**
@@ -132,6 +133,12 @@ export function buildDynamicSystemPrompt(context: PromptContext): string {
   // Active Skill Modules & AVDS Context
   if (context.skillsPromptMarkdown) {
     sections.push(context.skillsPromptMarkdown);
+  }
+
+  // v0.3.7 Active Agentic Operation & Dynamic Swarm Manifold Context
+  if (context.operationSummaryMarkdown) {
+    sections.push('\n## Konteks #Operation & Dynamic Swarm Manifold Aktif:');
+    sections.push(escapePromptDelimiters(context.operationSummaryMarkdown));
   }
 
   // v0.3.5 Dynamic Rules, GoalLedger & CapabilityToken Context

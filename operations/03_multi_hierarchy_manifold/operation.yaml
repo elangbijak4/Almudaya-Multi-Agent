@@ -1,0 +1,417 @@
+apiVersion: almudaya.operation/v0.3
+kind: AgenticOperation
+
+identity:
+  id: almudaya.operation.multi-hierarchy
+  name: Multi-Hierarchical Research and Delivery Manifold
+  version: 0.3.0
+  alias: "#Operation-multiHierarchyOperation"
+  description: >
+    Parent Swarm Manifold coordinating nested specialist child Operations
+    through delegated PrModerator seats, strict budget partitioning, and schema contracts.
+  tags:
+    - multi-operation
+    - hierarchy
+    - sub-manifold
+    - composition
+
+mission:
+  objective: Produce an integrated, evidence-grounded technical recommendation package across nested specialist sub-manifolds.
+  scope:
+    - Establish common project brief and aggregate budget partition
+    - Delegate parallel research and technical assessment sub-Operations
+    - Integrate findings and execute final quality gate
+  deliverables:
+    - integrated_recommendation
+    - evidence_register
+    - research_synthesis
+    - architecture_options
+    - risk_register
+    - quality_decision
+    - decision_log
+    - execution_trace
+  acceptance_criteria:
+    - All required child Operations succeeded or explicitly waived by operator
+    - Evidence register claims trace to verifiable identifiers
+    - Architecture options and material risks reconciled across branches
+    - Final quality gate approved with no unresolved critical contradiction
+  input_schema: schemas/input.schema.json
+  output_schema: schemas/output.schema.json
+
+manifold:
+  orchestration_regime: blueprint_seeded
+  topology_shape: sub_manifold
+  continuity:
+    l1_single_agent_fallback: false
+    allow_role_coalescing: false
+  crystallization_policy:
+    allow_on_the_fly_synthesis: false
+    crystallize_on_success: false
+  anti_affinity:
+    - roles:
+        - operation_director
+        - quality_controller
+      reason: >
+        Final parent quality gate controller must verify child contracts
+        independently from mission-level coordination.
+      enforcement: strict_distinct_bot
+  roles:
+    - id: operation_director
+      kind: master
+      responsibilities:
+        - Own global mission, budget partition, and sub-manifold orchestration
+        - Delegate PrModerator arbitration seats to child Operations
+        - Resolve cross-branch conflicts and request human approvals
+      skills:
+        - skill_id: mission-planning
+          required: true
+        - skill_id: operation-composition
+          required: true
+        - skill_id: decision-integration
+          required: true
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - system.process_control
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+    - id: quality_controller
+      kind: worker
+      responsibilities:
+        - Validate child output schemas against contracts
+        - Verify cross-branch evidence traceability and run final quality gate
+      skills:
+        - skill_id: quality-assurance
+          required: true
+          entry_point: qa
+        - skill_id: evidence-validation
+          required: true
+          entry_point: audit
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities:
+        - filesystem.read_external
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: stage_activated
+        recycle_eligible: true
+        dissolve_on: task_completed
+        coalescable: false
+
+    - id: operator
+      kind: human
+      responsibilities:
+        - Approve external recommendations, system changes, or child waivers
+      skills: []
+      default_access_mode: REVIEW_ONLY
+      allowed_path_globs: []
+      acg_capabilities: []
+      lifecycle:
+        cardinality:
+          min: 1
+          max: 1
+        spawn_trigger: session_start
+        recycle_eligible: false
+        dissolve_on: session_end
+        coalescable: false
+
+  sub_operations:
+    - id: research_branch
+      operation_ref: almudaya.operation.research-branch
+      version_constraint: ">=1.0.0 <2.0.0"
+      delegate_moderator: true
+      depends_on: []
+      execution_mode: parallel
+      required: true
+      budget_share_percent: 30
+      input_mapping:
+        project_brief: $.mission.project_brief
+        evidence_requirements: $.mission.evidence_requirements
+      output_mapping:
+        evidence_register: $.outputs.evidence_register
+        research_synthesis: $.outputs.research_synthesis
+
+    - id: technical_branch
+      operation_ref: almudaya.operation.technical-assessment
+      version_constraint: ">=1.0.0 <2.0.0"
+      delegate_moderator: true
+      depends_on: []
+      execution_mode: parallel
+      required: true
+      budget_share_percent: 35
+      input_mapping:
+        project_brief: $.mission.project_brief
+        constraints: $.mission.constraints
+      output_mapping:
+        architecture_options: $.outputs.architecture_options
+        risk_register: $.outputs.risk_register
+
+    - id: integration_branch
+      operation_ref: almudaya.operation.integration-quality-gate
+      version_constraint: ">=1.0.0 <2.0.0"
+      delegate_moderator: true
+      depends_on:
+        - research_branch
+        - technical_branch
+      execution_mode: sequential
+      required: true
+      budget_share_percent: 25
+      input_mapping:
+        evidence_register: $.child_outputs.research_branch.evidence_register
+        research_synthesis: $.child_outputs.research_branch.research_synthesis
+        architecture_options: $.child_outputs.technical_branch.architecture_options
+        risk_register: $.child_outputs.technical_branch.risk_register
+      output_mapping:
+        integrated_recommendation: $.outputs.integrated_recommendation
+        quality_decision: $.outputs.quality_decision
+
+communication:
+  protocol: almudaya.operation-message.v1
+  state_channel: session_blackboard
+  artifact_passing: reference
+  correlation_required: true
+  dead_end_routing: pr_me_end_and_pr_de
+  blackboard_acl:
+    - role_id: operation_director
+      namespace: hierarchy/parent
+      access: read_write
+    - role_id: quality_controller
+      namespace: hierarchy/validation
+      access: read_write
+    - role_id: quality_controller
+      namespace: hierarchy/parent
+      access: read
+
+workflow:
+  seed_stages:
+    - id: initialize
+      title: Initialize Charter & Partition Budget
+      owner_ref: operation_director
+      owner_kind: role
+      depends_on: []
+      action: Validate project brief, criteria, and partitioned child budgets.
+      expected_outputs:
+        - decision_log
+    - id: run_research
+      title: Execute Research Sub-Manifold
+      owner_ref: research_branch
+      owner_kind: sub_operation
+      depends_on:
+        - initialize
+      parallel_group: specialist_branches
+      action: Instantiate research_branch child Operation with delegated PrModerator seat.
+      expected_outputs:
+        - evidence_register
+        - research_synthesis
+    - id: run_technical
+      title: Execute Technical Assessment Sub-Manifold
+      owner_ref: technical_branch
+      owner_kind: sub_operation
+      depends_on:
+        - initialize
+      parallel_group: specialist_branches
+      action: Instantiate technical_assessment child Operation with isolated budget.
+      expected_outputs:
+        - architecture_options
+        - risk_register
+    - id: integrate
+      title: Execute Integration Quality Gate Sub-Manifold
+      owner_ref: integration_branch
+      owner_kind: sub_operation
+      depends_on:
+        - run_research
+        - run_technical
+      action: Reconcile evidence and technical architecture outputs.
+      expected_outputs:
+        - integrated_recommendation
+        - quality_decision
+    - id: finalize
+      title: Final Parent Audit & PrGate
+      owner_ref: quality_controller
+      owner_kind: role
+      depends_on:
+        - integrate
+      action: Verify parent output contract, traceability, and decision log.
+      expected_outputs:
+        - execution_trace
+  allow_dynamic_task_mutation: true
+
+behavior:
+  execution_mode: hierarchical
+  protocol_bindings:
+    pr_bot_limit: 16
+    pr_bot_global_max: auto
+    pr_iterasi_limit: 25
+    pr_iterasi_handover_limit: 3
+    pr_de_limit: 10
+    pr_de_escalation_limit: 10
+    pr_no_progress_limit: 2
+    pr_gate_enabled: true
+    pr_reattach_enabled: true
+    master_strict_orchestrator: true
+    task_timeout_ms: 180000
+    global_timeout_ms: 21600000
+    token_budget: 25000000
+    spawn_mode_preference: runtime_default
+  loops:
+    - id: child_revision_cycle
+      scope: nested_operation
+      target_units:
+        - research_branch
+        - technical_branch
+        - integration_branch
+      max_iterations: 2
+      no_progress_limit: 1
+      feedback_sources:
+        - kind: role
+          ref: quality_controller
+        - kind: role
+          ref: operation_director
+      continuation_predicate:
+        all:
+          - op: eq
+            var: child.quality_gate_passed
+            value: false
+          - op: eq
+            var: child.revision_actionable
+            value: true
+          - op: gt
+            var: budget.tokens_remaining
+            value: 0
+      acceptance_predicate:
+        all:
+          - op: eq
+            var: child.contract_valid
+            value: true
+          - op: eq
+            var: child.quality_gate_passed
+            value: true
+      on_limit_reached: escalate_hitl
+  termination:
+    success:
+      all:
+        - op: eq
+          var: child.all_required_succeeded_or_waived
+          value: true
+        - op: eq
+          var: gate.passed
+          value: true
+    failure:
+      any:
+        - op: eq
+          var: child.unrecoverable_failure
+          value: true
+        - op: lte
+          var: budget.tokens_remaining
+          value: 0
+    cancellation:
+      op: eq
+      var: protocol.cancelled
+      value: true
+    deadline:
+      op: eq
+      var: budget.deadline_reached
+      value: true
+  recovery:
+    checkpoint_before:
+      - child_instantiation
+      - integrate
+      - finalize
+    restore_strategy: pr_transfer_checkpoint
+    reassignment_policy:
+      enabled: true
+      require_capability_match: true
+      max_handovers_per_task: 1
+
+resources:
+  contracts:
+    - id: evidence_store
+      type: storage
+      purpose: Scoped Blackboard and artifact storage across parent and child manifolds
+      access: read_write
+      authorized_roles:
+        - operation_director
+        - quality_controller
+    - id: analysis_model
+      type: model
+      purpose: Parent director synthesis and quality controller verification
+      access: execute
+      authorized_roles:
+        - operation_director
+        - quality_controller
+    - id: pku_memory
+      type: memory_service
+      purpose: Shared project memory across child sub-manifolds
+      access: read
+      authorized_roles:
+        - operation_director
+        - quality_controller
+  write_fencing_policy: pr_moderator_exclusive_token
+  secret_policy: env_or_runtime_secret_ref_only
+  hardware_policy:
+    advisor_enabled: true
+    min_free_memory_mb: 512
+
+governance:
+  least_privilege: true
+  audit_required: true
+  dynamic_rules:
+    - rule_id: RULE-BUDGET-ISOLATION
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: Child Operations cannot exceed partitioned budget_share_percent or borrow from sibling branches.
+    - rule_id: RULE-SCHEMA-CONTRACT
+      severity: HARD_STOP
+      scope: ALL_BOTS
+      statement: All child Operation outputs must validate against declared output_schema before integration.
+  hitl_gates:
+    - action: publish_external_recommendation
+      approval_mode: per_action
+      approver_role: operator
+    - action: waive_failed_child_operation
+      approval_mode: per_action
+      approver_role: operator
+  prohibited_actions:
+    - instantiate_unregistered_child_operation
+    - bypass_child_output_schema
+    - exceed_nesting_depth
+  hierarchy_safety:
+    max_nesting_depth: 3
+    detect_operation_cycles: true
+    child_budget_isolation: true
+    cancellation_propagation: true
+
+integrations:
+  blackboard:
+    enabled: true
+    namespace: operation/multi-hierarchy
+  pku:
+    enabled: true
+    reading_policy: pku_first
+  acg:
+    enabled: true
+    default_preset: controlled
+  goal_ledger:
+    enabled: true
+    auto_seed_from_workflow: true
+
+observability:
+  emit_events:
+    - parent_started
+    - child_instantiated
+    - moderator_delegated
+    - child_status_changed
+    - budget_allocated
+    - integration_started
+    - quality_gate_decided
+    - parent_terminated
+  produce_execution_trace: true

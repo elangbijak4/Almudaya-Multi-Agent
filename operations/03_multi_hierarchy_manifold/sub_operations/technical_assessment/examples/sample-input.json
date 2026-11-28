@@ -1,0 +1,7 @@
+{
+  "project_brief": "Assess feasibility of an explainable AI early-warning system for forest and land fire risk around institutional operational units.",
+  "constraints": [
+    "Do not claim operational readiness without field validation",
+    "Identify data availability and governance risks"
+  ]
+}

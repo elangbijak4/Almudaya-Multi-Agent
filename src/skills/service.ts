@@ -43,6 +43,7 @@ export interface EnableSkillInput {
   botId?: string;
   config?: SkillBindingConfig;
   updatedBy?: string;
+  allowLogicalSkill?: boolean;
 }
 
 function parseFrontmatter(markdown: string): { name?: string; description?: string; body: string } {
@@ -717,19 +718,28 @@ export class SkillService {
     }
 
     const canonicalSkillId = this.normalizeSkillId(input.skillId);
-    // Verify the skill exists on disk
-    await this.resolveSkillPackageDir(canonicalSkillId);
+    let physicalPackageFound = false;
+    try {
+      await this.resolveSkillPackageDir(canonicalSkillId);
+      physicalPackageFound = true;
+    } catch (err) {
+      if (!input.allowLogicalSkill) {
+        throw err;
+      }
+    }
 
     const validatedConfig = SkillBindingConfigSchema.parse(input.config ?? {});
-    if (validatedConfig.primary_style) {
-      await this.getStyleProfile(validatedConfig.primary_style, canonicalSkillId);
-    }
-    if (validatedConfig.platform) {
-      await this.getPlatformProfile(validatedConfig.platform, canonicalSkillId);
-    }
-    if (validatedConfig.modalities) {
-      for (const mod of validatedConfig.modalities) {
-        await this.getModalityGuide(mod, canonicalSkillId);
+    if (physicalPackageFound) {
+      if (validatedConfig.primary_style) {
+        await this.getStyleProfile(validatedConfig.primary_style, canonicalSkillId);
+      }
+      if (validatedConfig.platform) {
+        await this.getPlatformProfile(validatedConfig.platform, canonicalSkillId);
+      }
+      if (validatedConfig.modalities) {
+        for (const mod of validatedConfig.modalities) {
+          await this.getModalityGuide(mod, canonicalSkillId);
+        }
       }
     }
 
@@ -944,9 +954,9 @@ export class SkillService {
   public async buildBotSkillPromptSection(sessionId: string, botId: string): Promise<string> {
     try {
       const installed = await this.listSkills();
-      if (installed.length === 0) return '';
-
       const activeBindings = await this.getSessionSkills(sessionId, botId, true);
+      if (installed.length === 0 && activeBindings.length === 0) return '';
+
       const lines: string[] = [
         '\n## Kapabilitas Modul Skill & Desain Adaptif (AVDS v1.0.1):',
         'Anda memiliki akses ke perkakas `use_skill` untuk membaca panduan arsitektur UI/UX lintas-platform Almudaya Visual Design Skills (AVDS):',

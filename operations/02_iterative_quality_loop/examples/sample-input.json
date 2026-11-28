@@ -1,0 +1,14 @@
+{
+  "requirement": "Add input validation to the CSV import endpoint and return structured row/column validation errors.",
+  "workspace_ref": "workspace://authorized/project-a",
+  "acceptance_criteria": [
+    "Malformed rows rejected with row and column information",
+    "Valid CSV continues to import",
+    "Automated tests cover valid and invalid input",
+    "No production deployment"
+  ],
+  "test_commands_profile": "project-default-ci",
+  "constraints": [
+    "Do not change public API fields except documented validation error object"
+  ]
+}
